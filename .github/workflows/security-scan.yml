@@ -94,12 +94,9 @@ jobs:
       actions: read
     needs: [sast-semgrep, sca-iac-trivy, secrets-gitleaks]
     steps:
-      - name: Determinar repo da plataforma
-        id: platform
-        run: echo "repo=$(echo '${{ github.workflow_ref }}' | cut -d'/' -f1,2)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
-          repository: ${{ steps.platform.outputs.repo }}
+          repository: k19x/ci_cd
       - uses: actions/download-artifact@v4
         with:
           pattern: sarif-*
