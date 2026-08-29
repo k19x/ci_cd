@@ -2,6 +2,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <style>
 /* ── Tokens ── */
@@ -446,6 +447,26 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
       <input type="password" id="loginPass" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
     </div>
     <button class="login-btn" onclick="doLogin()" id="loginBtn">Entrar</button>
+
+    <!-- TOTP step (hidden until server asks for it) -->
+    <div id="totpStep" style="display:none">
+      <div style="text-align:center;margin-bottom:12px">
+        <div style="font-size:28px;margin-bottom:4px">🔐</div>
+        <div style="font-weight:600;color:var(--text)">Verificação em dois fatores</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Insira o código de 6 dígitos do seu app autenticador</div>
+      </div>
+      <div class="login-field">
+        <label>Código 2FA</label>
+        <input type="text" id="totpCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
+               placeholder="000 000" style="font-size:22px;letter-spacing:.25em;text-align:center"
+               onkeydown="if(event.key==='Enter')doTOTP()">
+      </div>
+      <button class="login-btn" onclick="doTOTP()" id="totpBtn">Verificar</button>
+      <div style="text-align:center;margin-top:10px">
+        <button onclick="cancelTOTP()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer">← Voltar ao login</button>
+      </div>
+    </div>
+
     <div class="login-err" id="loginErr"></div>
   </div>
 </div>
@@ -726,6 +747,56 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
       </div>
     </div>
 
+    <!-- ── 2FA / TOTP ── -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-head">
+        <div class="card-title">🔐 Two-Factor Authentication (2FA)</div>
+        <div class="card-sub">TOTP — Google Authenticator, Authy, 1Password</div>
+      </div>
+      <div style="padding:18px">
+
+        <!-- Status -->
+        <div id="totp2faStatus" style="margin-bottom:16px;display:flex;align-items:center;gap:10px">
+          <span id="totp2faBadge" style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:10px"></span>
+          <span id="totp2faDesc" style="font-size:13px;color:var(--text2)"></span>
+        </div>
+
+        <!-- Setup flow -->
+        <div id="totp2faSetup" style="display:none">
+          <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Escaneie o QR code com seu app autenticador, depois insira o código para confirmar.</p>
+          <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+            <div>
+              <div id="totp2faQR" style="background:#fff;padding:12px;border-radius:8px;border:1px solid var(--border);display:inline-block"></div>
+              <div style="margin-top:8px;font-size:11px;color:var(--muted);max-width:200px;word-break:break-all" id="totp2faSecret"></div>
+            </div>
+            <div style="flex:1;min-width:220px">
+              <div class="login-field" style="margin-bottom:12px">
+                <label style="font-size:12px;font-weight:500;color:var(--text2)">Código de confirmação</label>
+                <input type="text" id="totp2faCode" inputmode="numeric" maxlength="6"
+                       placeholder="000000" style="font-size:20px;letter-spacing:.2em;text-align:center;padding:10px"
+                       onkeydown="if(event.key==='Enter')activateTOTP()">
+              </div>
+              <div style="display:flex;gap:8px">
+                <button class="btn-primary" onclick="activateTOTP()" id="totp2faActivateBtn">Ativar 2FA</button>
+                <button class="btn-ghost" onclick="cancelTOTPSetup()">Cancelar</button>
+              </div>
+              <div class="form-msg" id="totp2faSetupMsg" style="margin-top:8px"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div id="totp2faActions">
+          <button class="btn-primary" id="totp2faEnableBtn" onclick="startTOTPSetup()" style="display:none">Ativar 2FA</button>
+          <div id="totp2faDisableForm" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="password" id="totp2faDisablePwd" placeholder="Senha atual para desativar" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--bg);color:var(--text)">
+            <button class="btn-ghost" onclick="disableTOTP()" style="color:var(--crit)">Desativar 2FA</button>
+            <span class="form-msg" id="totp2faDisableMsg"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -789,12 +860,16 @@ async function doLogin() {
     });
     const body = await res.json().catch(() => ({}));
     if (res.ok) {
-      $('sidebarUsername').textContent = body.username;
-      $('sidebarRoleBadge').textContent = body.role;
-      applyRole(body.role);
-      hideLogin();
-      loadDashboard().then(updateDashAge);
-      dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
+      if (body.require_totp) {
+        showTOTPStep(body.partial);
+      } else {
+        $('sidebarUsername').textContent = body.username;
+        $('sidebarRoleBadge').textContent = body.role;
+        applyRole(body.role);
+        hideLogin();
+        loadDashboard().then(updateDashAge);
+        dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
+      }
     } else {
       err.textContent = body.detail || 'Credenciais inválidas';
     }
@@ -1234,12 +1309,14 @@ function allowType(entry) {
 
 async function loadSettings() {
   const p = await api('/api/policy');
+  if (!p) return;
   $('maxCritical').value = p.max.critical ?? 0;
   $('maxHigh').value     = p.max.high ?? 0;
   $('maxMedium').value   = p.max.medium ?? 10;
   $('maxLow').value      = p.max.low ?? 50;
   _allowlist = [...(p.allowlist || [])];
   renderAllowlist();
+  loadTOTPStatus();
 }
 
 function renderAllowlist() {
@@ -1304,6 +1381,149 @@ async function pushPolicy() {
   } else {
     msg.className = 'form-msg err';
     msg.textContent = 'Erro: ' + (body.detail || res.status);
+  }
+}
+
+/* ── TOTP Login step ── */
+let _partialToken = null;
+
+function showTOTPStep(partial) {
+  _partialToken = partial;
+  $('loginUser').closest('.login-field').style.display = 'none';
+  $('loginPass').closest('.login-field').style.display = 'none';
+  $('loginBtn').style.display = 'none';
+  $('totpStep').style.display = 'block';
+  $('loginErr').textContent = '';
+  setTimeout(() => $('totpCode').focus(), 50);
+}
+
+function cancelTOTP() {
+  _partialToken = null;
+  $('loginUser').closest('.login-field').style.display = '';
+  $('loginPass').closest('.login-field').style.display = '';
+  $('loginBtn').style.display = '';
+  $('totpStep').style.display = 'none';
+  $('totpCode').value = '';
+  $('loginErr').textContent = '';
+}
+
+async function doTOTP() {
+  const btn = $('totpBtn');
+  const err = $('loginErr');
+  btn.disabled = true; btn.textContent = 'Verificando…'; err.textContent = '';
+  try {
+    const res = await fetch('/api/auth/totp/confirm', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({partial: _partialToken, code: $('totpCode').value.replace(/\s/g, '')}),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) {
+      _partialToken = null;
+      $('sidebarUsername').textContent = body.username;
+      $('sidebarRoleBadge').textContent = body.role;
+      applyRole(body.role);
+      hideLogin();
+      cancelTOTP();
+      loadDashboard().then(updateDashAge);
+      dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
+    } else {
+      err.textContent = body.detail || 'Código inválido';
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = 'Verificar';
+  }
+}
+
+/* ── TOTP Settings ── */
+let _totpSetupSecret = null;
+
+async function loadTOTPStatus() {
+  const me = await fetch('/api/auth/me').then(r => r.ok ? r.json() : null).catch(() => null);
+  if (!me) return;
+  const res = await fetch('/api/auth/totp/status').then(r => r.ok ? r.json() : null).catch(() => null);
+  const enabled = res?.enabled ?? false;
+  const badge = $('totp2faBadge');
+  const desc  = $('totp2faDesc');
+  const enableBtn  = $('totp2faEnableBtn');
+  const disableForm = $('totp2faDisableForm');
+  if (enabled) {
+    badge.textContent = '✓ Ativo';
+    badge.style.cssText = 'background:#E8F5E9;color:#2E7D32;font-size:12px;font-weight:600;padding:3px 10px;border-radius:10px';
+    desc.textContent = '2FA está ativo nesta conta.';
+    enableBtn.style.display = 'none';
+    disableForm.style.display = 'flex';
+  } else {
+    badge.textContent = '✗ Inativo';
+    badge.style.cssText = 'background:#FFEBEE;color:#C62828;font-size:12px;font-weight:600;padding:3px 10px;border-radius:10px';
+    desc.textContent = 'Ative o 2FA para maior segurança.';
+    enableBtn.style.display = '';
+    disableForm.style.display = 'none';
+  }
+}
+
+async function startTOTPSetup() {
+  const res = await api('/api/auth/totp/setup');
+  if (!res) return;
+  _totpSetupSecret = res.secret;
+  $('totp2faSetup').style.display = 'block';
+  $('totp2faEnableBtn').style.display = 'none';
+  $('totp2faSetupMsg').textContent = '';
+  $('totp2faCode').value = '';
+  $('totp2faSecret').textContent = 'Chave manual: ' + res.secret;
+  const qrEl = $('totp2faQR');
+  qrEl.innerHTML = '';
+  new QRCode(qrEl, {text: res.uri, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M});
+  setTimeout(() => $('totp2faCode').focus(), 100);
+}
+
+function cancelTOTPSetup() {
+  _totpSetupSecret = null;
+  $('totp2faSetup').style.display = 'none';
+  $('totp2faEnableBtn').style.display = '';
+  $('totp2faSetupMsg').textContent = '';
+}
+
+async function activateTOTP() {
+  const btn = $('totp2faActivateBtn');
+  const msg = $('totp2faSetupMsg');
+  btn.disabled = true; btn.textContent = 'Ativando…'; msg.textContent = '';
+  try {
+    const res = await fetch('/api/auth/totp/activate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({secret: _totpSetupSecret, code: $('totp2faCode').value.replace(/\s/g, '')}),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) {
+      msg.className = 'form-msg ok'; msg.textContent = '✓ 2FA ativado com sucesso!';
+      _totpSetupSecret = null;
+      setTimeout(() => { $('totp2faSetup').style.display = 'none'; loadTOTPStatus(); }, 1500);
+    } else {
+      msg.className = 'form-msg err'; msg.textContent = body.detail || 'Código inválido';
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = 'Ativar 2FA';
+  }
+}
+
+async function disableTOTP() {
+  const msg = $('totp2faDisableMsg');
+  msg.textContent = '';
+  const pwd = $('totp2faDisablePwd').value;
+  if (!pwd) { msg.className = 'form-msg err'; msg.textContent = 'Insira a senha'; return; }
+  const res = await fetch('/api/auth/totp/disable', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({password: pwd}),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (res.ok) {
+    msg.className = 'form-msg ok'; msg.textContent = '2FA desativado.';
+    $('totp2faDisablePwd').value = '';
+    setTimeout(loadTOTPStatus, 1000);
+  } else {
+    msg.className = 'form-msg err'; msg.textContent = body.detail || 'Erro';
   }
 }
 

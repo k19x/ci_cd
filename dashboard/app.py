@@ -15,12 +15,14 @@ import json as _json
 import os
 import secrets
 import sqlite3
+import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import hashlib
+import pyotp
 
 from fastapi import FastAPI, Header, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -40,6 +42,11 @@ SECURE_COOKIE  = os.environ.get("SECPIPE_SECURE_COOKIE", "false").lower() == "tr
 _rl: dict      = {}   # rate limiting: ip -> [fail_count, lockout_ts]
 RL_MAX, RL_WIN = 10, 900  # 10 attempts → 15 min lockout
 _PBKDF2_ITERS  = 600_000  # OWASP 2023 recommendation for PBKDF2-SHA256
+
+# Partial sessions: after password OK, before TOTP verified
+# token -> {user_id, expires (unix ts)}
+_partial: dict = {}
+PARTIAL_TTL    = 300  # 5 minutes to enter TOTP code
 
 
 def _hash_password(password: str) -> str:
@@ -116,6 +123,8 @@ init_db()
 _migrations = [
     "ALTER TABLE repos ADD COLUMN visibility TEXT DEFAULT ''",
     "ALTER TABLE repos ADD COLUMN languages TEXT DEFAULT ''",
+    "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT ''",
+    "ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0",
 ]
 for _mig in _migrations:
     try:
@@ -646,16 +655,31 @@ class LoginPayload(BaseModel):
     password: str
 
 
+def _create_session(user_id: int, username: str, role: str) -> JSONResponse:
+    token = secrets.token_urlsafe(32)
+    expires = (datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_H)).isoformat()
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO sessions(token,user_id,expires_at) VALUES (?,?,?)",
+            (token, user_id, expires),
+        )
+    resp = JSONResponse({"ok": True, "username": username, "role": role})
+    resp.set_cookie(SESSION_COOKIE, token, max_age=SESSION_TTL_H * 3600,
+                    httponly=True, samesite="lax", secure=SECURE_COOKIE)
+    return resp
+
+
 @app.post("/api/auth/login")
 async def login(payload: LoginPayload, request: Request):
     ip = request.client.host if request.client else "unknown"
-    ts = datetime.now(timezone.utc).timestamp()
+    ts = time.time()
     rl = _rl.get(ip, [0, 0.0])
     if rl[1] > ts:
         raise HTTPException(429, f"Muitas tentativas. Aguarde {int(rl[1]-ts)}s")
     with db() as conn:
         u = conn.execute(
-            "SELECT id,username,password_hash,role,active FROM users WHERE username=?",
+            "SELECT id,username,password_hash,role,active,totp_enabled,totp_secret "
+            "FROM users WHERE username=?",
             (payload.username.strip(),),
         ).fetchone()
     ok = u and u["active"] and _verify_password(payload.password, u["password_hash"])
@@ -667,17 +691,108 @@ async def login(payload: LoginPayload, request: Request):
         _rl[ip] = rl
         raise HTTPException(401, "Credenciais inválidas")
     _rl.pop(ip, None)
-    token = secrets.token_urlsafe(32)
-    expires = (datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_H)).isoformat()
+
+    if u["totp_enabled"] and u["totp_secret"]:
+        # Password OK but TOTP required — issue a short-lived partial token
+        pt = secrets.token_urlsafe(24)
+        _partial[pt] = {"user_id": u["id"], "username": u["username"],
+                        "role": u["role"], "exp": ts + PARTIAL_TTL}
+        return JSONResponse({"require_totp": True, "partial": pt})
+
+    return _create_session(u["id"], u["username"], u["role"])
+
+
+class TOTPConfirmPayload(BaseModel):
+    partial: str
+    code: str
+
+
+@app.post("/api/auth/totp/confirm")
+async def totp_confirm(payload: TOTPConfirmPayload, request: Request):
+    entry = _partial.get(payload.partial)
+    if not entry or time.time() > entry["exp"]:
+        _partial.pop(payload.partial, None)
+        raise HTTPException(401, "Sessão expirada. Faça login novamente.")
+
+    ip = request.client.host if request.client else "unknown"
+    ts = time.time()
+    rl = _rl.get(f"totp:{ip}", [0, 0.0])
+    if rl[1] > ts:
+        raise HTTPException(429, f"Muitas tentativas. Aguarde {int(rl[1]-ts)}s")
+
+    with db() as conn:
+        u = conn.execute(
+            "SELECT totp_secret FROM users WHERE id=?", (entry["user_id"],)
+        ).fetchone()
+
+    if not u or not pyotp.TOTP(u["totp_secret"]).verify(payload.code.strip(), valid_window=1):
+        rl[0] += 1
+        if rl[0] >= 5:
+            rl[1] = ts + 300  # 5 min lockout on TOTP brute force
+            rl[0] = 0
+        _rl[f"totp:{ip}"] = rl
+        raise HTTPException(401, "Código 2FA inválido")
+
+    _partial.pop(payload.partial, None)
+    _rl.pop(f"totp:{ip}", None)
+    return _create_session(entry["user_id"], entry["username"], entry["role"])
+
+
+@app.get("/api/auth/totp/status")
+async def totp_status(user=Depends(require_role("viewer"))):
+    with db() as conn:
+        row = conn.execute(
+            "SELECT totp_enabled FROM users WHERE id=?", (user["id"],)
+        ).fetchone()
+    return {"enabled": bool(row and row["totp_enabled"])}
+
+
+@app.get("/api/auth/totp/setup")
+async def totp_setup(user=Depends(require_role("viewer"))):
+    """Generate a new TOTP secret for the current user (not yet activated)."""
+    secret = pyotp.random_base32()
+    issuer = "SecPipe"
+    uri = pyotp.TOTP(secret).provisioning_uri(name=user["username"], issuer_name=issuer)
+    return {"secret": secret, "uri": uri}
+
+
+class TOTPActivatePayload(BaseModel):
+    secret: str
+    code: str
+
+
+@app.post("/api/auth/totp/activate")
+async def totp_activate(payload: TOTPActivatePayload, user=Depends(require_role("viewer"))):
+    """Verify code against new secret and enable TOTP for the current user."""
+    if not pyotp.TOTP(payload.secret).verify(payload.code.strip(), valid_window=1):
+        raise HTTPException(400, "Código inválido. Verifique o app autenticador.")
     with db() as conn:
         conn.execute(
-            "INSERT INTO sessions(token,user_id,expires_at) VALUES (?,?,?)",
-            (token, u["id"], expires),
+            "UPDATE users SET totp_secret=?, totp_enabled=1 WHERE id=?",
+            (payload.secret, user["id"]),
         )
-    resp = JSONResponse({"ok": True, "username": u["username"], "role": u["role"]})
-    resp.set_cookie(SESSION_COOKIE, token, max_age=SESSION_TTL_H * 3600,
-                    httponly=True, samesite="lax", secure=SECURE_COOKIE)
-    return resp
+    return {"ok": True}
+
+
+class TOTPDisablePayload(BaseModel):
+    password: str
+
+
+@app.post("/api/auth/totp/disable")
+async def totp_disable(payload: TOTPDisablePayload, user=Depends(require_role("viewer"))):
+    """Disable TOTP for the current user (requires current password)."""
+    with db() as conn:
+        u = conn.execute(
+            "SELECT password_hash FROM users WHERE id=?", (user["id"],)
+        ).fetchone()
+    if not u or not _verify_password(payload.password, u["password_hash"]):
+        raise HTTPException(401, "Senha incorreta")
+    with db() as conn:
+        conn.execute(
+            "UPDATE users SET totp_secret='', totp_enabled=0 WHERE id=?",
+            (user["id"],),
+        )
+    return {"ok": True}
 
 
 @app.post("/api/auth/logout")

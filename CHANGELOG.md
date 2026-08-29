@@ -3,6 +3,17 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] - 2026-08-29
+
+### Added
+- **2FA/MFA TOTP**: autenticação de dois fatores via Google Authenticator, Authy, 1Password, etc.
+- Login em dois passos: senha → código TOTP de 6 dígitos (se 2FA ativo)
+- Sessão parcial com TTL de 5 min entre os dois passos
+- Rate limiting específico para tentativas de TOTP (5 tentativas → 5 min lockout)
+- Endpoints: `GET /api/auth/totp/status`, `/setup`, `POST /confirm`, `/activate`, `/disable`
+- Seção "2FA" no Settings: QR code via qrcodejs, ativação com confirmação de código, desativação com senha
+- `pyotp>=2.9` adicionado ao requirements.txt (pure Python, sem C extensions)
+
 ## [0.6.1] - 2026-08-29
 
 ### Fixed
