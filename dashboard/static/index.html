@@ -49,14 +49,40 @@
   .msg { max-width: 420px; }
   .empty { color: var(--muted); text-align: center; padding: 24px; }
   canvas { max-height: 260px; }
+  nav { margin-left: auto; display: flex; gap: 4px; }
+  nav button { background: none; border: 1px solid transparent; color: var(--muted);
+               padding: 7px 14px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+  nav button.active { color: var(--text); background: var(--panel);
+                      border-color: var(--border); }
+  nav button:hover { color: var(--text); }
+  .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  input[type=text] { background: var(--bg); color: var(--text); border: 1px solid var(--border);
+                     border-radius: 6px; padding: 8px 10px; font-size: 13px; min-width: 220px; }
+  .btn { background: var(--accent); color: #10151a; border: 0; border-radius: 6px;
+         padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .btn.ghost { background: none; color: var(--muted); border: 1px solid var(--border);
+               font-weight: 400; }
+  .btn.ghost:hover { color: var(--critical); border-color: var(--critical); }
+  .formmsg { font-size: 13px; align-self: center; }
+  .formmsg.err { color: var(--critical); } .formmsg.ok { color: #3ddc84; }
+  details.snippet { margin-top: 6px; }
+  details.snippet summary { cursor: pointer; color: var(--accent); font-size: 12px; }
+  pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+             padding: 10px 12px; font-size: 12px; overflow-x: auto; margin: 8px 0 0;
+             font-family: ui-monospace, Consolas, monospace; }
 </style>
 </head>
 <body>
 <header>
   <h1>🛡️ SecPipe</h1>
   <span class="sub">SAST · SCA · Secrets · IaC — findings do pipeline</span>
+  <nav>
+    <button id="navDash" class="active" onclick="showTab('dashboard')">Dashboard</button>
+    <button id="navRepos" onclick="showTab('repos')">Repositórios</button>
+  </nav>
 </header>
 <main>
+<div id="tab-dashboard">
   <div class="cards" id="cards"></div>
 
   <div class="panel">
@@ -91,6 +117,28 @@
       </table>
     </div>
   </div>
+</div>
+
+<div id="tab-repos" hidden>
+  <div class="panel">
+    <h2>Cadastrar repositório</h2>
+    <div class="form-row">
+      <input type="text" id="repoName" placeholder="nome (ex: k19x/meu-projeto)">
+      <input type="text" id="repoUrl" placeholder="URL (opcional)">
+      <button class="btn" onclick="addRepo()">Cadastrar</button>
+      <span class="formmsg" id="repoMsg"></span>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th>Repositório</th><th>Último scan</th><th>Scans</th>
+          <th>Abertos</th><th>Crit/High</th><th>Integração</th><th></th>
+        </tr></thead>
+        <tbody id="repoRows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 </main>
 
 <script>
@@ -191,6 +239,86 @@ async function setTriage(repo, fid, status) {
   await Promise.all([loadOverview(), loadFindings()]);
 }
 
+// ---------- aba Repositórios ----------
+const PLATFORM_REPO = 'k19x/ci_cd'; // repo da plataforma no GitHub
+
+function showTab(tab) {
+  $('tab-dashboard').hidden = tab !== 'dashboard';
+  $('tab-repos').hidden = tab !== 'repos';
+  $('navDash').classList.toggle('active', tab === 'dashboard');
+  $('navRepos').classList.toggle('active', tab === 'repos');
+  if (tab === 'repos') loadRepos();
+}
+
+function yamlSnippet(name) {
+  return `# .github/workflows/security.yml no repo ${name}
+name: security
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  scan:
+    uses: ${PLATFORM_REPO}/.github/workflows/security-scan.yml@main
+    with:
+      fail_on: high`;
+}
+
+async function loadRepos() {
+  const data = await api('/api/repos');
+  const tbody = $('repoRows');
+  if (!data.repos.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhum repositório cadastrado ainda.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.repos.map(r => `
+    <tr>
+      <td>
+        <strong>${escapeHtml(r.name)}</strong>
+        ${r.url ? `<div><a class="mono" href="${escapeHtml(r.url)}" target="_blank">${escapeHtml(r.url)}</a></div>` : ''}
+      </td>
+      <td>${r.last_scan ? r.last_scan.slice(0, 16).replace('T', ' ') : '<span class="mono">nunca escaneado</span>'}</td>
+      <td>${r.scan_count}</td>
+      <td>${r.open_findings}</td>
+      <td>${r.open_critical_high > 0
+            ? `<span class="sev critical">${r.open_critical_high}</span>` : '0'}</td>
+      <td>
+        <details class="snippet">
+          <summary>ver workflow</summary>
+          <pre class="yaml">${escapeHtml(yamlSnippet(r.name))}</pre>
+        </details>
+      </td>
+      <td><button class="btn ghost" onclick="delRepo('${escapeHtml(r.name)}')">remover</button></td>
+    </tr>`).join('');
+}
+
+async function addRepo() {
+  const msg = $('repoMsg');
+  msg.className = 'formmsg';
+  msg.textContent = '';
+  const response = await fetch('/api/repos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: $('repoName').value, url: $('repoUrl').value }),
+  });
+  if (response.ok) {
+    msg.className = 'formmsg ok';
+    msg.textContent = 'cadastrado ✔';
+    $('repoName').value = ''; $('repoUrl').value = '';
+    await Promise.all([loadRepos(), loadOverview()]);
+  } else {
+    const body = await response.json().catch(() => ({}));
+    msg.className = 'formmsg err';
+    msg.textContent = body.detail || `erro ${response.status}`;
+  }
+}
+
+async function delRepo(name) {
+  await fetch('/api/repos/' + encodeURIComponent(name), { method: 'DELETE' });
+  await Promise.all([loadRepos(), loadOverview()]);
+}
+
+$('repoName').addEventListener('keydown', e => { if (e.key === 'Enter') addRepo(); });
 ['fRepo', 'fSeverity', 'fStatus'].forEach(id => $(id).addEventListener('change', loadFindings));
 $('trendRepo').addEventListener('change', loadTrend);
 

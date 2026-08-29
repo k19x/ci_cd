@@ -55,6 +55,11 @@ def init_db() -> None:
                 PRIMARY KEY (repo, fid)
             );
             CREATE INDEX IF NOT EXISTS idx_findings_repo ON findings(repo, status, severity);
+            CREATE TABLE IF NOT EXISTS repos(
+                name TEXT PRIMARY KEY,
+                url TEXT DEFAULT '',
+                created_at TEXT NOT NULL
+            );
             """
         )
 
@@ -93,6 +98,9 @@ def ingest(payload: IngestPayload, x_api_key: str | None = Header(default=None))
     counts = {sev: payload.summary.get(sev, 0) for sev in SEVERITIES}
 
     with db() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO repos(name, created_at) VALUES (?,?)", (payload.repo, now)
+        )
         conn.execute(
             "INSERT INTO scans(repo, branch, commit_sha, created_at, critical, high, medium, low, info)"
             " VALUES (?,?,?,?,?,?,?,?,?)",
@@ -136,7 +144,12 @@ def ingest(payload: IngestPayload, x_api_key: str | None = Header(default=None))
 @app.get("/api/overview")
 def overview():
     with db() as conn:
-        repos = [r["repo"] for r in conn.execute("SELECT DISTINCT repo FROM scans ORDER BY repo")]
+        repos = [
+            r["name"]
+            for r in conn.execute(
+                "SELECT name FROM repos UNION SELECT DISTINCT repo FROM scans ORDER BY 1"
+            )
+        ]
         totals = dict(
             conn.execute(
                 "SELECT severity, COUNT(*) FROM findings WHERE status='open' GROUP BY severity"
@@ -158,6 +171,60 @@ def overview():
         "by_status": by_status,
         "last_scans": last_scans,
     }
+
+
+class RepoCreate(BaseModel):
+    name: str
+    url: str = ""
+
+
+@app.get("/api/repos")
+def list_repos():
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT r.name, r.url, r.created_at,
+                   (SELECT MAX(created_at) FROM scans s WHERE s.repo = r.name) AS last_scan,
+                   (SELECT COUNT(*) FROM scans s WHERE s.repo = r.name) AS scan_count,
+                   (SELECT COUNT(*) FROM findings f
+                     WHERE f.repo = r.name AND f.status = 'open') AS open_findings,
+                   (SELECT COUNT(*) FROM findings f
+                     WHERE f.repo = r.name AND f.status = 'open'
+                       AND f.severity IN ('critical', 'high')) AS open_critical_high
+            FROM (SELECT name, url, created_at FROM repos
+                  UNION
+                  SELECT DISTINCT repo, '', '' FROM scans
+                   WHERE repo NOT IN (SELECT name FROM repos)) r
+            ORDER BY r.name
+            """
+        ).fetchall()
+    return {"repos": [dict(r) for r in rows]}
+
+
+@app.post("/api/repos", status_code=201)
+def create_repo(repo: RepoCreate):
+    name = repo.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="nome do repositório é obrigatório")
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with db() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO repos(name, url, created_at) VALUES (?,?,?)",
+                (name, repo.url.strip(), now),
+            )
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=409, detail="repositório já cadastrado")
+    return {"ok": True, "name": name}
+
+
+@app.delete("/api/repos/{name:path}")
+def delete_repo(name: str):
+    with db() as conn:
+        cur = conn.execute("DELETE FROM repos WHERE name=?", (name,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="repositório não encontrado")
+    return {"ok": True}
 
 
 @app.get("/api/trend")
