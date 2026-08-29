@@ -314,6 +314,7 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
   <header class="topbar">
     <div class="topbar-title" id="topbarTitle">Dashboard</div>
     <div class="topbar-actions">
+      <span id="topbarAge" hidden style="font-size:11px;color:var(--muted)"></span>
       <span class="topbar-badge" id="topbarBadge" hidden></span>
       <button class="refresh-btn" onclick="refreshCurrent()">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -457,7 +458,7 @@ const api = path => fetch(path).then(r => r.json());
 const esc = s => (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sevClass = s => ({critical:'critical',high:'high',medium:'medium',low:'low',info:'info'}[s]||'info');
 
-let chart, jobTimer, currentTab = 'dashboard';
+let chart, jobTimer, dashTimer, currentTab = 'dashboard';
 
 /* ── Tab switching ── */
 function showTab(tab, el) {
@@ -469,10 +470,21 @@ function showTab(tab, el) {
   const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Results', repos:'Projects'};
   $('topbarTitle').textContent = titles[tab] || tab;
   clearInterval(jobTimer);
-  if (tab === 'dashboard') loadDashboard();
-  if (tab === 'jobs')      { loadJobs(); jobTimer = setInterval(loadJobs, 15000); }
-  if (tab === 'findings')  loadFindings();
-  if (tab === 'repos')     loadRepos();
+  clearInterval(dashTimer);
+  $('topbarAge').hidden = true;
+  if (tab === 'dashboard') {
+    loadDashboard();
+    dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
+  }
+  if (tab === 'jobs')     { loadJobs(); jobTimer = setInterval(loadJobs, 15000); }
+  if (tab === 'findings') loadFindings();
+  if (tab === 'repos')    loadRepos();
+}
+
+function updateDashAge() {
+  const el = $('topbarAge');
+  el.hidden = false;
+  el.textContent = 'Auto-refresh 30s · ' + new Date().toLocaleTimeString('pt-BR');
 }
 
 function refreshCurrent() { showTab(currentTab, document.querySelector('.nav-item.active')); }
@@ -698,5 +710,6 @@ async function delRepo(name) {
 }
 
 /* ── Boot ── */
-loadDashboard();
+loadDashboard().then(updateDashAge);
+dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
 </script>
