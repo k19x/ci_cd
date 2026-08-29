@@ -732,9 +732,83 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
 <script>
 /* ── helpers ── */
 const $ = id => document.getElementById(id);
-const api = path => fetch(path).then(r => r.json());
 const esc = s => (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sevClass = s => ({critical:'critical',high:'high',medium:'medium',low:'low',info:'info'}[s]||'info');
+
+let _currentRole = 'viewer';
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (r.status === 401) { showLogin(); return null; }
+  return r.json();
+}
+
+/* ── Auth / RBAC ── */
+function showLogin() {
+  $('loginScreen').style.display = 'flex';
+  $('loginErr').textContent = '';
+  $('loginUser').value = '';
+  $('loginPass').value = '';
+  clearInterval(jobTimer);
+  clearInterval(dashTimer);
+}
+
+function hideLogin() {
+  $('loginScreen').style.display = 'none';
+}
+
+function applyRole(role) {
+  _currentRole = role;
+  const order = ['viewer', 'analyst', 'admin'];
+  const rank = r => order.indexOf(r);
+  document.querySelectorAll('[data-min-role]').forEach(el => {
+    el.hidden = rank(role) < rank(el.dataset.minRole);
+  });
+}
+
+async function initApp() {
+  const me = await fetch('/api/auth/me').then(r => r.ok ? r.json() : null).catch(() => null);
+  if (!me) { showLogin(); return; }
+  $('sidebarUsername').textContent = me.username;
+  $('sidebarRoleBadge').textContent = me.role;
+  applyRole(me.role);
+  hideLogin();
+  loadDashboard().then(updateDashAge);
+  dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
+}
+
+async function doLogin() {
+  const btn = $('loginBtn');
+  const err = $('loginErr');
+  btn.disabled = true; btn.textContent = 'Entrando…'; err.textContent = '';
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username: $('loginUser').value, password: $('loginPass').value}),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) {
+      $('sidebarUsername').textContent = body.username;
+      $('sidebarRoleBadge').textContent = body.role;
+      applyRole(body.role);
+      hideLogin();
+      loadDashboard().then(updateDashAge);
+      dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
+    } else {
+      err.textContent = body.detail || 'Credenciais inválidas';
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+}
+
+async function doLogout() {
+  await fetch('/api/auth/logout', {method:'POST'}).catch(() => {});
+  clearInterval(jobTimer);
+  clearInterval(dashTimer);
+  showLogin();
+}
 
 let chart, jobTimer, dashTimer, currentTab = 'dashboard';
 
@@ -772,6 +846,7 @@ function refreshCurrent() { showTab(currentTab, document.querySelector('.nav-ite
 /* ── Dashboard ── */
 async function loadDashboard() {
   const data = await api('/api/overview');
+  if (!data) return;
   const sev = data.open_by_severity;
   const total = Object.values(sev).reduce((a,b)=>a+b,0);
   $('s-total').textContent   = total;
@@ -1233,6 +1308,5 @@ async function pushPolicy() {
 }
 
 /* ── Boot ── */
-loadDashboard().then(updateDashAge);
-dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
+initApp();
 </script>

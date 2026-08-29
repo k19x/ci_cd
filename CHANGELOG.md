@@ -3,6 +3,16 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.1] - 2026-08-29
+
+### Fixed
+- Login screen agora funciona: `initApp()` verifica `/api/auth/me` antes de carregar o dashboard
+- `api()` helper redireciona para tela de login ao receber 401
+- `loadDashboard()` trata retorno `null` (evita crash `Object.values(null)`)
+- `doLogin()` / `doLogout()` implementados com feedback de erro e loading
+- `applyRole()` aplica visibilidade de elementos `[data-min-role]` por role
+- Favicon 404 resolvido com rota `/favicon.ico` inline no backend
+
 ## [0.6.0] - 2026-08-29
 
 ### Added

@@ -809,3 +809,18 @@ def health():
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    ico = STATIC / "favicon.ico"
+    if ico.exists():
+        return FileResponse(ico)
+    from fastapi.responses import Response
+    # minimal 1×1 transparent ICO
+    data = bytes([
+        0,0,1,0,1,0,1,1,0,0,1,0,32,0,40,0,0,0,22,0,0,0,40,0,0,0,1,0,0,0,2,0,
+        0,0,1,0,32,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,255,255,255,0,0,0,0,0
+    ])
+    return Response(content=data, media_type="image/x-icon")
