@@ -254,6 +254,26 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
 /* ── Tabs hidden ── */
 .tab-pane { display: none; }
 .tab-pane.active { display: block; }
+
+/* ── Severity chips compactos (Vulnerabilidades) ── */
+.chip { display:inline-flex; align-items:center; gap:3px; padding:2px 7px;
+        border-radius:4px; font-size:11px; font-weight:700; min-width:32px;
+        justify-content:center; font-variant-numeric:tabular-nums; }
+.chip.c { background:var(--crit-bg); color:var(--crit); }
+.chip.h { background:var(--high-bg); color:var(--high); }
+.chip.m { background:var(--med-bg);  color:var(--med);  }
+.chip.l { background:var(--low-bg);  color:var(--low);  }
+.chip.zero { opacity:.25; }
+
+/* ── Settings ── */
+.sev-input-row { display:flex; align-items:center; gap:12px; }
+.sev-input-row label { width:80px; justify-content:center; }
+.sev-num { width:80px; font-size:14px; font-weight:600; padding:6px 10px;
+           border-radius:var(--radius); border:1px solid var(--border);
+           background:var(--surface); color:var(--text); text-align:center; }
+.sev-num:focus { border-color:var(--orange); outline:none; box-shadow:0 0 0 3px var(--orange-light); }
+.sev-hint { font-size:12px; color:var(--muted); }
+.allow-type { font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; }
 </style>
 
 <div class="sidebar">
@@ -292,6 +312,13 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
         </svg>
         Results
       </a>
+      <a class="nav-item" onclick="showTab('vulns',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        Vulnerabilidades
+      </a>
     </div>
     <div class="nav-section">
       <span class="nav-label">Management</span>
@@ -300,6 +327,13 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
         </svg>
         Projects
+      </a>
+      <a class="nav-item" onclick="showTab('settings',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        Configurações
       </a>
     </div>
   </nav>
@@ -417,6 +451,28 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
       </div>
     </div>
 
+    <!-- ═══ VULNERABILIDADES ═══ -->
+    <div id="tab-vulns" class="tab-pane">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">Histórico de scans</div>
+          <div class="card-sub" id="vulnCount"></div>
+        </div>
+        <div class="filter-bar">
+          <select id="vRepo"><option value="">All projects</option></select>
+        </div>
+        <div class="card-body tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Projeto</th><th>Branch</th><th>Commit</th>
+              <th>Data</th><th style="text-align:center">C</th><th style="text-align:center">H</th><th style="text-align:center">M</th><th style="text-align:center">L</th><th style="text-align:center">Total</th>
+            </tr></thead>
+            <tbody id="vulnRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══ REPOS / PROJECTS ═══ -->
     <div id="tab-repos" class="tab-pane">
       <div class="card" style="margin-bottom:16px">
@@ -448,6 +504,91 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
       </div>
     </div>
 
+    <!-- ═══ CONFIGURAÇÕES ═══ -->
+    <div id="tab-settings" class="tab-pane">
+      <div class="grid-2" style="margin-bottom:16px">
+
+        <!-- Thresholds -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Limites de bloqueio</div>
+            <div class="card-sub">Máx. de findings ativos por severidade</div>
+          </div>
+          <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+            <div class="sev-input-row">
+              <label class="sev critical">Critical</label>
+              <input type="number" id="maxCritical" min="0" class="sev-num">
+              <span class="sev-hint">findings (0 = bloqueia qualquer)</span>
+            </div>
+            <div class="sev-input-row">
+              <label class="sev high">High</label>
+              <input type="number" id="maxHigh" min="0" class="sev-num">
+              <span class="sev-hint">findings</span>
+            </div>
+            <div class="sev-input-row">
+              <label class="sev medium">Medium</label>
+              <input type="number" id="maxMedium" min="0" class="sev-num">
+              <span class="sev-hint">findings</span>
+            </div>
+            <div class="sev-input-row">
+              <label class="sev low">Low</label>
+              <input type="number" id="maxLow" min="0" class="sev-num">
+              <span class="sev-hint">findings</span>
+            </div>
+          </div>
+          <div style="padding:0 18px 18px;font-size:12px;color:var(--muted)">
+            <strong>Nota:</strong> o parâmetro <code>fail_on: high</code> no workflow dos repos sobrepõe esses limites quando definido.
+          </div>
+        </div>
+
+        <!-- Info card -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Como funciona o gate</div>
+          </div>
+          <div style="padding:18px;font-size:13px;line-height:1.7;color:var(--text2)">
+            <p style="margin-bottom:10px">O <strong>Policy Gate</strong> é o último job de cada scan. Ele:</p>
+            <ol style="padding-left:18px;display:flex;flex-direction:column;gap:6px">
+              <li>Coleta os SARIFs de Semgrep, Trivy e Gitleaks</li>
+              <li>Remove findings do <strong>allowlist</strong> (falsos positivos)</li>
+              <li>Compara com os limites definidos aqui</li>
+              <li>Retorna <code style="color:var(--crit)">exit 1</code> se houver violações — bloqueando o merge</li>
+            </ol>
+            <p style="margin-top:12px">Ao salvar, clique em <strong>Commit & Push</strong> para que os próximos scans usem a nova política.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Allowlist -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-head">
+          <div class="card-title">Allowlist — falsos positivos</div>
+          <div class="card-sub">Rule ID, fingerprint de finding ou glob de arquivo</div>
+        </div>
+        <div class="form-row">
+          <input type="text" id="allowEntry" placeholder="ex: python.lang.security.audit.eval-detected  ou  tests/**" style="flex:1;min-width:300px">
+          <button class="btn-primary" onclick="addAllow()">Adicionar</button>
+        </div>
+        <div class="card-body tbl-wrap">
+          <table>
+            <thead><tr><th>Entrada</th><th>Tipo</th><th></th></tr></thead>
+            <tbody id="allowRows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Save bar -->
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn-primary" style="padding:9px 22px;font-size:14px" onclick="savePolicy()">
+          Salvar policy.yml
+        </button>
+        <button class="refresh-btn" style="padding:9px 16px" onclick="pushPolicy()">
+          Commit &amp; Push →  GitHub
+        </button>
+        <span id="policyMsg" class="form-msg"></span>
+      </div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -467,7 +608,7 @@ function showTab(tab, el) {
   $(`tab-${tab}`).classList.add('active');
   if (el) el.classList.add('active');
   currentTab = tab;
-  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Results', repos:'Projects'};
+  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Results', vulns:'Vulnerabilidades', repos:'Projects', settings:'Configurações'};
   $('topbarTitle').textContent = titles[tab] || tab;
   clearInterval(jobTimer);
   clearInterval(dashTimer);
@@ -478,7 +619,9 @@ function showTab(tab, el) {
   }
   if (tab === 'jobs')     { loadJobs(); jobTimer = setInterval(loadJobs, 15000); }
   if (tab === 'findings') loadFindings();
+  if (tab === 'vulns')    loadVulns();
   if (tab === 'repos')    loadRepos();
+  if (tab === 'settings') loadSettings();
 }
 
 function updateDashAge() {
@@ -707,6 +850,129 @@ async function addRepo() {
 async function delRepo(name) {
   await fetch('/api/repos/' + encodeURIComponent(name), {method:'DELETE'});
   await Promise.all([loadRepos(), loadDashboard()]);
+}
+
+/* ── Vulnerabilidades ── */
+$('vRepo') && $('vRepo').addEventListener('change', loadVulns);
+
+async function loadVulns() {
+  const repo = $('vRepo').value;
+  const p = new URLSearchParams();
+  if (repo) p.set('repo', repo);
+  const data = await api('/api/scans?' + p);
+  $('vulnCount').textContent = `${data.count} scan${data.count!==1?'s':''}`;
+
+  // populate filter
+  const sel = $('vRepo'), cur = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  const repos = [...new Set(data.scans.map(s=>s.repo))].sort();
+  repos.forEach(r => sel.add(new Option(r,r)));
+  if (cur) sel.value = cur;
+
+  const chip = (cls, n) => `<span class="chip ${cls}${n===0?' zero':''}">${n}</span>`;
+  const tbody = $('vulnRows');
+  if (!data.scans.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><p>Nenhum scan registrado ainda.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.scans.map(s => {
+    const total = (s.critical||0)+(s.high||0)+(s.medium||0)+(s.low||0)+(s.info||0);
+    return `<tr>
+      <td class="primary">${esc(s.repo)}</td>
+      <td class="mono">${esc(s.branch||'—')}</td>
+      <td class="mono">${s.commit_sha ? s.commit_sha.slice(0,7) : '—'}</td>
+      <td class="mono" style="font-size:12px">${s.created_at.slice(0,16).replace('T',' ')}</td>
+      <td style="text-align:center">${chip('c', s.critical||0)}</td>
+      <td style="text-align:center">${chip('h', s.high||0)}</td>
+      <td style="text-align:center">${chip('m', s.medium||0)}</td>
+      <td style="text-align:center">${chip('l', s.low||0)}</td>
+      <td style="text-align:center;font-weight:600;color:var(--text2)">${total}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── Settings / Policy ── */
+let _allowlist = [];
+
+function allowType(entry) {
+  if (entry.includes('**') || entry.includes('/') || entry.startsWith('.')) return 'glob arquivo';
+  if (/^[0-9a-f]{8,}$/.test(entry)) return 'fingerprint';
+  return 'rule ID';
+}
+
+async function loadSettings() {
+  const p = await api('/api/policy');
+  $('maxCritical').value = p.max.critical ?? 0;
+  $('maxHigh').value     = p.max.high ?? 0;
+  $('maxMedium').value   = p.max.medium ?? 10;
+  $('maxLow').value      = p.max.low ?? 50;
+  _allowlist = [...(p.allowlist || [])];
+  renderAllowlist();
+}
+
+function renderAllowlist() {
+  const tbody = $('allowRows');
+  if (!_allowlist.length) {
+    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><p>Nenhuma entrada. Adicione rule IDs ou globs de arquivos para suprimir falsos positivos.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = _allowlist.map((e, i) => `
+    <tr>
+      <td class="primary mono">${esc(e)}</td>
+      <td><span class="allow-type">${allowType(e)}</span></td>
+      <td><button class="btn-ghost" onclick="removeAllow(${i})">Remover</button></td>
+    </tr>`).join('');
+}
+
+function addAllow() {
+  const val = $('allowEntry').value.trim();
+  if (!val || _allowlist.includes(val)) return;
+  _allowlist.push(val);
+  $('allowEntry').value = '';
+  renderAllowlist();
+}
+
+function removeAllow(i) {
+  _allowlist.splice(i, 1);
+  renderAllowlist();
+}
+
+async function savePolicy() {
+  const msg = $('policyMsg');
+  msg.className = 'form-msg'; msg.textContent = 'Salvando…';
+  const res = await fetch('/api/policy', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      max: {
+        critical: +$('maxCritical').value,
+        high:     +$('maxHigh').value,
+        medium:   +$('maxMedium').value,
+        low:      +$('maxLow').value,
+      },
+      allowlist: _allowlist,
+    }),
+  });
+  if (res.ok) {
+    msg.className = 'form-msg ok';
+    msg.textContent = 'policy.yml salvo! Clique em "Commit & Push" para enviar ao GitHub.';
+  } else {
+    msg.className = 'form-msg err'; msg.textContent = 'Erro ao salvar';
+  }
+}
+
+async function pushPolicy() {
+  const msg = $('policyMsg');
+  msg.className = 'form-msg'; msg.textContent = 'Fazendo commit & push…';
+  const res = await fetch('/api/policy/push', {method:'POST'});
+  const body = await res.json().catch(()=>({}));
+  if (res.ok) {
+    msg.className = 'form-msg ok';
+    msg.textContent = '✓ Commitado e enviado ao GitHub. Próximos scans usarão a nova política.';
+  } else {
+    msg.className = 'form-msg err';
+    msg.textContent = 'Erro: ' + (body.detail || res.status);
+  }
 }
 
 /* ── Boot ── */

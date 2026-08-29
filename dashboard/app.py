@@ -10,11 +10,13 @@ Auth:   se a env SECPIPE_TOKEN estiver definida, o /api/ingest exige o
 """
 
 import os
+import subprocess
 import sqlite3
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
@@ -22,6 +24,8 @@ from pydantic import BaseModel
 
 DB_PATH = Path(os.environ.get("SECPIPE_DB", Path(__file__).parent / "secpipe.db"))
 STATIC = Path(__file__).parent / "static"
+REPO_ROOT = Path(__file__).parent.parent
+POLICY_PATH = REPO_ROOT / "policy" / "policy.yml"
 SEVERITIES = ["critical", "high", "medium", "low", "info"]
 TRIAGE_STATUSES = {"open", "fixed", "false_positive", "accepted"}
 
@@ -229,6 +233,20 @@ def delete_repo(name: str):
     return {"ok": True}
 
 
+@app.get("/api/scans")
+def list_scans(repo: str | None = None, limit: int = 200):
+    query = "SELECT id, repo, branch, commit_sha, created_at, critical, high, medium, low, info FROM scans"
+    params: list = []
+    if repo:
+        query += " WHERE repo=?"
+        params.append(repo)
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+    with db() as conn:
+        rows = [dict(r) for r in conn.execute(query, params)]
+    return {"count": len(rows), "scans": rows}
+
+
 @app.get("/api/trend")
 def trend(repo: str | None = None, limit: int = 30):
     query = "SELECT repo, created_at, critical, high, medium, low FROM scans"
@@ -329,6 +347,85 @@ def list_runs(repo: str | None = None, limit: int = 30):
 
     runs.sort(key=lambda x: x["updated_at"], reverse=True)
     return {"runs": runs[:limit]}
+
+
+def _read_policy() -> dict:
+    policy = {"max": {"critical": 0, "high": 0, "medium": 10, "low": 50}, "allowlist": []}
+    if not POLICY_PATH.exists():
+        return policy
+    section = None
+    for raw in POLICY_PATH.read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip())
+        stripped = line.strip()
+        if indent == 0 and stripped.endswith(":"):
+            section = stripped[:-1]
+        elif section == "max" and ":" in stripped:
+            k, _, v = stripped.partition(":")
+            try:
+                policy["max"][k.strip()] = int(v.strip())
+            except ValueError:
+                pass
+        elif section == "allowlist" and stripped.startswith("- "):
+            policy["allowlist"].append(stripped[2:].strip().strip("'\""))
+    return policy
+
+
+def _write_policy(policy: dict) -> None:
+    lines = [
+        "# Política do gate de segurança — editada via dashboard SecPipe\n",
+        "max:\n",
+    ]
+    for sev in ["critical", "high", "medium", "low"]:
+        lines.append(f"  {sev}: {policy['max'].get(sev, 0)}\n")
+    lines.append("\nallowlist:\n")
+    for entry in policy.get("allowlist", []):
+        lines.append(f'  - "{entry}"\n')
+    POLICY_PATH.write_text("".join(lines), encoding="utf-8")
+
+
+class PolicyMax(BaseModel):
+    critical: int = 0
+    high: int = 0
+    medium: int = 10
+    low: int = 50
+
+
+class PolicyPayload(BaseModel):
+    max: PolicyMax
+    allowlist: list[str] = []
+
+
+@app.get("/api/policy")
+def get_policy():
+    return _read_policy()
+
+
+@app.put("/api/policy")
+def update_policy(payload: PolicyPayload):
+    data = {
+        "max": payload.max.model_dump(),
+        "allowlist": payload.allowlist,
+    }
+    _write_policy(data)
+    return {"ok": True}
+
+
+@app.post("/api/policy/push")
+def push_policy():
+    try:
+        cwd = str(REPO_ROOT)
+        subprocess.run(["git", "add", "policy/policy.yml"], cwd=cwd, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "policy: update via dashboard"],
+            cwd=cwd, check=True, capture_output=True,
+        )
+        subprocess.run(["git", "push"], cwd=cwd, check=True, capture_output=True)
+        return {"ok": True, "message": "Committed and pushed"}
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail=e.stderr.decode() if e.stderr else str(e))
 
 
 @app.get("/")
