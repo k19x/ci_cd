@@ -15,3 +15,7 @@ max:
 #   - um glob de arquivo, ex: "tests/**"
 allowlist:
   - "tests/fixtures/**"
+  # secrets: inherit é seguro aqui pois o workflow chamado é nosso próprio ci_cd (confiável)
+  - "yaml.github-actions.security.secrets-inherit.secrets-inherit"
+  # arquivos de workflow do caller não são código da aplicação
+  - ".github/workflows/security.yml"
