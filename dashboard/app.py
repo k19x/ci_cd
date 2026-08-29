@@ -10,23 +10,51 @@ Auth:   se a env SECPIPE_TOKEN estiver definida, o /api/ingest exige o
 """
 
 import base64
+import concurrent.futures
 import json as _json
 import os
+import secrets
 import sqlite3
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+import hashlib
+
+from fastapi import FastAPI, Header, HTTPException, Depends, Request
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 DB_PATH     = Path(os.environ.get("SECPIPE_DB",     Path(__file__).parent / "secpipe.db"))
 POLICY_PATH = Path(os.environ.get("SECPIPE_POLICY", Path(__file__).parent.parent / "policy" / "policy.yml"))
 STATIC      = Path(__file__).parent / "static"
-SEVERITIES = ["critical", "high", "medium", "low", "info"]
+SEVERITIES      = ["critical", "high", "medium", "low", "info"]
 TRIAGE_STATUSES = {"open", "fixed", "false_positive", "accepted"}
+ROLES           = ["viewer", "analyst", "admin"]
+
+# Auth config
+SESSION_COOKIE = "secpipe_session"
+SESSION_TTL_H  = int(os.environ.get("SECPIPE_SESSION_TTL", "8"))
+SECURE_COOKIE  = os.environ.get("SECPIPE_SECURE_COOKIE", "false").lower() == "true"
+_rl: dict      = {}   # rate limiting: ip -> [fail_count, lockout_ts]
+RL_MAX, RL_WIN = 10, 900  # 10 attempts → 15 min lockout
+_PBKDF2_ITERS  = 600_000  # OWASP 2023 recommendation for PBKDF2-SHA256
+
+
+def _hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    key  = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), _PBKDF2_ITERS)
+    return f"pbkdf2$sha256${_PBKDF2_ITERS}${salt}${key.hex()}"
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    try:
+        _, algo, iters, salt, hx = stored.split("$")
+        key = hashlib.pbkdf2_hmac(algo, password.encode(), salt.encode(), int(iters))
+        return secrets.compare_digest(key.hex(), hx)
+    except Exception:
+        return False
 
 app = FastAPI(title="SecPipe Dashboard")
 
@@ -65,11 +93,78 @@ def init_db() -> None:
                 url TEXT DEFAULT '',
                 created_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS users(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'viewer',
+                created_at TEXT NOT NULL,
+                active INTEGER DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS sessions(
+                token TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                expires_at TEXT NOT NULL
+            );
             """
         )
 
 
 init_db()
+
+# Add columns if upgrading from older schema
+_migrations = [
+    "ALTER TABLE repos ADD COLUMN visibility TEXT DEFAULT ''",
+    "ALTER TABLE repos ADD COLUMN languages TEXT DEFAULT ''",
+]
+for _mig in _migrations:
+    try:
+        with db() as _conn:
+            _conn.execute(_mig)
+    except Exception:
+        pass
+
+
+def seed_admin() -> None:
+    with db() as conn:
+        if conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]:
+            return
+        pwd = os.environ.get("SECPIPE_ADMIN_PASSWORD") or secrets.token_urlsafe(16)
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        conn.execute(
+            "INSERT INTO users(username,password_hash,role,created_at) VALUES (?,?,?,?)",
+            ("admin", _hash_password(pwd), "admin", now),
+        )
+        if not os.environ.get("SECPIPE_ADMIN_PASSWORD"):
+            print(f"\n{'='*44}\nSECPIPE FIRST RUN — admin password: {pwd}\n{'='*44}\n", flush=True)
+
+
+seed_admin()
+
+
+# ── Auth dependencies ──────────────────────────────
+async def get_current_user(request: Request):
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token:
+        raise HTTPException(401, "Não autenticado")
+    now = datetime.now(timezone.utc).isoformat()
+    with db() as conn:
+        row = conn.execute(
+            "SELECT u.id,u.username,u.role FROM sessions s JOIN users u ON s.user_id=u.id "
+            "WHERE s.token=? AND s.expires_at>? AND u.active=1",
+            (token, now),
+        ).fetchone()
+    if not row:
+        raise HTTPException(401, "Sessão expirada")
+    return dict(row)
+
+
+def require_role(min_role: str):
+    async def dep(user=Depends(get_current_user)):
+        if ROLES.index(user["role"]) < ROLES.index(min_role):
+            raise HTTPException(403, "Permissão insuficiente")
+        return user
+    return dep
 
 
 class Finding(BaseModel):
@@ -147,7 +242,7 @@ def ingest(payload: IngestPayload, x_api_key: str | None = Header(default=None))
 
 
 @app.get("/api/overview")
-def overview():
+def overview(user=Depends(require_role("viewer"))):
     with db() as conn:
         repos = [
             r["name"]
@@ -184,11 +279,12 @@ class RepoCreate(BaseModel):
 
 
 @app.get("/api/repos")
-def list_repos():
+def list_repos(user=Depends(require_role("viewer"))):
     with db() as conn:
         rows = conn.execute(
             """
             SELECT r.name, r.url, r.created_at,
+                   r.visibility, r.languages,
                    (SELECT MAX(created_at) FROM scans s WHERE s.repo = r.name) AS last_scan,
                    (SELECT COUNT(*) FROM scans s WHERE s.repo = r.name) AS scan_count,
                    (SELECT COUNT(*) FROM findings f
@@ -196,9 +292,12 @@ def list_repos():
                    (SELECT COUNT(*) FROM findings f
                      WHERE f.repo = r.name AND f.status = 'open'
                        AND f.severity IN ('critical', 'high')) AS open_critical_high
-            FROM (SELECT name, url, created_at FROM repos
+            FROM (SELECT name, url, created_at,
+                         COALESCE(visibility,'') AS visibility,
+                         COALESCE(languages,'') AS languages
+                  FROM repos
                   UNION
-                  SELECT DISTINCT repo, '', '' FROM scans
+                  SELECT DISTINCT repo, '', '', '', '' FROM scans
                    WHERE repo NOT IN (SELECT name FROM repos)) r
             ORDER BY r.name
             """
@@ -207,7 +306,7 @@ def list_repos():
 
 
 @app.post("/api/repos", status_code=201)
-def create_repo(repo: RepoCreate):
+def create_repo(repo: RepoCreate, user=Depends(require_role("analyst"))):
     name = repo.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="nome do repositório é obrigatório")
@@ -223,8 +322,43 @@ def create_repo(repo: RepoCreate):
     return {"ok": True, "name": name}
 
 
+@app.post("/api/repos/{name:path}/refresh-meta")
+def refresh_repo_meta(name: str, user=Depends(require_role("analyst"))):
+    """Fetch visibility and language info from GitHub and cache in DB."""
+    gh_token = os.environ.get("GITHUB_TOKEN", "")
+    hdrs = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    if gh_token:
+        hdrs["Authorization"] = f"Bearer {gh_token}"
+
+    visibility = ""
+    languages_str = ""
+    try:
+        req = urllib.request.Request(f"https://api.github.com/repos/{name}", headers=hdrs)
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = _json.loads(resp.read())
+            visibility = "private" if data.get("private") else "public"
+    except Exception:
+        pass
+
+    try:
+        req = urllib.request.Request(f"https://api.github.com/repos/{name}/languages", headers=hdrs)
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            lang_data = _json.loads(resp.read())
+            sorted_langs = sorted(lang_data.items(), key=lambda x: x[1], reverse=True)
+            languages_str = ",".join(lname for lname, _ in sorted_langs[:6])
+    except Exception:
+        pass
+
+    with db() as conn:
+        conn.execute(
+            "UPDATE repos SET visibility=?, languages=? WHERE name=?",
+            (visibility, languages_str, name),
+        )
+    return {"ok": True, "visibility": visibility, "languages": languages_str}
+
+
 @app.delete("/api/repos/{name:path}")
-def delete_repo(name: str):
+def delete_repo(name: str, user=Depends(require_role("admin"))):
     with db() as conn:
         cur = conn.execute("DELETE FROM repos WHERE name=?", (name,))
         if cur.rowcount == 0:
@@ -233,7 +367,7 @@ def delete_repo(name: str):
 
 
 @app.get("/api/scans")
-def list_scans(repo: str | None = None, limit: int = 200):
+def list_scans(repo: str | None = None, limit: int = 200, user=Depends(require_role("viewer"))):
     query = "SELECT id, repo, branch, commit_sha, created_at, critical, high, medium, low, info FROM scans"
     params: list = []
     if repo:
@@ -247,7 +381,7 @@ def list_scans(repo: str | None = None, limit: int = 200):
 
 
 @app.get("/api/trend")
-def trend(repo: str | None = None, limit: int = 30):
+def trend(repo: str | None = None, limit: int = 30, user=Depends(require_role("viewer"))):
     query = "SELECT repo, created_at, critical, high, medium, low FROM scans"
     params: list = []
     if repo:
@@ -267,6 +401,7 @@ def list_findings(
     status: str | None = "open",
     tool: str | None = None,
     limit: int = 500,
+    user=Depends(require_role("viewer")),
 ):
     query = "SELECT * FROM findings WHERE 1=1"
     params: list = []
@@ -292,7 +427,7 @@ class TriageUpdate(BaseModel):
 
 
 @app.patch("/api/findings/{repo:path}/{fid}")
-def triage(repo: str, fid: str, update: TriageUpdate):
+def triage(repo: str, fid: str, update: TriageUpdate, user=Depends(require_role("analyst"))):
     if update.status not in TRIAGE_STATUSES:
         raise HTTPException(status_code=400, detail=f"status deve ser um de {sorted(TRIAGE_STATUSES)}")
     with db() as conn:
@@ -305,7 +440,7 @@ def triage(repo: str, fid: str, update: TriageUpdate):
 
 
 @app.post("/api/repos/{repo:path}/dispatch")
-def dispatch_scan(repo: str):
+def dispatch_scan(repo: str, user=Depends(require_role("analyst"))):
     token = os.environ.get("GITHUB_TOKEN", "")
     if not token:
         raise HTTPException(status_code=400, detail="GITHUB_TOKEN não configurado")
@@ -347,8 +482,8 @@ def dispatch_scan(repo: str):
 
 
 @app.get("/api/runs")
-def list_runs(repo: str | None = None, limit: int = 30):
-    """Consulta runs do GitHub Actions em tempo real via API pública."""
+def list_runs(repo: str | None = None, limit: int = 30, user=Depends(require_role("viewer"))):
+    """Consulta runs do GitHub Actions em paralelo via API."""
     token = os.environ.get("GITHUB_TOKEN", "")
     headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     if token:
@@ -363,16 +498,14 @@ def list_runs(repo: str | None = None, limit: int = 30):
             ).fetchall()
             repo_list = [r["name"] for r in rows]
 
-    runs = []
-    for r in repo_list[:20]:
+    def fetch_repo(r: str) -> list:
         try:
             url = f"https://api.github.com/repos/{r}/actions/workflows/security.yml/runs?per_page=3"
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=8) as resp:
-                import json as _json
                 data = _json.loads(resp.read())
-                for run in data.get("workflow_runs", []):
-                    runs.append({
+                return [
+                    {
                         "repo": r,
                         "run_id": run["id"],
                         "status": run["status"],
@@ -382,9 +515,16 @@ def list_runs(repo: str | None = None, limit: int = 30):
                         "created_at": run["created_at"],
                         "updated_at": run["updated_at"],
                         "url": run["html_url"],
-                    })
-        except (urllib.error.URLError, Exception):
-            pass
+                    }
+                    for run in data.get("workflow_runs", [])
+                ]
+        except Exception:
+            return []
+
+    runs: list = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
+        for result in ex.map(fetch_repo, repo_list[:20]):
+            runs.extend(result)
 
     runs.sort(key=lambda x: x["updated_at"], reverse=True)
     return {"runs": runs[:limit]}
@@ -440,12 +580,12 @@ class PolicyPayload(BaseModel):
 
 
 @app.get("/api/policy")
-def get_policy():
+def get_policy(user=Depends(require_role("viewer"))):
     return _read_policy()
 
 
 @app.put("/api/policy")
-def update_policy(payload: PolicyPayload):
+def update_policy(payload: PolicyPayload, user=Depends(require_role("admin"))):
     data = {
         "max": payload.max.model_dump(),
         "allowlist": payload.allowlist,
@@ -455,7 +595,7 @@ def update_policy(payload: PolicyPayload):
 
 
 @app.post("/api/policy/push")
-def push_policy():
+def push_policy(user=Depends(require_role("admin"))):
     token = os.environ.get("GITHUB_TOKEN", "")
     if not token:
         raise HTTPException(status_code=400, detail="GITHUB_TOKEN não configurado no .env")
@@ -498,6 +638,172 @@ def push_policy():
         return {"ok": True, "commit": commit_sha}
     except urllib.error.URLError as e:
         raise HTTPException(status_code=502, detail=f"GitHub API (write): {e}")
+
+
+# ── Auth endpoints ─────────────────────────────────
+class LoginPayload(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/auth/login")
+async def login(payload: LoginPayload, request: Request):
+    ip = request.client.host if request.client else "unknown"
+    ts = datetime.now(timezone.utc).timestamp()
+    rl = _rl.get(ip, [0, 0.0])
+    if rl[1] > ts:
+        raise HTTPException(429, f"Muitas tentativas. Aguarde {int(rl[1]-ts)}s")
+    with db() as conn:
+        u = conn.execute(
+            "SELECT id,username,password_hash,role,active FROM users WHERE username=?",
+            (payload.username.strip(),),
+        ).fetchone()
+    ok = u and u["active"] and _verify_password(payload.password, u["password_hash"])
+    if not ok:
+        rl[0] += 1
+        if rl[0] >= RL_MAX:
+            rl[1] = ts + RL_WIN
+            rl[0] = 0
+        _rl[ip] = rl
+        raise HTTPException(401, "Credenciais inválidas")
+    _rl.pop(ip, None)
+    token = secrets.token_urlsafe(32)
+    expires = (datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_H)).isoformat()
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO sessions(token,user_id,expires_at) VALUES (?,?,?)",
+            (token, u["id"], expires),
+        )
+    resp = JSONResponse({"ok": True, "username": u["username"], "role": u["role"]})
+    resp.set_cookie(SESSION_COOKIE, token, max_age=SESSION_TTL_H * 3600,
+                    httponly=True, samesite="lax", secure=SECURE_COOKIE)
+    return resp
+
+
+@app.post("/api/auth/logout")
+async def logout(request: Request):
+    token = request.cookies.get(SESSION_COOKIE)
+    if token:
+        with db() as conn:
+            conn.execute("DELETE FROM sessions WHERE token=?", (token,))
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(SESSION_COOKIE)
+    return resp
+
+
+@app.get("/api/auth/me")
+async def me(request: Request):
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token:
+        raise HTTPException(401, "Não autenticado")
+    now = datetime.now(timezone.utc).isoformat()
+    with db() as conn:
+        row = conn.execute(
+            "SELECT u.username,u.role FROM sessions s JOIN users u ON s.user_id=u.id "
+            "WHERE s.token=? AND s.expires_at>? AND u.active=1",
+            (token, now),
+        ).fetchone()
+    if not row:
+        raise HTTPException(401, "Sessão expirada")
+    return {"username": row["username"], "role": row["role"]}
+
+
+# ── User management (admin only) ───────────────────
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    role: str = "viewer"
+
+
+class PasswordChange(BaseModel):
+    password: str
+
+
+@app.get("/api/users")
+def list_users(user=Depends(require_role("admin"))):
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT id,username,role,created_at,active FROM users ORDER BY username"
+        ).fetchall()
+    return {"users": [dict(r) for r in rows]}
+
+
+@app.post("/api/users", status_code=201)
+def create_user(payload: UserCreate, user=Depends(require_role("admin"))):
+    if payload.role not in ROLES:
+        raise HTTPException(400, f"Role inválido. Use: {ROLES}")
+    if len(payload.password) < 8:
+        raise HTTPException(400, "Senha mínima: 8 caracteres")
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    try:
+        with db() as conn:
+            conn.execute(
+                "INSERT INTO users(username,password_hash,role,created_at) VALUES (?,?,?,?)",
+                (payload.username.strip(), _hash_password(payload.password), payload.role, now),
+            )
+    except sqlite3.IntegrityError:
+        raise HTTPException(409, "Usuário já existe")
+    return {"ok": True}
+
+
+@app.delete("/api/users/{username}")
+def delete_user(username: str, user=Depends(require_role("admin"))):
+    if username == user["username"]:
+        raise HTTPException(400, "Não é possível remover a si mesmo")
+    with db() as conn:
+        cur = conn.execute("DELETE FROM users WHERE username=?", (username,))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "Usuário não encontrado")
+    return {"ok": True}
+
+
+@app.put("/api/users/{username}/password")
+def change_password(username: str, payload: PasswordChange, user=Depends(get_current_user)):
+    if user["username"] != username and ROLES.index(user["role"]) < ROLES.index("admin"):
+        raise HTTPException(403, "Permissão insuficiente")
+    if len(payload.password) < 8:
+        raise HTTPException(400, "Senha mínima: 8 caracteres")
+    with db() as conn:
+        cur = conn.execute(
+            "UPDATE users SET password_hash=? WHERE username=?",
+            (_hash_password(payload.password), username),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(404, "Usuário não encontrado")
+    return {"ok": True}
+
+
+# ── Re-run workflow ────────────────────────────────
+@app.post("/api/runs/{repo:path}/{run_id}/rerun")
+def rerun_scan(repo: str, run_id: int, user=Depends(require_role("analyst"))):
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if not token:
+        raise HTTPException(400, "GITHUB_TOKEN não configurado")
+    hdrs = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+    }
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/rerun",
+            data=b"{}",
+            headers=hdrs,
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+    except urllib.error.HTTPError as e:
+        raise HTTPException(e.code, e.read().decode(errors="replace"))
+    except urllib.error.URLError as e:
+        raise HTTPException(502, str(e))
+    return {"ok": True}
+
+
+@app.get("/health")
+def health():
+    return {"ok": True}
 
 
 @app.get("/")

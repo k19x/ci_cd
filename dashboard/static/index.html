@@ -232,6 +232,42 @@ select.triage { font-size: 12px; padding: 4px 6px; border-radius: var(--radius);
 .chart-wrap { padding: 16px 18px; }
 canvas { max-height: 200px; }
 
+/* ── Login screen ── */
+#loginScreen { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center;
+               justify-content:center; z-index:9999; }
+.login-card  { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+               padding:40px 44px; width:360px; box-shadow:var(--shadow-md); }
+.login-logo  { display:flex; align-items:center; gap:12px; margin-bottom:32px; }
+.login-logo .brand-icon { width:40px; height:40px; font-size:18px; }
+.login-title { font-size:20px; font-weight:700; color:var(--text); }
+.login-sub   { font-size:11px; color:var(--muted); margin-top:2px; text-transform:uppercase; letter-spacing:.06em; }
+.login-field { margin-bottom:18px; }
+.login-field label { display:block; font-size:11px; font-weight:600; color:var(--text2); margin-bottom:6px;
+                     text-transform:uppercase; letter-spacing:.05em; }
+.login-field input { width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius);
+                     background:var(--bg); color:var(--text); font-size:14px; box-sizing:border-box; outline:none; }
+.login-field input:focus { border-color:var(--orange); box-shadow:0 0 0 3px var(--orange-light); }
+.login-btn   { width:100%; padding:10px; background:var(--orange); color:#fff; border:0;
+               border-radius:var(--radius); font-size:14px; font-weight:600; cursor:pointer;
+               margin-top:4px; transition:background .12s; }
+.login-btn:hover:not(:disabled)  { background:var(--orange-dark); }
+.login-btn:disabled { opacity:.6; cursor:default; }
+.login-err   { color:var(--crit); font-size:13px; margin-top:12px; text-align:center; min-height:18px; }
+/* Role gates */
+[data-min-role] { transition:opacity .1s; }
+/* Sidebar user area */
+.sidebar-user { padding:12px 16px; border-top:1px solid rgba(255,255,255,.07); display:flex;
+                align-items:center; justify-content:space-between; gap:8px; }
+.sidebar-user-name { font-size:13px; font-weight:600; color:#fff; }
+.sidebar-user-role { font-size:10px; color:var(--muted); margin-top:1px; text-transform:uppercase; letter-spacing:.06em; }
+.role-badge  { display:inline-block; font-size:9px; font-weight:700; padding:2px 6px; border-radius:99px;
+               text-transform:uppercase; letter-spacing:.06em; }
+.role-badge.admin   { background:rgba(79,126,247,.2); color:var(--orange); }
+.role-badge.analyst { background:rgba(46,160,67,.2); color:#2ea043; }
+.role-badge.viewer  { background:rgba(155,155,155,.15); color:var(--muted); }
+/* Riskiest/safest cards row */
+.grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:16px; }
+
 /* ── Paginação ── */
 .pager { display:flex; align-items:center; justify-content:space-between; gap:8px;
          padding:10px 16px; border-top:1px solid var(--border); font-size:13px; flex-wrap:wrap; }
@@ -255,6 +291,30 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
 .repo-ico { width: 28px; height: 28px; border-radius: 6px; background: var(--orange-light);
             display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .repo-ico svg { width: 14px; height: 14px; color: var(--orange); }
+
+/* ── Visibility filter tabs ── */
+.vis-tabs { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 2px; }
+.vis-tab  { padding: 3px 12px; border-radius: calc(var(--radius) - 2px); border: none;
+            background: transparent; color: var(--muted); font-size: 12px; font-weight: 500;
+            cursor: pointer; transition: background .15s, color .15s; }
+.vis-tab:hover  { background: var(--surface); color: var(--text); }
+.vis-tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+/* ── Visibility badge ── */
+.vis-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px;
+             font-weight: 600; padding: 2px 6px; border-radius: 10px; letter-spacing: .3px; }
+.vis-badge.public  { background: #E8F5E9; color: #2E7D32; }
+.vis-badge.private { background: #E3F2FD; color: #1565C0; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .vis-badge.public  { background: #0A2B0F; color: #81c784; }
+  :root:not([data-theme="light"]) .vis-badge.private { background: #0a1929; color: #64b5f6; }
+}
+
+/* ── Language chips ── */
+.lang-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.lang-chip  { font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 10px;
+              background: var(--orange-light); color: var(--orange-dark); white-space: nowrap; }
 
 /* ── Severity bar ── */
 .sev-bar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
@@ -346,13 +406,47 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
           <circle cx="12" cy="12" r="3"/>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
-        Configurações
+        Settings
       </a>
     </div>
   </nav>
 
+  <div class="sidebar-user" id="sidebarUser">
+    <div>
+      <div class="sidebar-user-name" id="sidebarUsername">—</div>
+      <div><span class="role-badge" id="sidebarRoleBadge"></span></div>
+    </div>
+    <button class="btn-ghost" style="font-size:11px;padding:4px 8px" onclick="doLogout()">Sair</button>
+  </div>
   <div class="sidebar-footer">
     <a href="https://github.com/k19x/ci_cd" target="_blank">k19x/ci_cd</a>
+  </div>
+</div>
+
+<!-- Login screen -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="login-title">SecPipe</div>
+        <div class="login-sub">Security Platform</div>
+      </div>
+    </div>
+    <div class="login-field">
+      <label>Usuário</label>
+      <input type="text" id="loginUser" autocomplete="username" placeholder="admin">
+    </div>
+    <div class="login-field">
+      <label>Senha</label>
+      <input type="password" id="loginPass" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" onclick="doLogin()" id="loginBtn">Entrar</button>
+    <div class="login-err" id="loginErr"></div>
   </div>
 </div>
 
@@ -406,6 +500,28 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
           </div>
         </div>
       </div>
+
+      <!-- Risk cards row -->
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Projetos mais arriscados</div></div>
+          <div class="card-body tbl-wrap">
+            <table><thead><tr><th>Projeto</th><th style="text-align:right">C+H abertos</th></tr></thead>
+            <tbody id="riskiestRows"></tbody></table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Projetos mais seguros</div></div>
+          <div class="card-body tbl-wrap">
+            <table><thead><tr><th>Projeto</th><th style="text-align:right">Abertos</th></tr></thead>
+            <tbody id="safestRows"></tbody></table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Distribuição por engine</div></div>
+          <div style="padding:16px;display:flex;flex-direction:column;gap:8px" id="engineDist"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ SCANS / JOBS ═══ -->
@@ -419,7 +535,7 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
           <table>
             <thead><tr>
               <th>Projeto</th><th>Branch</th><th>Commit</th>
-              <th>Status</th><th>Iniciado</th><th>Link</th>
+              <th>Status</th><th>Iniciado</th><th>Link</th><th></th>
             </tr></thead>
             <tbody id="jobRows"></tbody>
           </table>
@@ -504,12 +620,19 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
       <div class="card">
         <div class="card-head">
           <div class="card-title">Projects</div>
-          <div class="card-sub" id="repoCount"></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="vis-tabs" id="visFilter">
+              <button class="vis-tab active" data-vis="all"   onclick="setVisFilter('all',this)">All</button>
+              <button class="vis-tab"        data-vis="public" onclick="setVisFilter('public',this)">Public</button>
+              <button class="vis-tab"        data-vis="private" onclick="setVisFilter('private',this)">Private</button>
+            </div>
+            <div class="card-sub" id="repoCount"></div>
+          </div>
         </div>
         <div class="card-body tbl-wrap">
           <table>
             <thead><tr>
-              <th>Project</th><th>Last scan</th><th>Scans</th>
+              <th>Project</th><th>Languages</th><th>Last scan</th><th>Scans</th>
               <th>Open</th><th>Crit / High</th><th>Integration</th><th></th>
             </tr></thead>
             <tbody id="repoRows"></tbody>
@@ -622,7 +745,7 @@ function showTab(tab, el) {
   $(`tab-${tab}`).classList.add('active');
   if (el) el.classList.add('active');
   currentTab = tab;
-  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Results', vulns:'Findings', repos:'Projects', settings:'Configurações'};
+  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Results', vulns:'Findings', repos:'Projects', settings:'Settings'};
   $('topbarTitle').textContent = titles[tab] || tab;
   clearInterval(jobTimer);
   clearInterval(dashTimer);
@@ -848,25 +971,50 @@ jobs:
     secrets: inherit`;
 }
 
-async function loadRepos() {
-  const data = await api('/api/repos');
-  $('repoCount').textContent = `${data.repos.length} project${data.repos.length!==1?'s':''}`;
+let _allRepos = [];
+let _visFilter = 'all';
+
+function setVisFilter(vis, btn) {
+  _visFilter = vis;
+  document.querySelectorAll('.vis-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderRepos();
+}
+
+function renderRepos() {
   const tbody = $('repoRows');
-  if (!data.repos.length) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>No projects yet. Add one above.</p></div></td></tr>`;
+  const list = _visFilter === 'all' ? _allRepos
+             : _allRepos.filter(r => r.visibility === _visFilter);
+  $('repoCount').textContent = `${list.length} project${list.length!==1?'s':''}`;
+  if (!list.length) {
+    const msg = _visFilter !== 'all' ? `No ${_visFilter} projects.` : 'No projects yet. Add one above.';
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>${msg}</p></div></td></tr>`;
     return;
   }
-  tbody.innerHTML = data.repos.map(r => `
+  tbody.innerHTML = list.map(r => {
+    const visBadge = r.visibility
+      ? `<span class="vis-badge ${r.visibility}">${r.visibility === 'private' ? '🔒 Private' : '🌐 Public'}</span>`
+      : `<span class="vis-badge" style="background:var(--bg);color:var(--muted)">unknown</span>`;
+    const langChips = r.languages
+      ? r.languages.split(',').filter(Boolean).map(l =>
+          `<span class="lang-chip">${esc(l)}</span>`).join('')
+      : `<span style="color:var(--muted);font-size:11px">–</span>`;
+    const nameKey = r.name.replace(/'/g, "\\'");
+    return `
     <tr>
       <td>
         <div style="display:flex;align-items:center;gap:10px">
           <div class="repo-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
           <div>
-            <div class="primary" style="font-weight:600">${esc(r.name)}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+              <span class="primary" style="font-weight:600">${esc(r.name)}</span>
+              ${visBadge}
+            </div>
             ${r.url ? `<div><a class="mono" href="${esc(r.url)}" target="_blank" style="color:var(--orange);font-size:11px">${esc(r.url)}</a></div>` : ''}
           </div>
         </div>
       </td>
+      <td><div class="lang-chips">${langChips}</div></td>
       <td class="mono">${r.last_scan ? r.last_scan.slice(0,16).replace('T',' ') : '<span style="color:var(--muted)">Never scanned</span>'}</td>
       <td>${r.scan_count}</td>
       <td>${r.open_findings}</td>
@@ -879,11 +1027,35 @@ async function loadRepos() {
           <pre class="yaml">${esc(workflowYaml(r.name))}</pre>
         </details>
       </td>
-      <td style="display:flex;gap:6px;align-items:center">
-        <button class="btn-primary" style="padding:4px 10px;font-size:12px" onclick="triggerScan('${esc(r.name)}',this)">▶ Scan</button>
-        <button class="btn-ghost" onclick="delRepo('${esc(r.name)}')">Remove</button>
+      <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <button class="btn-primary" style="padding:4px 10px;font-size:12px" onclick="triggerScan('${nameKey}',this)">▶ Scan</button>
+        <button class="btn-ghost" style="padding:4px 8px;font-size:11px" onclick="refreshMeta('${nameKey}',this)" title="Refresh visibility & languages from GitHub">↻</button>
+        <button class="btn-ghost" onclick="delRepo('${nameKey}')">Remove</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
+}
+
+async function loadRepos() {
+  const data = await api('/api/repos');
+  _allRepos = data.repos;
+  renderRepos();
+}
+
+async function refreshMeta(name, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const res = await fetch('/api/repos/' + encodeURIComponent(name) + '/refresh-meta', {method:'POST'});
+    if (res.ok) {
+      const d = await res.json();
+      const r = _allRepos.find(x => x.name === name);
+      if (r) { r.visibility = d.visibility; r.languages = d.languages; }
+      renderRepos();
+    }
+  } finally {
+    btn.textContent = orig; btn.disabled = false;
+  }
 }
 
 async function addRepo() {
@@ -895,8 +1067,17 @@ async function addRepo() {
   });
   if (res.ok) {
     msg.className = 'form-msg ok'; msg.textContent = 'Project added';
+    const addedName = $('repoName').value;
     $('repoName').value = ''; $('repoUrl').value = '';
     await Promise.all([loadRepos(), loadDashboard()]);
+    // fetch GitHub metadata in background
+    fetch('/api/repos/' + encodeURIComponent(addedName) + '/refresh-meta', {method:'POST'})
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        const repo = _allRepos.find(x => x.name === addedName);
+        if (repo) { repo.visibility = d.visibility; repo.languages = d.languages; renderRepos(); }
+      }).catch(() => {});
   } else {
     const b = await res.json().catch(()=>({}));
     msg.className = 'form-msg err'; msg.textContent = b.detail || `Error ${res.status}`;

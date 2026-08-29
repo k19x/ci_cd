@@ -3,6 +3,19 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-08-29
+
+### Added
+- **Projects tab — Public/Private filter**: tabs All / Public / Private filtram a lista de projetos por visibilidade
+- **Projects tab — Language chips**: cada projeto exibe as linguagens detectadas (Python, Go, JavaScript, etc.) buscadas da API do GitHub
+- **Visibility badge**: badge 🌐 Public / 🔒 Private ao lado do nome do projeto
+- **Botão ↻ Refresh meta**: atualiza visibilidade e linguagens de um projeto individual via GitHub API
+- **Auto-fetch metadata**: ao adicionar um projeto, os metadados são buscados automaticamente em background
+- **Backend `/api/repos/{name}/refresh-meta`**: novo endpoint que consulta GitHub e persiste `visibility` e `languages` no SQLite
+
+### Changed
+- Coluna "Languages" adicionada à tabela de Projects
+
 ## [0.5.6] - 2026-08-29
 
 ### Added
