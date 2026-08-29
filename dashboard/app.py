@@ -304,6 +304,48 @@ def triage(repo: str, fid: str, update: TriageUpdate):
     return {"ok": True}
 
 
+@app.post("/api/repos/{repo:path}/dispatch")
+def dispatch_scan(repo: str):
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=400, detail="GITHUB_TOKEN não configurado")
+    hdrs = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+    }
+    payload = _json.dumps({"ref": "main"}).encode()
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{repo}/actions/workflows/security.yml/dispatches",
+            data=payload,
+            headers=hdrs,
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        if e.code == 422:
+            # tenta branch master
+            try:
+                payload2 = _json.dumps({"ref": "master"}).encode()
+                req2 = urllib.request.Request(
+                    f"https://api.github.com/repos/{repo}/actions/workflows/security.yml/dispatches",
+                    data=payload2, headers=hdrs, method="POST",
+                )
+                with urllib.request.urlopen(req2, timeout=10):
+                    pass
+            except urllib.error.HTTPError as e2:
+                raise HTTPException(status_code=e2.code, detail=e2.read().decode(errors="replace"))
+        else:
+            raise HTTPException(status_code=e.code, detail=body)
+    except urllib.error.URLError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return {"ok": True, "repo": repo}
+
+
 @app.get("/api/runs")
 def list_runs(repo: str | None = None, limit: int = 30):
     """Consulta runs do GitHub Actions em tempo real via API pública."""

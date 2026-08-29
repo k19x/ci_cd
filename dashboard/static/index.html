@@ -826,7 +826,10 @@ async function loadRepos() {
           <pre class="yaml">${esc(workflowYaml(r.name))}</pre>
         </details>
       </td>
-      <td><button class="btn-ghost" onclick="delRepo('${esc(r.name)}')">Remove</button></td>
+      <td style="display:flex;gap:6px;align-items:center">
+        <button class="btn-primary" style="padding:4px 10px;font-size:12px" onclick="triggerScan('${esc(r.name)}',this)">▶ Scan</button>
+        <button class="btn-ghost" onclick="delRepo('${esc(r.name)}')">Remove</button>
+      </td>
     </tr>`).join('');
 }
 
@@ -850,6 +853,26 @@ async function addRepo() {
 async function delRepo(name) {
   await fetch('/api/repos/' + encodeURIComponent(name), {method:'DELETE'});
   await Promise.all([loadRepos(), loadDashboard()]);
+}
+
+async function triggerScan(name, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const res = await fetch('/api/repos/' + encodeURIComponent(name) + '/dispatch', {method:'POST'});
+    if (res.ok) {
+      btn.textContent = '✓ Queued'; btn.style.background = 'var(--green,#2ea043)';
+      setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.disabled = false; }, 4000);
+    } else {
+      const b = await res.json().catch(()=>({}));
+      btn.textContent = '✗ Erro'; btn.style.background = '#c0392b';
+      console.error('dispatch error:', b.detail);
+      setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.disabled = false; }, 4000);
+    }
+  } catch(e) {
+    btn.textContent = '✗ Erro'; btn.style.background = '#c0392b';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.disabled = false; }, 4000);
+  }
 }
 
 /* ── Vulnerabilidades ── */
