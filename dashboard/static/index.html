@@ -330,7 +330,7 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
           <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
-        Vulnerabilidades
+        Findings
       </a>
     </div>
     <div class="nav-section">
@@ -469,7 +469,7 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
     <div id="tab-vulns" class="tab-pane">
       <div class="card">
         <div class="card-head">
-          <div class="card-title">Histórico de scans</div>
+          <div class="card-title">Findings</div>
           <div class="card-sub" id="vulnCount"></div>
         </div>
         <div class="filter-bar">
@@ -622,7 +622,7 @@ function showTab(tab, el) {
   $(`tab-${tab}`).classList.add('active');
   if (el) el.classList.add('active');
   currentTab = tab;
-  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Results', vulns:'Vulnerabilidades', repos:'Projects', settings:'Configurações'};
+  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Results', vulns:'Findings', repos:'Projects', settings:'Configurações'};
   $('topbarTitle').textContent = titles[tab] || tab;
   clearInterval(jobTimer);
   clearInterval(dashTimer);

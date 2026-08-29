@@ -3,6 +3,11 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.5] - 2026-08-29
+
+### Changed
+- Aba "Vulnerabilidades" renomeada para "Findings"
+
 ## [0.5.4] - 2026-08-29
 
 ### Added
