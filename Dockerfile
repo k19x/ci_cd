@@ -35,7 +35,7 @@ USER secpipe
 EXPOSE 8200
 
 HEALTHCHECK --interval=20s --timeout=5s --start-period=15s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8200/api/overview', timeout=3)"
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8200/health', timeout=3)"
 
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8200", \
      "--no-access-log", "--workers", "1"]

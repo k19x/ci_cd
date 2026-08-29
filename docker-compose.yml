@@ -33,7 +33,7 @@ services:
     # nenhuma porta exposta ao host — acesso apenas via cloudflared
     healthcheck:
       test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8200/api/overview', timeout=3)"]
+             "import urllib.request; urllib.request.urlopen('http://localhost:8200/health', timeout=3)"]
       interval: 20s
       timeout: 5s
       retries: 3
