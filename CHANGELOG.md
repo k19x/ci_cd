@@ -3,6 +3,13 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.3] - 2026-08-29
+
+### Changed
+- Sidebar redesenhada: background `#111318` (charcoal neutro, sem tint navy), hover `#1c1f27`
+- Accent color trocado de laranja `#E8612D` → azul índigo `#4F7EF7` (botões, borda ativa, brand icon, links)
+- HIGH severity agora usa âmbar `#E07339` independente do accent, evitando confusão visual
+
 ## [0.5.2] - 2026-08-29
 
 ### Added
