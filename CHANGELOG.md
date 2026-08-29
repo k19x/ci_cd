@@ -1,0 +1,41 @@
+# Changelog
+
+All notable changes to SecPipe are documented here.
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [0.3.0] - 2026-08-29
+
+### Added
+- `fix-workflows.ps1` — script para atualizar `security.yml` em todos os repos da conta com `permissions:` + `workflow_dispatch:` corretos
+- Tema dark "escuro Chrome" no dashboard: paleta `#202124`/`#2d2e30`/`#3c4043` em dark mode
+
+### Fixed
+- `startup_failure` em todos os repos causado por ausência de `permissions:` no workflow caller; corrigido adicionando bloco `permissions: { contents: read, security-events: write, actions: read }` no nível do workflow
+- Falso positivo do gate: regra `yaml.github-actions.security.secrets-inherit.secrets-inherit` adicionada ao allowlist em `policy/policy.yml` (`secrets: inherit` é seguro para o workflow `k19x/ci_cd` próprio)
+- `.github/workflows/security.yml` excluído do escopo do scan de SAST
+
+## [0.2.0] - 2026-08-29
+
+### Added
+- Dashboard UI completamente redesenhado com layout Checkmarx One: sidebar escura com navegação, stat strip de severidades, tabela de últimos scans, gráfico de tendências por repo
+- Integração com GitHub Actions API na aba Scans com auto-refresh a cada 15 s
+- Aba Projects com cadastro de repos, snippet de workflow, contagem de findings e link para remoção
+- Suporte a triage inline na tabela de Results (To Review / Not Exploitable / Risk Accepted / Fixed)
+- Filtros de repo, severidade, status e engine na aba Results
+- Badge de critical no topbar quando há findings críticos abertos
+
+### Fixed
+- `startup_failure` inicial: repo `k19x/ci_cd` tornado público para permitir acesso ao reusable workflow
+- Rota de triage PATCH `/api/findings/{repo:path}/{fid}` com suporte a nomes `org/repo` (barras) via `{repo:path}` no FastAPI
+
+## [0.1.0] - 2026-08-28
+
+### Added
+- Plataforma SecPipe MVP: SAST (Semgrep), SCA + IaC + Secrets (Trivy), Secrets histórico (Gitleaks)
+- Workflow reutilizável `security-scan.yml` no `k19x/ci_cd` com 4 jobs: semgrep, trivy, gitleaks, gate
+- Normalização SARIF → `findings.json` via `scripts/normalize.py` com dedup por fingerprint
+- Gate de política `scripts/gate.py` configurável por severidade via `policy/policy.yml`
+- Upload de findings para o dashboard via `scripts/upload.py` (stdlib pura)
+- Dashboard FastAPI + SQLite em `dashboard/app.py` com endpoints: `/api/ingest`, `/api/overview`, `/api/findings`, `/api/repos`, `/api/runs`, `/api/trend`
+- Script `integrate-all.ps1` para integrar todos os repos da conta k19x em batch
+- 44 repositórios integrados com `security.yml` via API do GitHub
