@@ -63,6 +63,13 @@
   .btn.ghost { background: none; color: var(--muted); border: 1px solid var(--border);
                font-weight: 400; }
   .btn.ghost:hover { color: var(--critical); border-color: var(--critical); }
+  .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:11px; font-weight:700; text-transform:uppercase; }
+  .badge.in_progress { background:#4da3ff22; color:#4da3ff; border:1px solid #4da3ff66; }
+  .badge.queued { background:#f5d90a22; color:#f5d90a; border:1px solid #f5d90a66; }
+  .badge.success { background:#3ddc8422; color:#3ddc84; border:1px solid #3ddc8466; }
+  .badge.failure { background:#ff5c5c22; color:#ff5c5c; border:1px solid #ff5c5c66; }
+  .badge.cancelled,.badge.skipped { background:#8b98a522; color:#8b98a5; border:1px solid #8b98a566; }
+  .badge.startup_failure { background:#ff9f4322; color:#ff9f43; border:1px solid #ff9f4366; }
   .formmsg { font-size: 13px; align-self: center; }
   .formmsg.err { color: var(--critical); } .formmsg.ok { color: #3ddc84; }
   details.snippet { margin-top: 6px; }
@@ -78,6 +85,7 @@
   <span class="sub">SAST · SCA · Secrets · IaC — findings do pipeline</span>
   <nav>
     <button id="navDash" class="active" onclick="showTab('dashboard')">Dashboard</button>
+    <button id="navJobs" onclick="showTab('jobs')">Jobs</button>
     <button id="navRepos" onclick="showTab('repos')">Repositórios</button>
   </nav>
 </header>
@@ -114,6 +122,25 @@
           <th>Local</th><th class="msg">Mensagem</th><th>Triagem</th>
         </tr></thead>
         <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="tab-jobs" hidden>
+  <div class="panel">
+    <h2>
+      Scans em execução / recentes
+      <button class="btn ghost" style="margin-left:12px;font-size:12px" onclick="loadJobs()">↻ Atualizar</button>
+      <span id="jobsAge" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
+    </h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th>Repositório</th><th>Branch</th><th>Commit</th>
+          <th>Status</th><th>Iniciado</th><th></th>
+        </tr></thead>
+        <tbody id="jobRows"></tbody>
       </table>
     </div>
   </div>
@@ -239,14 +266,46 @@ async function setTriage(repo, fid, status) {
   await Promise.all([loadOverview(), loadFindings()]);
 }
 
+// ---------- aba Jobs ----------
+let jobsTimer;
+
+function jobBadge(run) {
+  const label = run.status === 'completed' ? (run.conclusion || 'unknown') : run.status;
+  const cls = run.status === 'completed' ? (run.conclusion || 'unknown') : run.status;
+  return `<span class="badge ${cls.replace('_','-')}">${label.replace('_',' ')}</span>`;
+}
+
+async function loadJobs() {
+  const data = await api('/api/runs');
+  $('jobsAge').textContent = 'atualizado ' + new Date().toLocaleTimeString('pt-BR');
+  const tbody = $('jobRows');
+  if (!data.runs.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhum scan encontrado. Verifique se GITHUB_TOKEN está configurado no servidor ou se há repos cadastrados.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.runs.map(r => `
+    <tr>
+      <td><strong>${escapeHtml(r.repo)}</strong></td>
+      <td class="mono">${escapeHtml(r.branch)}</td>
+      <td class="mono">${r.commit}</td>
+      <td>${jobBadge(r)}</td>
+      <td class="mono" style="font-size:12px">${r.created_at.slice(5,16).replace('T',' ')}</td>
+      <td><a href="${escapeHtml(r.url)}" target="_blank" style="color:var(--accent);font-size:12px">ver no GitHub ↗</a></td>
+    </tr>`).join('');
+}
+
 // ---------- aba Repositórios ----------
 const PLATFORM_REPO = 'k19x/ci_cd'; // repo da plataforma no GitHub
 
 function showTab(tab) {
   $('tab-dashboard').hidden = tab !== 'dashboard';
+  $('tab-jobs').hidden = tab !== 'jobs';
   $('tab-repos').hidden = tab !== 'repos';
   $('navDash').classList.toggle('active', tab === 'dashboard');
+  $('navJobs').classList.toggle('active', tab === 'jobs');
   $('navRepos').classList.toggle('active', tab === 'repos');
+  clearInterval(jobsTimer);
+  if (tab === 'jobs') { loadJobs(); jobsTimer = setInterval(loadJobs, 15000); }
   if (tab === 'repos') loadRepos();
 }
 

@@ -11,6 +11,8 @@ Auth:   se a env SECPIPE_TOKEN estiver definida, o /api/ingest exige o
 
 import os
 import sqlite3
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -283,6 +285,50 @@ def triage(repo: str, fid: str, update: TriageUpdate):
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="finding não encontrado")
     return {"ok": True}
+
+
+@app.get("/api/runs")
+def list_runs(repo: str | None = None, limit: int = 30):
+    """Consulta runs do GitHub Actions em tempo real via API pública."""
+    token = os.environ.get("GITHUB_TOKEN", "")
+    headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    with db() as conn:
+        if repo:
+            repo_list = [repo]
+        else:
+            rows = conn.execute(
+                "SELECT name FROM repos UNION SELECT DISTINCT repo FROM scans ORDER BY 1"
+            ).fetchall()
+            repo_list = [r["name"] for r in rows]
+
+    runs = []
+    for r in repo_list[:20]:
+        try:
+            url = f"https://api.github.com/repos/{r}/actions/workflows/security.yml/runs?per_page=3"
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                import json as _json
+                data = _json.loads(resp.read())
+                for run in data.get("workflow_runs", []):
+                    runs.append({
+                        "repo": r,
+                        "run_id": run["id"],
+                        "status": run["status"],
+                        "conclusion": run.get("conclusion"),
+                        "branch": run["head_branch"],
+                        "commit": run["head_sha"][:7],
+                        "created_at": run["created_at"],
+                        "updated_at": run["updated_at"],
+                        "url": run["html_url"],
+                    })
+        except (urllib.error.URLError, Exception):
+            pass
+
+    runs.sort(key=lambda x: x["updated_at"], reverse=True)
+    return {"runs": runs[:limit]}
 
 
 @app.get("/")
