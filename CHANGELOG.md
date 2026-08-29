@@ -3,6 +3,12 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.4] - 2026-08-29
+
+### Added
+- Paginação na aba Results: 25/50/100 resultados por página, controles Anterior/Próxima, indicador "X–Y de N · Pág. P/T"
+- Triage não reseta a página — permanece na mesma posição ao marcar um finding
+
 ## [0.5.3] - 2026-08-29
 
 ### Changed

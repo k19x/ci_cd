@@ -232,6 +232,19 @@ select.triage { font-size: 12px; padding: 4px 6px; border-radius: var(--radius);
 .chart-wrap { padding: 16px 18px; }
 canvas { max-height: 200px; }
 
+/* ── Paginação ── */
+.pager { display:flex; align-items:center; justify-content:space-between; gap:8px;
+         padding:10px 16px; border-top:1px solid var(--border); font-size:13px; flex-wrap:wrap; }
+.pager-info { color:var(--muted); }
+.pager-controls { display:flex; align-items:center; gap:6px; }
+.pager button { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+                padding:4px 10px; font-size:12px; cursor:pointer; color:var(--text2);
+                transition:border-color .12s, color .12s; }
+.pager button:hover:not(:disabled) { border-color:var(--orange); color:var(--orange); }
+.pager button:disabled { opacity:.35; cursor:default; }
+.pager select { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+                padding:4px 8px; font-size:12px; color:var(--text2); cursor:pointer; }
+
 /* ── Snippet expand ── */
 details.snippet summary { cursor: pointer; color: var(--orange); font-size: 11px; }
 pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
@@ -448,6 +461,7 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
             <tbody id="findRows"></tbody>
           </table>
         </div>
+        <div class="pager" id="findPager" hidden></div>
       </div>
     </div>
 
@@ -737,20 +751,38 @@ async function loadJobs() {
 /* ── Findings ── */
 ['fRepo','fSev','fStatus','fTool'].forEach(id => $(id) && $(id).addEventListener('change', loadFindings));
 
-async function loadFindings() {
+let _findings = [], _findPage = 0, _findPageSize = 25;
+
+async function loadFindings(resetPage = true) {
+  if (resetPage) _findPage = 0;
   const p = new URLSearchParams();
   if ($('fRepo').value)   p.set('repo',     $('fRepo').value);
   if ($('fSev').value)    p.set('severity', $('fSev').value);
   p.set('status', $('fStatus').value);
   if ($('fTool').value)   p.set('tool',     $('fTool').value);
+  p.set('limit', '2000');
   const data = await api('/api/findings?' + p);
-  $('findCount').textContent = `${data.count} result${data.count!==1?'s':''}`;
+  _findings = data.findings || [];
+  renderFindPage();
+}
+
+function renderFindPage() {
+  const total = _findings.length;
+  const pages = Math.max(1, Math.ceil(total / _findPageSize));
+  _findPage = Math.min(_findPage, pages - 1);
+  const start = _findPage * _findPageSize;
+  const slice = _findings.slice(start, start + _findPageSize);
+
+  $('findCount').textContent = `${total} result${total!==1?'s':''}`;
+
   const tbody = $('findRows');
-  if (!data.findings.length) {
+  if (!total) {
     tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><p>No results for the selected filters</p></div></td></tr>`;
+    $('findPager').hidden = true;
     return;
   }
-  tbody.innerHTML = data.findings.map(f => `
+
+  tbody.innerHTML = slice.map(f => `
     <tr>
       <td class="primary msg-cell" title="${esc(f.message)}">${esc(f.rule)}</td>
       <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span></td>
@@ -765,6 +797,19 @@ async function loadFindings() {
         </select>
       </td>
     </tr>`).join('');
+
+  const pager = $('findPager');
+  pager.hidden = false;
+  pager.innerHTML = `
+    <span class="pager-info">${start+1}–${Math.min(start+_findPageSize, total)} de ${total}</span>
+    <div class="pager-controls">
+      <select onchange="_findPageSize=+this.value;_findPage=0;renderFindPage()">
+        ${[25,50,100].map(n=>`<option value="${n}"${n===_findPageSize?' selected':''}>${n} / pág.</option>`).join('')}
+      </select>
+      <button onclick="_findPage--;renderFindPage()" ${_findPage===0?'disabled':''}>← Anterior</button>
+      <span class="pager-info">Pág. ${_findPage+1} / ${pages}</span>
+      <button onclick="_findPage++;renderFindPage()" ${_findPage>=pages-1?'disabled':''}>Próxima →</button>
+    </div>`;
 }
 
 async function setTriage(repo, fid, status) {
@@ -772,7 +817,7 @@ async function setTriage(repo, fid, status) {
     method:'PATCH', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({status}),
   });
-  await Promise.all([loadDashboard(), loadFindings()]);
+  await Promise.all([loadDashboard(), loadFindings(false)]);
 }
 
 /* ── Repos ── */
