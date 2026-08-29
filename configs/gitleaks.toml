@@ -1,0 +1,19 @@
+# Configuração do Gitleaks — herda todas as regras padrão e permite
+# adicionar regras próprias e allowlist de falsos positivos.
+title = "SecPipe - Gitleaks"
+
+[extend]
+useDefault = true
+
+# Exemplo de regra customizada (token interno da empresa):
+# [[rules]]
+# id = "token-interno"
+# description = "Token interno ACME"
+# regex = '''acme_[a-zA-Z0-9]{32}'''
+
+[allowlist]
+description = "Falsos positivos conhecidos"
+paths = [
+  '''tests/fixtures/.*''',
+  '''.*\.lock$''',
+]

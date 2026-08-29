@@ -1,0 +1,21 @@
+# EXEMPLO — copie este arquivo para o repositório que você quer proteger,
+# em .github/workflows/security.yml, ajustando SUA_ORG.
+#
+# name: security
+# on:
+#   pull_request:
+#   push:
+#     branches: [main]
+# jobs:
+#   scan:
+#     uses: SUA_ORG/ci_cd/.github/workflows/security-scan.yml@main
+#     with:
+#       fail_on: high   # critical | high | medium | low
+name: example-caller (desativado)
+on:
+  workflow_dispatch:
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Veja os comentários deste arquivo para o uso real."

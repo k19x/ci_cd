@@ -1,0 +1,17 @@
+# Política do gate de segurança.
+# Usada quando o workflow NÃO passa --fail-on (que é um atalho que sobrepõe isto).
+
+# Quantidade máxima permitida de findings ATIVOS por severidade.
+# 0 = qualquer ocorrência bloqueia o merge.
+max:
+  critical: 0
+  high: 0
+  medium: 10
+  low: 50
+
+# Supressão de falsos positivos. Cada entrada pode ser:
+#   - o id (fingerprint) de um finding específico, ex: "a1b2c3d4e5f60708"
+#   - um rule id inteiro, ex: "python.lang.security.audit.eval-detected"
+#   - um glob de arquivo, ex: "tests/**"
+allowlist:
+  - "tests/fixtures/**"

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecPipe Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f141a; --panel: #171e26; --border: #26303b; --text: #dfe6ee;
+    --muted: #8b98a5; --accent: #4da3ff;
+    --critical: #ff5c5c; --high: #ff9f43; --medium: #f5d90a; --low: #4da3ff; --info: #8b98a5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 system-ui, "Segoe UI", sans-serif; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--border);
+           display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+           gap: 12px; margin-bottom: 24px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+          padding: 14px 16px; }
+  .card .n { font-size: 28px; font-weight: 700; }
+  .card .l { color: var(--muted); font-size: 12px; text-transform: uppercase;
+             letter-spacing: .05em; }
+  .card.critical .n { color: var(--critical); } .card.high .n { color: var(--high); }
+  .card.medium .n { color: var(--medium); } .card.low .n { color: var(--low); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+           padding: 16px; margin-bottom: 24px; }
+  .panel h2 { margin: 0 0 12px; font-size: 15px; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  select { background: var(--bg); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border);
+           vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  .sev { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 11px;
+         font-weight: 700; text-transform: uppercase; color: #10151a; }
+  .sev.critical { background: var(--critical); } .sev.high { background: var(--high); }
+  .sev.medium { background: var(--medium); } .sev.low { background: var(--low); }
+  .sev.info { background: var(--info); }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px;
+          color: var(--muted); word-break: break-all; }
+  .msg { max-width: 420px; }
+  .empty { color: var(--muted); text-align: center; padding: 24px; }
+  canvas { max-height: 260px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛡️ SecPipe</h1>
+  <span class="sub">SAST · SCA · Secrets · IaC — findings do pipeline</span>
+</header>
+<main>
+  <div class="cards" id="cards"></div>
+
+  <div class="panel">
+    <h2>Tendência por scan <select id="trendRepo" style="margin-left:8px"></select></h2>
+    <canvas id="trendChart"></canvas>
+  </div>
+
+  <div class="panel">
+    <h2>Findings</h2>
+    <div class="filters">
+      <select id="fRepo"><option value="">Todos os repos</option></select>
+      <select id="fSeverity">
+        <option value="">Todas as severidades</option>
+        <option>critical</option><option>high</option><option>medium</option>
+        <option>low</option><option>info</option>
+      </select>
+      <select id="fStatus">
+        <option value="open" selected>Abertos</option>
+        <option value="fixed">Corrigidos</option>
+        <option value="false_positive">Falsos positivos</option>
+        <option value="accepted">Risco aceito</option>
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th>Sev</th><th>Repo</th><th>Ferramenta</th><th>Regra</th>
+          <th>Local</th><th class="msg">Mensagem</th><th>Triagem</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const api = (path) => fetch(path).then(r => r.json());
+let chart;
+
+async function loadOverview() {
+  const data = await api('/api/overview');
+  const sev = data.open_by_severity;
+  $('cards').innerHTML = `
+    <div class="card critical"><div class="n">${sev.critical}</div><div class="l">Critical abertos</div></div>
+    <div class="card high"><div class="n">${sev.high}</div><div class="l">High abertos</div></div>
+    <div class="card medium"><div class="n">${sev.medium}</div><div class="l">Medium abertos</div></div>
+    <div class="card low"><div class="n">${sev.low}</div><div class="l">Low abertos</div></div>
+    <div class="card"><div class="n">${data.by_status.fixed || 0}</div><div class="l">Corrigidos</div></div>
+    <div class="card"><div class="n">${data.repos.length}</div><div class="l">Repositórios</div></div>`;
+
+  for (const selId of ['fRepo', 'trendRepo']) {
+    const sel = $(selId);
+    const current = sel.value;
+    sel.length = selId === 'fRepo' ? 1 : 0;
+    if (selId === 'trendRepo' && data.repos.length)
+      sel.add(new Option('(selecione)', data.repos[0]));
+    data.repos.forEach(r => sel.add(new Option(r, r)));
+    if (current) sel.value = current;
+  }
+}
+
+async function loadTrend() {
+  const repo = $('trendRepo').value;
+  if (!repo) return;
+  const data = await api('/api/trend?repo=' + encodeURIComponent(repo));
+  const labels = data.scans.map(s => s.created_at.slice(5, 16).replace('T', ' '));
+  const ds = (key, color) => ({
+    label: key, data: data.scans.map(s => s[key]), borderColor: color,
+    backgroundColor: color, tension: .25, pointRadius: 3,
+  });
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  if (chart) chart.destroy();
+  chart = new Chart($('trendChart'), {
+    type: 'line',
+    data: { labels, datasets: [
+      ds('critical', css('--critical')), ds('high', css('--high')),
+      ds('medium', css('--medium')), ds('low', css('--low')),
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: css('--text') } } },
+      scales: {
+        x: { ticks: { color: css('--muted') }, grid: { color: css('--border') } },
+        y: { ticks: { color: css('--muted'), precision: 0 }, grid: { color: css('--border') },
+             beginAtZero: true },
+      },
+    },
+  });
+}
+
+async function loadFindings() {
+  const params = new URLSearchParams();
+  if ($('fRepo').value) params.set('repo', $('fRepo').value);
+  if ($('fSeverity').value) params.set('severity', $('fSeverity').value);
+  params.set('status', $('fStatus').value);
+  const data = await api('/api/findings?' + params);
+  const tbody = $('rows');
+  if (!data.findings.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhum finding para os filtros atuais 🎉</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.findings.map(f => `
+    <tr>
+      <td><span class="sev ${f.severity}">${f.severity}</span></td>
+      <td>${f.repo}</td>
+      <td>${f.tool}</td>
+      <td class="mono">${f.rule}</td>
+      <td class="mono">${f.file}${f.line ? ':' + f.line : ''}</td>
+      <td class="msg">${escapeHtml(f.message)}</td>
+      <td>
+        <select onchange="setTriage('${f.repo}','${f.fid}',this.value)">
+          ${['open','false_positive','accepted','fixed'].map(s =>
+            `<option value="${s}" ${s===f.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </td>
+    </tr>`).join('');
+}
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function setTriage(repo, fid, status) {
+  await fetch(`/api/findings/${encodeURIComponent(repo)}/${fid}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  await Promise.all([loadOverview(), loadFindings()]);
+}
+
+['fRepo', 'fSeverity', 'fStatus'].forEach(id => $(id).addEventListener('change', loadFindings));
+$('trendRepo').addEventListener('change', loadTrend);
+
+(async () => { await loadOverview(); await Promise.all([loadTrend(), loadFindings()]); })();
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# Configuração do Trivy (scan de filesystem: SCA + IaC + secrets).
+scan:
+  scanners:
+    - vuln      # SCA: CVEs em dependências (package-lock, requirements, go.sum...)
+    - secret    # segredos em arquivos do working tree
+    - misconfig # IaC: Terraform, Kubernetes, Dockerfile, Helm
+
+severity:
+  - CRITICAL
+  - HIGH
+  - MEDIUM
+  - LOW

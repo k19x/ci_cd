@@ -1,0 +1,4 @@
+# dados locais do dashboard e resultados de scan
+dashboard/secpipe.db
+out/
+__pycache__/
