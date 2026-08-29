@@ -30,9 +30,11 @@ Write-Host "`n=== [2/3] SCA + IaC + Secrets: Trivy ===" -ForegroundColor Cyan
 docker run --rm -v "${Target}:/src" -v "${out}:/out" -v "${here}\configs:/cfg" aquasec/trivy `
     fs /src --config /cfg/trivy.yaml --format sarif --output /out/trivy.sarif --exit-code 0
 
-Write-Host "`n=== [3/3] Secrets no histórico: Gitleaks ===" -ForegroundColor Cyan
+Write-Host "`n=== [3/3] Secrets: Gitleaks ===" -ForegroundColor Cyan
+# Com repositório git escaneia o histórico de commits; sem, escaneia os arquivos.
+$gitleaksMode = if (Test-Path (Join-Path $Target ".git")) { "detect" } else { "dir" }
 docker run --rm -v "${Target}:/src" -v "${out}:/out" -v "${here}\configs:/cfg" zricethezav/gitleaks:latest `
-    detect --source /src --config /cfg/gitleaks.toml `
+    $gitleaksMode --source /src --config /cfg/gitleaks.toml `
     --report-format sarif --report-path /out/gitleaks.sarif --exit-code 0
 
 Write-Host "`n=== Normalizando e aplicando gate ===" -ForegroundColor Cyan
