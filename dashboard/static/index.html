@@ -3,6 +3,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.263.1/dist/umd/lucide.min.js"></script>
 
 <style>
 /* ── Tokens ── */
@@ -291,7 +292,8 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
 /* ── Repo icon ── */
 .repo-ico { width: 28px; height: 28px; border-radius: 6px; background: var(--orange-light);
             display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.repo-ico svg { width: 14px; height: 14px; color: var(--orange); }
+.repo-ico svg, .repo-ico i[data-lucide] svg { width: 14px; height: 14px; color: var(--orange); }
+.repo-ico i[data-lucide] { display: flex; align-items: center; }
 
 /* ── Visibility filter tabs ── */
 .vis-tabs { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--border);
@@ -348,6 +350,19 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
 .sev-num:focus { border-color:var(--orange); outline:none; box-shadow:0 0 0 3px var(--orange-light); }
 .sev-hint { font-size:12px; color:var(--muted); }
 .allow-type { font-size:11px; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+
+/* ── Lucide icons ── */
+.nav-item i[data-lucide] { width:16px; height:16px; flex-shrink:0; opacity:.8; }
+.nav-item.active i[data-lucide] { opacity:1; }
+.nav-item i[data-lucide] svg { width:16px; height:16px; }
+.empty-state i[data-lucide] svg { width:40px; height:40px; color:var(--border); margin-bottom:12px; }
+
+/* ── Theme toggle ── */
+.theme-btn { background:none; border:1px solid var(--border); color:var(--text2);
+             cursor:pointer; padding:5px 8px; border-radius:var(--radius);
+             display:flex; align-items:center; transition:background .12s; }
+.theme-btn:hover { background:var(--bg); }
+.theme-btn svg { width:15px; height:15px; }
 </style>
 
 <div class="sidebar">
@@ -367,57 +382,47 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
     <div class="nav-section">
       <span class="nav-label">Analysis</span>
       <a class="nav-item active" onclick="showTab('dashboard',this)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-        </svg>
+        <i data-lucide="layout-dashboard"></i>
         Dashboard
       </a>
       <a class="nav-item" onclick="showTab('jobs',this)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <polyline points="12 6 12 12 16 14"/>
-        </svg>
+        <i data-lucide="clock"></i>
         Scans
       </a>
       <a class="nav-item" onclick="showTab('findings',this)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
+        <i data-lucide="table-2"></i>
         Results
       </a>
       <a class="nav-item" onclick="showTab('vulns',this)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
+        <i data-lucide="shield-alert"></i>
         Findings
       </a>
     </div>
     <div class="nav-section">
       <span class="nav-label">Management</span>
       <a class="nav-item" onclick="showTab('repos',this)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-        </svg>
+        <i data-lucide="folder-git-2"></i>
         Projects
       </a>
       <a class="nav-item" onclick="showTab('settings',this)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
+        <i data-lucide="settings-2"></i>
         Settings
       </a>
     </div>
   </nav>
 
   <div class="sidebar-user" id="sidebarUser">
-    <div>
-      <div class="sidebar-user-name" id="sidebarUsername">—</div>
-      <div><span class="role-badge" id="sidebarRoleBadge"></span></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <i data-lucide="user" style="width:14px;height:14px;color:var(--sidebar-text);flex-shrink:0"></i>
+      <div>
+        <div class="sidebar-user-name" id="sidebarUsername">—</div>
+        <div><span class="role-badge" id="sidebarRoleBadge"></span></div>
+      </div>
     </div>
-    <button class="btn-ghost" style="font-size:11px;padding:4px 8px" onclick="doLogout()">Sair</button>
+    <button class="btn-ghost" style="font-size:11px;padding:4px 8px;display:flex;align-items:center;gap:4px" onclick="doLogout()">
+      <i data-lucide="log-out" style="width:12px;height:12px"></i>
+      Sair
+    </button>
   </div>
   <div class="sidebar-footer">
     <a href="https://github.com/k19x/ci_cd" target="_blank">k19x/ci_cd</a>
@@ -478,10 +483,12 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
     <div class="topbar-actions">
       <span id="topbarAge" hidden style="font-size:11px;color:var(--muted)"></span>
       <span class="topbar-badge" id="topbarBadge" hidden></span>
+      <button class="theme-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle theme">
+        <i data-lucide="sun" id="themeIconSun"></i>
+        <i data-lucide="moon" id="themeIconMoon" style="display:none"></i>
+      </button>
       <button class="refresh-btn" onclick="refreshCurrent()">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-        </svg>
+        <i data-lucide="refresh-cw" style="width:12px;height:12px"></i>
         Atualizar
       </button>
     </div>
@@ -1019,6 +1026,7 @@ async function loadJobs() {
       <td class="mono" style="font-size:12px">${r.created_at.slice(0,16).replace('T',' ')}</td>
       <td><a href="${esc(r.url)}" target="_blank" style="color:var(--orange);font-size:12px;text-decoration:none">View ↗</a></td>
     </tr>`).join('');
+  lucide.createIcons();
 }
 
 /* ── Findings ── */
@@ -1058,7 +1066,7 @@ function renderFindPage() {
 
   const tbody = $('findRows');
   if (!total) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><p>No results for the selected filters</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><i data-lucide="circle-check-big"></i><p>No results for the selected filters</p></div></td></tr>`;
     $('findPager').hidden = true;
     return;
   }
@@ -1078,6 +1086,7 @@ function renderFindPage() {
         </select>
       </td>
     </tr>`).join('');
+  lucide.createIcons();
 
   const pager = $('findPager');
   pager.hidden = false;
@@ -1154,7 +1163,7 @@ function renderRepos() {
     <tr>
       <td>
         <div style="display:flex;align-items:center;gap:10px">
-          <div class="repo-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+          <div class="repo-ico"><i data-lucide="folder-git-2"></i></div>
           <div>
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
               <span class="primary" style="font-weight:600">${esc(r.name)}</span>
@@ -1184,6 +1193,7 @@ function renderRepos() {
       </td>
     </tr>`;
   }).join('');
+  lucide.createIcons();
 }
 
 async function loadRepos() {
@@ -1296,6 +1306,7 @@ async function loadVulns() {
       <td style="text-align:center;font-weight:600;color:var(--text2)">${total}</td>
     </tr>`;
   }).join('');
+  lucide.createIcons();
 }
 
 /* ── Settings / Policy ── */
@@ -1527,6 +1538,27 @@ async function disableTOTP() {
   }
 }
 
+/* ── Theme ── */
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const sun  = $('themeIconSun');
+  const moon = $('themeIconMoon');
+  if (sun)  sun.style.display  = theme === 'dark' ? 'none' : 'inline-flex';
+  if (moon) moon.style.display = theme === 'dark' ? 'inline-flex' : 'none';
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('secpipe-theme', next);
+  applyTheme(next);
+}
+
 /* ── Boot ── */
+(function() {
+  const saved = localStorage.getItem('secpipe-theme') ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  applyTheme(saved);
+})();
+lucide.createIcons();
 initApp();
 </script>

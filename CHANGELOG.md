@@ -3,6 +3,18 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0] - 2026-08-29
+
+### Added
+- **Lucide icons**: todos os ícones da UI migrados para Lucide (via CDN `lucide@0.263.1`) — nav, topbar, sidebar e tabelas dinâmicas
+- **Theme toggle dark/light**: botão sun/moon no topbar persiste preferência em `localStorage`, respeita `prefers-color-scheme` como padrão
+- `lucide.createIcons()` chamado no boot e após cada render dinâmico (`renderRepos`, `loadJobs`, `renderFindPage`, `loadVulns`)
+
+### Changed
+- Botão "Atualizar" no topbar usa ícone `refresh-cw` no lugar do SVG inline
+- Empty-state de Findings usa ícone `circle-check-big` no lugar do SVG inline
+- Ícone de repo na tabela Projects usa `folder-git-2` no lugar do SVG inline
+
 ## [0.7.0] - 2026-08-29
 
 ### Added
