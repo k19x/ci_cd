@@ -1,7 +1,5 @@
 name: Security Scan
 
-# Workflow reutilizável: outros repos chamam com `uses: .../security-scan.yml@main`.
-# Também roda neste próprio repo em push/PR para facilitar o desenvolvimento.
 on:
   workflow_call:
     inputs:
@@ -13,14 +11,13 @@ on:
     branches: [main]
   pull_request:
 
-permissions:
-  contents: read
-  security-events: write # upload de SARIF para a aba Security do GitHub
-
 jobs:
   sast-semgrep:
     name: SAST (Semgrep)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     container:
       image: semgrep/semgrep
     steps:
@@ -42,17 +39,20 @@ jobs:
   sca-iac-trivy:
     name: SCA + IaC + Secrets (Trivy)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
       - name: Rodar Trivy (filesystem)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
           format: sarif
           output: trivy.sarif
           scanners: vuln,secret,misconfig
-          exit-code: "0" # quem decide falhar é o gate, não o scanner
+          exit-code: "0"
       - uses: actions/upload-artifact@v4
         with:
           name: sarif-trivy
@@ -68,12 +68,14 @@ jobs:
   secrets-gitleaks:
     name: Secrets no histórico (Gitleaks)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     container:
       image: zricethezav/gitleaks:latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # histórico completo: pega segredo commitado e depois removido
+          fetch-depth: 0
       - name: Rodar Gitleaks
         run: |
           gitleaks detect --source . \
@@ -87,10 +89,11 @@ jobs:
   gate:
     name: Policy Gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     needs: [sast-semgrep, sca-iac-trivy, secrets-gitleaks]
     steps:
-      # Baixa o repo da PLATAFORMA (onde vivem scripts/ e policy/), mesmo quando
-      # este workflow é chamado a partir de outro repositório.
       - name: Determinar repo da plataforma
         id: platform
         run: echo "repo=$(echo '${{ github.workflow_ref }}' | cut -d'/' -f1,2)" >> "$GITHUB_OUTPUT"
