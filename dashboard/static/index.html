@@ -122,8 +122,8 @@ body { font-family: 'Inter', system-ui, sans-serif; font-size: 14px; line-height
 .stat-strip { display: flex; gap: 1px; background: var(--border); border-radius: var(--radius);
               overflow: hidden; border: 1px solid var(--border); margin-bottom: 20px; box-shadow: var(--shadow); }
 .stat-cell { flex: 1; background: var(--surface); padding: 16px 20px; display: flex;
-             flex-direction: column; gap: 4px; }
-.stat-cell:hover { background: var(--bg); }
+             flex-direction: column; gap: 4px; cursor: pointer; transition: background .12s, box-shadow .12s; }
+.stat-cell:hover { background: var(--bg); box-shadow: inset 0 -2px 0 var(--orange); }
 .stat-val { font-size: 26px; font-weight: 700; letter-spacing: -.02em;
             font-variant-numeric: tabular-nums; }
 .stat-label { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase;
@@ -377,12 +377,12 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
     <!-- ═══ DASHBOARD ═══ -->
     <div id="tab-dashboard" class="tab-pane active">
       <div class="stat-strip" id="statStrip">
-        <div class="stat-cell total"><div class="stat-val" id="s-total">—</div><div class="stat-label">Total abertos</div></div>
-        <div class="stat-cell crit"><div class="stat-val" id="s-critical">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--crit)"></span>Critical</div></div>
-        <div class="stat-cell high"><div class="stat-val" id="s-high">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--high)"></span>High</div></div>
-        <div class="stat-cell med"><div class="stat-val" id="s-medium">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--med)"></span>Medium</div></div>
-        <div class="stat-cell low"><div class="stat-val" id="s-low">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--low)"></span>Low</div></div>
-        <div class="stat-cell fixed"><div class="stat-val" id="s-fixed">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--ok)"></span>Corrigidos</div></div>
+        <div class="stat-cell total" title="Ver todos os findings abertos" onclick="goToFindings('','open')"><div class="stat-val" id="s-total">—</div><div class="stat-label">Total abertos</div></div>
+        <div class="stat-cell crit"  title="Filtrar por Critical" onclick="goToFindings('critical','open')"><div class="stat-val" id="s-critical">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--crit)"></span>Critical</div></div>
+        <div class="stat-cell high"  title="Filtrar por High" onclick="goToFindings('high','open')"><div class="stat-val" id="s-high">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--high)"></span>High</div></div>
+        <div class="stat-cell med"   title="Filtrar por Medium" onclick="goToFindings('medium','open')"><div class="stat-val" id="s-medium">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--med)"></span>Medium</div></div>
+        <div class="stat-cell low"   title="Filtrar por Low" onclick="goToFindings('low','open')"><div class="stat-val" id="s-low">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--low)"></span>Low</div></div>
+        <div class="stat-cell fixed" title="Ver findings corrigidos" onclick="goToFindings('','fixed')"><div class="stat-val" id="s-fixed">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--ok)"></span>Corrigidos</div></div>
       </div>
 
       <div class="grid-2">
@@ -677,11 +677,11 @@ async function loadDashboard() {
   // last scans table
   const tbody = $('lastScans');
   tbody.innerHTML = data.last_scans.map(s => `
-    <tr>
-      <td class="primary">${esc(s.repo)}</td>
+    <tr style="cursor:pointer" onclick="goToFindings('','open','${esc(s.repo)}')" title="Ver findings de ${esc(s.repo)}">
+      <td class="primary" style="color:var(--orange)">${esc(s.repo)}</td>
       <td class="mono">${s.last_scan ? s.last_scan.slice(0,16).replace('T',' ') : '<span style="color:var(--muted)">—</span>'}</td>
-      <td><span class="sev critical" style="${s.critical?'':'opacity:.3'}">${s.critical||0}</span></td>
-      <td><span class="sev high"     style="${s.high?'':'opacity:.3'}">${s.high||0}</span></td>
+      <td onclick="event.stopPropagation();goToFindings('critical','open','${esc(s.repo)}')" title="Ver criticals de ${esc(s.repo)}"><span class="sev critical" style="${s.critical?'':'opacity:.3'}">${s.critical||0}</span></td>
+      <td onclick="event.stopPropagation();goToFindings('high','open','${esc(s.repo)}')"    title="Ver highs de ${esc(s.repo)}"><span class="sev high"     style="${s.high?'':'opacity:.3'}">${s.high||0}</span></td>
     </tr>`).join('');
 
   if ($('trendRepo').value) loadTrend();
@@ -752,6 +752,14 @@ async function loadJobs() {
 ['fRepo','fSev','fStatus','fTool'].forEach(id => $(id) && $(id).addEventListener('change', loadFindings));
 
 let _findings = [], _findPage = 0, _findPageSize = 25;
+
+function goToFindings(severity, status, repo) {
+  if (repo !== undefined) $('fRepo').value = repo;
+  $('fSev').value    = severity || '';
+  $('fStatus').value = status   || 'open';
+  const navEl = document.querySelector('.nav-item[onclick*="findings"]');
+  showTab('findings', navEl);
+}
 
 async function loadFindings(resetPage = true) {
   if (resetPage) _findPage = 0;

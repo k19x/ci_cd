@@ -3,6 +3,13 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.6] - 2026-08-29
+
+### Added
+- Stat strip clicável: cada card (Total, Critical, High, Medium, Low, Corrigidos) navega para Results com filtro de severidade/status pré-aplicado
+- Tabela "Último scan por projeto" clicável: linha abre Results filtrado por repo; chips Critical/High filtram por repo + severidade
+- Hover nos stat-cells com underline azul para indicar interatividade
+
 ## [0.5.5] - 2026-08-29
 
 ### Changed
