@@ -32,9 +32,13 @@ docker run --rm -v "${Target}:/src" -v "${out}:/out" -v "${here}\configs:/cfg" a
 
 Write-Host "`n=== [3/3] Secrets: Gitleaks ===" -ForegroundColor Cyan
 # Com repositório git escaneia o histórico de commits; sem, escaneia os arquivos.
-$gitleaksMode = if (Test-Path (Join-Path $Target ".git")) { "detect" } else { "dir" }
+$gitleaksArgs = if (Test-Path (Join-Path $Target ".git")) {
+    @("detect", "--source", "/src")
+} else {
+    @("dir", "/src")
+}
 docker run --rm -v "${Target}:/src" -v "${out}:/out" -v "${here}\configs:/cfg" zricethezav/gitleaks:latest `
-    $gitleaksMode --source /src --config /cfg/gitleaks.toml `
+    @gitleaksArgs --config /cfg/gitleaks.toml `
     --report-format sarif --report-path /out/gitleaks.sarif --exit-code 0
 
 Write-Host "`n=== Normalizando e aplicando gate ===" -ForegroundColor Cyan
