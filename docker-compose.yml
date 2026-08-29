@@ -5,31 +5,74 @@ services:
       context: .
       dockerfile: Dockerfile
     env_file: .env
+    networks:
+      - secpipe-net
     volumes:
-      - .:/workspace          # repo completo montado (policy + git para commit/push)
-      - secpipe-data:/data    # banco SQLite persistente
+      - secpipe-data:/data                    # banco SQLite (named volume, isolado)
+      - ./policy:/app/policy:rw              # policy YAML (editável pelo dashboard)
     restart: unless-stopped
+
+    # ── filesystem só-leitura com tmpfs para escrita temporária ──────────
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid
+
+    # ── hardening de processo ─────────────────────────────────────────────
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:unconfined              # trocar por perfil customizado em prod
+    cap_drop:
+      - ALL
+
+    # ── limites de recursos ───────────────────────────────────────────────
+    mem_limit: 256m
+    mem_reservation: 64m
+    cpus: 0.50
+    pids_limit: 100
+
+    # nenhuma porta exposta ao host — acesso apenas via cloudflared
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/api/overview', timeout=3)"]
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8200/api/overview', timeout=3)"]
       interval: 20s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2025.4.0  # versão pinada para reproducibilidade
+    networks:
+      - secpipe-net
     restart: unless-stopped
     depends_on:
       dashboard:
         condition: service_healthy
-    # Túnel nomeado (URL permanente — recomendado para produção):
-    #   1. crie o túnel: cloudflared tunnel create secpipe
-    #   2. copie o token para .env: CLOUDFLARE_TUNNEL_TOKEN=...
-    #   3. descomente a linha abaixo e comente a linha "quick tunnel"
+
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 50
+
+    # ── MODO A: Quick Tunnel (sem conta, URL muda ao reiniciar) ───────────
+    command: tunnel --no-autoupdate --url http://dashboard:8200
+    #
+    # ── MODO B: Named Tunnel (URL permanente com domínio próprio) ─────────
+    # 1. Crie o túnel:  cloudflared tunnel create secpipe
+    # 2. Adicione ao .env:  CLOUDFLARE_TUNNEL_TOKEN=<token>
+    # 3. Comente o command acima e descomente abaixo:
     # command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
 
-    # Quick tunnel (URL temporária, sem conta necessária — bom para testes):
-    command: tunnel --no-autoupdate --url http://dashboard:8200
+networks:
+  secpipe-net:
+    driver: bridge
+    # internal: true  # ativar apenas se remover o /api/runs (GitHub API)
 
 volumes:
   secpipe-data:
+    driver: local

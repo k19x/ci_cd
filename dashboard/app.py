@@ -9,23 +9,22 @@ Auth:   se a env SECPIPE_TOKEN estiver definida, o /api/ingest exige o
         header X-API-Key com o mesmo valor.
 """
 
+import base64
+import json as _json
 import os
-import subprocess
 import sqlite3
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-DB_PATH    = Path(os.environ.get("SECPIPE_DB",        Path(__file__).parent / "secpipe.db"))
-REPO_ROOT  = Path(os.environ.get("SECPIPE_REPO_ROOT", Path(__file__).parent.parent))
-POLICY_PATH= Path(os.environ.get("SECPIPE_POLICY",    REPO_ROOT / "policy" / "policy.yml"))
-STATIC     = Path(__file__).parent / "static"
+DB_PATH     = Path(os.environ.get("SECPIPE_DB",     Path(__file__).parent / "secpipe.db"))
+POLICY_PATH = Path(os.environ.get("SECPIPE_POLICY", Path(__file__).parent.parent / "policy" / "policy.yml"))
+STATIC      = Path(__file__).parent / "static"
 SEVERITIES = ["critical", "high", "medium", "low", "info"]
 TRIAGE_STATUSES = {"open", "fixed", "false_positive", "accepted"}
 
@@ -415,17 +414,48 @@ def update_policy(payload: PolicyPayload):
 
 @app.post("/api/policy/push")
 def push_policy():
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=400, detail="GITHUB_TOKEN não configurado no .env")
+
+    github_repo = os.environ.get("SECPIPE_GITHUB_REPO", "k19x/ci_cd")
+    remote_path = "policy/policy.yml"
+    content = POLICY_PATH.read_text(encoding="utf-8")
+    b64 = base64.b64encode(content.encode()).decode()
+
+    hdrs = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
     try:
-        cwd = str(REPO_ROOT)
-        subprocess.run(["git", "add", "policy/policy.yml"], cwd=cwd, check=True)
-        subprocess.run(
-            ["git", "commit", "-m", "policy: update via dashboard"],
-            cwd=cwd, check=True, capture_output=True,
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{github_repo}/contents/{remote_path}",
+            headers=hdrs,
         )
-        subprocess.run(["git", "push"], cwd=cwd, check=True, capture_output=True)
-        return {"ok": True, "message": "Committed and pushed"}
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(status_code=500, detail=e.stderr.decode() if e.stderr else str(e))
+        with urllib.request.urlopen(req, timeout=10) as r:
+            sha = _json.loads(r.read())["sha"]
+    except urllib.error.URLError as e:
+        raise HTTPException(status_code=502, detail=f"GitHub API (read): {e}")
+
+    try:
+        payload = _json.dumps({
+            "message": "policy: update via SecPipe dashboard",
+            "content": b64,
+            "sha": sha,
+        }).encode()
+        req2 = urllib.request.Request(
+            f"https://api.github.com/repos/{github_repo}/contents/{remote_path}",
+            data=payload,
+            headers={**hdrs, "Content-Type": "application/json"},
+            method="PUT",
+        )
+        with urllib.request.urlopen(req2, timeout=10) as r:
+            commit_sha = _json.loads(r.read())["commit"]["sha"][:7]
+        return {"ok": True, "commit": commit_sha}
+    except urllib.error.URLError as e:
+        raise HTTPException(status_code=502, detail=f"GitHub API (write): {e}")
 
 
 @app.get("/")

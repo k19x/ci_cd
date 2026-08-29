@@ -2,3 +2,10 @@
 dashboard/secpipe.db
 out/
 __pycache__/
+*.pyc
+
+# segredos — NUNCA commitar
+.env
+
+# Docker
+dashboard/secpipe.db
