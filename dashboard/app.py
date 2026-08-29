@@ -22,10 +22,10 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-DB_PATH = Path(os.environ.get("SECPIPE_DB", Path(__file__).parent / "secpipe.db"))
-STATIC = Path(__file__).parent / "static"
-REPO_ROOT = Path(__file__).parent.parent
-POLICY_PATH = REPO_ROOT / "policy" / "policy.yml"
+DB_PATH    = Path(os.environ.get("SECPIPE_DB",        Path(__file__).parent / "secpipe.db"))
+REPO_ROOT  = Path(os.environ.get("SECPIPE_REPO_ROOT", Path(__file__).parent.parent))
+POLICY_PATH= Path(os.environ.get("SECPIPE_POLICY",    REPO_ROOT / "policy" / "policy.yml"))
+STATIC     = Path(__file__).parent / "static"
 SEVERITIES = ["critical", "high", "medium", "low", "info"]
 TRIAGE_STATUSES = {"open", "fixed", "false_positive", "accepted"}
 

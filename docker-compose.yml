@@ -1,0 +1,35 @@
+services:
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    volumes:
+      - .:/workspace          # repo completo montado (policy + git para commit/push)
+      - secpipe-data:/data    # banco SQLite persistente
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/api/overview', timeout=3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on:
+      dashboard:
+        condition: service_healthy
+    # Túnel nomeado (URL permanente — recomendado para produção):
+    #   1. crie o túnel: cloudflared tunnel create secpipe
+    #   2. copie o token para .env: CLOUDFLARE_TUNNEL_TOKEN=...
+    #   3. descomente a linha abaixo e comente a linha "quick tunnel"
+    # command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+
+    # Quick tunnel (URL temporária, sem conta necessária — bom para testes):
+    command: tunnel --no-autoupdate --url http://dashboard:8200
+
+volumes:
+  secpipe-data:
