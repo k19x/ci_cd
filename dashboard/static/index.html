@@ -1,387 +1,702 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SecPipe Dashboard</title>
+<title>SecPipe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
 <style>
-  :root {
-    --bg: #0f141a; --panel: #171e26; --border: #26303b; --text: #dfe6ee;
-    --muted: #8b98a5; --accent: #4da3ff;
-    --critical: #ff5c5c; --high: #ff9f43; --medium: #f5d90a; --low: #4da3ff; --info: #8b98a5;
+/* ── Tokens ── */
+:root {
+  --sidebar-bg:    #0D1B2E;
+  --sidebar-hover: #162844;
+  --sidebar-text:  #8FA8C4;
+  --sidebar-label: #4D6B8A;
+  --orange:        #E8612D;
+  --orange-light:  #FEF0E9;
+  --orange-dark:   #C44E21;
+
+  --bg:        #F4F6FA;
+  --surface:   #FFFFFF;
+  --border:    #E2E8F0;
+  --text:      #1C2B3A;
+  --text2:     #4A5568;
+  --muted:     #667085;
+  --topbar-bg: #FFFFFF;
+  --topbar-bd: #E2E8F0;
+
+  --crit:    #C62828; --crit-bg:   #FFEBEE;
+  --high:    #E8612D; --high-bg:   #FEF0E9;
+  --med:     #D97706; --med-bg:    #FFFBEB;
+  --low:     #1565C0; --low-bg:    #E3F2FD;
+  --info:    #455A64; --info-bg:   #ECEFF1;
+  --ok:      #2E7D32; --ok-bg:     #E8F5E9;
+
+  --radius: 6px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.10);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:        #202124;
+    --surface:   #2d2e30;
+    --border:    #3c4043;
+    --text:      #e8eaed;
+    --text2:     #bdc1c6;
+    --muted:     #9aa0a6;
+    --topbar-bg: #2d2e30;
+    --topbar-bd: #3c4043;
+    --crit-bg: #3B0A0A; --high-bg: #3B1A08;
+    --med-bg:  #3B2A00; --low-bg:  #0a1929;
+    --info-bg: #2a2b2d; --ok-bg:   #0A2B0F;
   }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 14px/1.5 system-ui, "Segoe UI", sans-serif; }
-  header { padding: 16px 24px; border-bottom: 1px solid var(--border);
-           display: flex; align-items: center; gap: 12px; }
-  header h1 { font-size: 18px; margin: 0; }
-  header .sub { color: var(--muted); font-size: 13px; }
-  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-           gap: 12px; margin-bottom: 24px; }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-          padding: 14px 16px; }
-  .card .n { font-size: 28px; font-weight: 700; }
-  .card .l { color: var(--muted); font-size: 12px; text-transform: uppercase;
-             letter-spacing: .05em; }
-  .card.critical .n { color: var(--critical); } .card.high .n { color: var(--high); }
-  .card.medium .n { color: var(--medium); } .card.low .n { color: var(--low); }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-           padding: 16px; margin-bottom: 24px; }
-  .panel h2 { margin: 0 0 12px; font-size: 15px; }
-  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-  select { background: var(--bg); color: var(--text); border: 1px solid var(--border);
-           border-radius: 6px; padding: 6px 8px; font-size: 13px; }
-  .tablewrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border);
-           vertical-align: top; }
-  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
-  .sev { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 11px;
-         font-weight: 700; text-transform: uppercase; color: #10151a; }
-  .sev.critical { background: var(--critical); } .sev.high { background: var(--high); }
-  .sev.medium { background: var(--medium); } .sev.low { background: var(--low); }
-  .sev.info { background: var(--info); }
-  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px;
-          color: var(--muted); word-break: break-all; }
-  .msg { max-width: 420px; }
-  .empty { color: var(--muted); text-align: center; padding: 24px; }
-  canvas { max-height: 260px; }
-  nav { margin-left: auto; display: flex; gap: 4px; }
-  nav button { background: none; border: 1px solid transparent; color: var(--muted);
-               padding: 7px 14px; border-radius: 8px; font-size: 14px; cursor: pointer; }
-  nav button.active { color: var(--text); background: var(--panel);
-                      border-color: var(--border); }
-  nav button:hover { color: var(--text); }
-  .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-  input[type=text] { background: var(--bg); color: var(--text); border: 1px solid var(--border);
-                     border-radius: 6px; padding: 8px 10px; font-size: 13px; min-width: 220px; }
-  .btn { background: var(--accent); color: #10151a; border: 0; border-radius: 6px;
-         padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
-  .btn.ghost { background: none; color: var(--muted); border: 1px solid var(--border);
-               font-weight: 400; }
-  .btn.ghost:hover { color: var(--critical); border-color: var(--critical); }
-  .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:11px; font-weight:700; text-transform:uppercase; }
-  .badge.in_progress { background:#4da3ff22; color:#4da3ff; border:1px solid #4da3ff66; }
-  .badge.queued { background:#f5d90a22; color:#f5d90a; border:1px solid #f5d90a66; }
-  .badge.success { background:#3ddc8422; color:#3ddc84; border:1px solid #3ddc8466; }
-  .badge.failure { background:#ff5c5c22; color:#ff5c5c; border:1px solid #ff5c5c66; }
-  .badge.cancelled,.badge.skipped { background:#8b98a522; color:#8b98a5; border:1px solid #8b98a566; }
-  .badge.startup_failure { background:#ff9f4322; color:#ff9f43; border:1px solid #ff9f4366; }
-  .formmsg { font-size: 13px; align-self: center; }
-  .formmsg.err { color: var(--critical); } .formmsg.ok { color: #3ddc84; }
-  details.snippet { margin-top: 6px; }
-  details.snippet summary { cursor: pointer; color: var(--accent); font-size: 12px; }
-  pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-             padding: 10px 12px; font-size: 12px; overflow-x: auto; margin: 8px 0 0;
-             font-family: ui-monospace, Consolas, monospace; }
+}
+:root[data-theme="dark"] {
+  --bg:        #202124;
+  --surface:   #2d2e30;
+  --border:    #3c4043;
+  --text:      #e8eaed;
+  --text2:     #bdc1c6;
+  --muted:     #9aa0a6;
+  --topbar-bg: #2d2e30;
+  --topbar-bd: #3c4043;
+  --crit-bg: #3B0A0A; --high-bg: #3B1A08;
+  --med-bg:  #3B2A00; --low-bg:  #0a1929;
+  --info-bg: #2a2b2d; --ok-bg:   #0A2B0F;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+body { font-family: 'Inter', system-ui, sans-serif; font-size: 14px; line-height: 1.5;
+       background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+
+/* ── Sidebar ── */
+.sidebar { width: 220px; min-width: 220px; background: var(--sidebar-bg); display: flex;
+           flex-direction: column; overflow-y: auto; overflow-x: hidden; z-index: 10; }
+.sidebar-brand { padding: 20px 18px 16px; display: flex; align-items: center; gap: 10px;
+                 border-bottom: 1px solid rgba(255,255,255,.06); }
+.brand-icon { width: 32px; height: 32px; background: var(--orange); border-radius: 8px;
+              display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.brand-icon svg { width: 18px; height: 18px; }
+.brand-name { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -.01em; }
+.brand-sub { font-size: 10px; color: var(--sidebar-label); margin-top: 1px; text-transform: uppercase;
+             letter-spacing: .06em; }
+
+.nav-section { padding: 16px 0 4px; }
+.nav-label { display: block; font-size: 10px; font-weight: 600; color: var(--sidebar-label);
+             text-transform: uppercase; letter-spacing: .08em; padding: 0 18px 6px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 18px;
+            color: var(--sidebar-text); cursor: pointer; font-size: 13.5px; font-weight: 500;
+            border-left: 3px solid transparent; transition: background .12s, color .12s; text-decoration: none; }
+.nav-item:hover { background: var(--sidebar-hover); color: #fff; }
+.nav-item.active { background: rgba(232,97,45,.15); color: #fff; border-left-color: var(--orange); }
+.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: .8; }
+.nav-item.active svg { opacity: 1; }
+
+.sidebar-footer { margin-top: auto; padding: 14px 18px;
+                  border-top: 1px solid rgba(255,255,255,.06); }
+.sidebar-footer a { font-size: 12px; color: var(--sidebar-label); text-decoration: none; }
+.sidebar-footer a:hover { color: var(--sidebar-text); }
+
+/* ── Main ── */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Topbar ── */
+.topbar { height: 56px; min-height: 56px; background: var(--topbar-bg);
+          border-bottom: 1px solid var(--topbar-bd); display: flex; align-items: center;
+          padding: 0 24px; gap: 16px; box-shadow: var(--shadow); z-index: 5; }
+.topbar-title { font-size: 15px; font-weight: 600; color: var(--text); flex: 1; }
+.topbar-crumb { font-size: 13px; color: var(--muted); }
+.topbar-crumb span { color: var(--text); }
+.topbar-actions { display: flex; align-items: center; gap: 10px; }
+.topbar-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 99px;
+                background: var(--orange-light); color: var(--orange); }
+.refresh-btn { background: none; border: 1px solid var(--border); color: var(--text2); cursor: pointer;
+               padding: 6px 12px; border-radius: var(--radius); font-size: 12px; font-weight: 500;
+               display: flex; align-items: center; gap: 5px; transition: background .12s; }
+.refresh-btn:hover { background: var(--bg); }
+
+/* ── Content ── */
+.content { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* ── Stat strip (Checkmarx style) ── */
+.stat-strip { display: flex; gap: 1px; background: var(--border); border-radius: var(--radius);
+              overflow: hidden; border: 1px solid var(--border); margin-bottom: 20px; box-shadow: var(--shadow); }
+.stat-cell { flex: 1; background: var(--surface); padding: 16px 20px; display: flex;
+             flex-direction: column; gap: 4px; }
+.stat-cell:hover { background: var(--bg); }
+.stat-val { font-size: 26px; font-weight: 700; letter-spacing: -.02em;
+            font-variant-numeric: tabular-nums; }
+.stat-label { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase;
+              letter-spacing: .06em; display: flex; align-items: center; gap: 4px; }
+.stat-dot { width: 7px; height: 7px; border-radius: 50%; }
+.stat-cell.total  .stat-val { color: var(--text); }
+.stat-cell.crit   .stat-val { color: var(--crit); }
+.stat-cell.high   .stat-val { color: var(--high); }
+.stat-cell.med    .stat-val { color: var(--med); }
+.stat-cell.low    .stat-val { color: var(--low); }
+.stat-cell.fixed  .stat-val { color: var(--ok); }
+
+/* ── Grid ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+
+/* ── Card ── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+        box-shadow: var(--shadow); }
+.card-head { padding: 14px 18px 12px; border-bottom: 1px solid var(--border);
+             display: flex; align-items: center; gap: 10px; }
+.card-title { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+.card-sub { font-size: 12px; color: var(--muted); }
+.card-body { padding: 0; }
+
+/* ── Table ── */
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { background: var(--bg); padding: 9px 14px; text-align: left; font-size: 11px;
+           font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em;
+           border-bottom: 1px solid var(--border); white-space: nowrap; }
+tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+tbody tr:last-child { border-bottom: 0; }
+tbody tr:hover { background: var(--bg); }
+td { padding: 10px 14px; vertical-align: middle; color: var(--text2); }
+td.primary { color: var(--text); font-weight: 500; }
+.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+.file-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-cell { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Severity badges ── */
+.sev { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 4px;
+       font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.sev::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+.sev.critical { background: var(--crit-bg); color: var(--crit); }
+.sev.critical::before { background: var(--crit); }
+.sev.high     { background: var(--high-bg); color: var(--high); }
+.sev.high::before { background: var(--high); }
+.sev.medium   { background: var(--med-bg);  color: var(--med); }
+.sev.medium::before { background: var(--med); }
+.sev.low      { background: var(--low-bg);  color: var(--low); }
+.sev.low::before { background: var(--low); }
+.sev.info     { background: var(--info-bg); color: var(--info); }
+.sev.info::before { background: var(--info); }
+
+/* ── Status badges ── */
+.status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px;
+          border-radius: 99px; font-size: 11px; font-weight: 600; }
+.status.running  { background: var(--low-bg); color: var(--low); }
+.status.queued   { background: var(--med-bg); color: var(--med); }
+.status.success  { background: var(--ok-bg); color: var(--ok); }
+.status.failure  { background: var(--crit-bg); color: var(--crit); }
+.status.cancelled { background: var(--info-bg); color: var(--info); }
+.status.startup_failure { background: var(--high-bg); color: var(--high); }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.status.running .status-dot { animation: pulse 1.2s ease-in-out infinite; }
+
+/* ── Triage state ── */
+.state-chip { display: inline-flex; padding: 2px 8px; border-radius: 4px; font-size: 11px;
+              font-weight: 600; border: 1px solid var(--border); color: var(--muted);
+              background: var(--surface); cursor: default; }
+select.triage { font-size: 12px; padding: 4px 6px; border-radius: var(--radius);
+                border: 1px solid var(--border); background: var(--surface); color: var(--text2);
+                cursor: pointer; }
+
+/* ── Filter bar ── */
+.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 18px;
+              border-bottom: 1px solid var(--border); background: var(--bg); }
+.filter-bar select, .filter-bar input { font-size: 12px; padding: 5px 10px;
+  border-radius: var(--radius); border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); height: 30px; }
+.filter-bar input { min-width: 180px; }
+
+/* ── Empty state ── */
+.empty-state { text-align: center; padding: 48px 24px; }
+.empty-state svg { width: 40px; height: 40px; color: var(--border); margin-bottom: 12px; }
+.empty-state p { color: var(--muted); font-size: 13px; }
+
+/* ── Forms ── */
+.form-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 14px 18px; }
+.form-row input { font-size: 13px; padding: 7px 11px; border-radius: var(--radius);
+                  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+                  min-width: 200px; outline: none; }
+.form-row input:focus { border-color: var(--orange); box-shadow: 0 0 0 3px var(--orange-light); }
+.btn-primary { background: var(--orange); color: #fff; border: 0; border-radius: var(--radius);
+               padding: 7px 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .12s; }
+.btn-primary:hover { background: var(--orange-dark); }
+.btn-ghost { background: none; color: var(--muted); border: 1px solid var(--border);
+             border-radius: var(--radius); padding: 5px 12px; font-size: 12px; cursor: pointer; transition: all .12s; }
+.btn-ghost:hover { color: var(--crit); border-color: var(--crit); }
+.form-msg { font-size: 12px; }
+.form-msg.ok  { color: var(--ok); }
+.form-msg.err { color: var(--crit); }
+
+/* ── Chart container ── */
+.chart-wrap { padding: 16px 18px; }
+canvas { max-height: 200px; }
+
+/* ── Snippet expand ── */
+details.snippet summary { cursor: pointer; color: var(--orange); font-size: 11px; }
+pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+           padding: 10px 12px; font-size: 11.5px; overflow-x: auto; margin: 8px 0 0;
+           font-family: 'JetBrains Mono', monospace; color: var(--text2); }
+
+/* ── Repo icon ── */
+.repo-ico { width: 28px; height: 28px; border-radius: 6px; background: var(--orange-light);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.repo-ico svg { width: 14px; height: 14px; color: var(--orange); }
+
+/* ── Severity bar ── */
+.sev-bar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+.sev-bar-fill { height: 100%; border-radius: 2px; }
+
+/* ── Trend select ── */
+.card-head select { font-size: 12px; padding: 3px 8px; border-radius: var(--radius);
+                    border: 1px solid var(--border); background: var(--surface); color: var(--text2); }
+
+/* ── Tabs hidden ── */
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
 </style>
-</head>
-<body>
-<header>
-  <h1>🛡️ SecPipe</h1>
-  <span class="sub">SAST · SCA · Secrets · IaC — findings do pipeline</span>
+
+<div class="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.5C16.5 22.15 20 17.25 20 12V6l-8-4z"/>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-name">SecPipe</div>
+      <div class="brand-sub">Security Platform</div>
+    </div>
+  </div>
+
   <nav>
-    <button id="navDash" class="active" onclick="showTab('dashboard')">Dashboard</button>
-    <button id="navJobs" onclick="showTab('jobs')">Jobs</button>
-    <button id="navRepos" onclick="showTab('repos')">Repositórios</button>
+    <div class="nav-section">
+      <span class="nav-label">Analysis</span>
+      <a class="nav-item active" onclick="showTab('dashboard',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+        </svg>
+        Dashboard
+      </a>
+      <a class="nav-item" onclick="showTab('jobs',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+        Scans
+      </a>
+      <a class="nav-item" onclick="showTab('findings',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        Results
+      </a>
+    </div>
+    <div class="nav-section">
+      <span class="nav-label">Management</span>
+      <a class="nav-item" onclick="showTab('repos',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        Projects
+      </a>
+    </div>
   </nav>
-</header>
-<main>
-<div id="tab-dashboard">
-  <div class="cards" id="cards"></div>
 
-  <div class="panel">
-    <h2>Tendência por scan <select id="trendRepo" style="margin-left:8px"></select></h2>
-    <canvas id="trendChart"></canvas>
-  </div>
-
-  <div class="panel">
-    <h2>Findings</h2>
-    <div class="filters">
-      <select id="fRepo"><option value="">Todos os repos</option></select>
-      <select id="fSeverity">
-        <option value="">Todas as severidades</option>
-        <option>critical</option><option>high</option><option>medium</option>
-        <option>low</option><option>info</option>
-      </select>
-      <select id="fStatus">
-        <option value="open" selected>Abertos</option>
-        <option value="fixed">Corrigidos</option>
-        <option value="false_positive">Falsos positivos</option>
-        <option value="accepted">Risco aceito</option>
-        <option value="">Todos</option>
-      </select>
-    </div>
-    <div class="tablewrap">
-      <table>
-        <thead><tr>
-          <th>Sev</th><th>Repo</th><th>Ferramenta</th><th>Regra</th>
-          <th>Local</th><th class="msg">Mensagem</th><th>Triagem</th>
-        </tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
+  <div class="sidebar-footer">
+    <a href="https://github.com/k19x/ci_cd" target="_blank">k19x/ci_cd</a>
   </div>
 </div>
 
-<div id="tab-jobs" hidden>
-  <div class="panel">
-    <h2>
-      Scans em execução / recentes
-      <button class="btn ghost" style="margin-left:12px;font-size:12px" onclick="loadJobs()">↻ Atualizar</button>
-      <span id="jobsAge" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
-    </h2>
-    <div class="tablewrap">
-      <table>
-        <thead><tr>
-          <th>Repositório</th><th>Branch</th><th>Commit</th>
-          <th>Status</th><th>Iniciado</th><th></th>
-        </tr></thead>
-        <tbody id="jobRows"></tbody>
-      </table>
+<div class="main">
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-title" id="topbarTitle">Dashboard</div>
+    <div class="topbar-actions">
+      <span class="topbar-badge" id="topbarBadge" hidden></span>
+      <button class="refresh-btn" onclick="refreshCurrent()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+        Atualizar
+      </button>
     </div>
-  </div>
-</div>
+  </header>
 
-<div id="tab-repos" hidden>
-  <div class="panel">
-    <h2>Cadastrar repositório</h2>
-    <div class="form-row">
-      <input type="text" id="repoName" placeholder="nome (ex: k19x/meu-projeto)">
-      <input type="text" id="repoUrl" placeholder="URL (opcional)">
-      <button class="btn" onclick="addRepo()">Cadastrar</button>
-      <span class="formmsg" id="repoMsg"></span>
+  <div class="content">
+
+    <!-- ═══ DASHBOARD ═══ -->
+    <div id="tab-dashboard" class="tab-pane active">
+      <div class="stat-strip" id="statStrip">
+        <div class="stat-cell total"><div class="stat-val" id="s-total">—</div><div class="stat-label">Total abertos</div></div>
+        <div class="stat-cell crit"><div class="stat-val" id="s-critical">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--crit)"></span>Critical</div></div>
+        <div class="stat-cell high"><div class="stat-val" id="s-high">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--high)"></span>High</div></div>
+        <div class="stat-cell med"><div class="stat-val" id="s-medium">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--med)"></span>Medium</div></div>
+        <div class="stat-cell low"><div class="stat-val" id="s-low">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--low)"></span>Low</div></div>
+        <div class="stat-cell fixed"><div class="stat-val" id="s-fixed">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--ok)"></span>Corrigidos</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Tendência de findings</div>
+            <select id="trendRepo" onchange="loadTrend()"></select>
+          </div>
+          <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Último scan por projeto</div>
+          </div>
+          <div class="card-body tbl-wrap">
+            <table>
+              <thead><tr><th>Projeto</th><th>Último scan</th><th>Critical</th><th>High</th></tr></thead>
+              <tbody id="lastScans"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="tablewrap">
-      <table>
-        <thead><tr>
-          <th>Repositório</th><th>Último scan</th><th>Scans</th>
-          <th>Abertos</th><th>Crit/High</th><th>Integração</th><th></th>
-        </tr></thead>
-        <tbody id="repoRows"></tbody>
-      </table>
+
+    <!-- ═══ SCANS / JOBS ═══ -->
+    <div id="tab-jobs" class="tab-pane">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">Scans recentes</div>
+          <div class="card-sub" id="jobsAge"></div>
+        </div>
+        <div class="card-body tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Projeto</th><th>Branch</th><th>Commit</th>
+              <th>Status</th><th>Iniciado</th><th>Link</th>
+            </tr></thead>
+            <tbody id="jobRows"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
-</main>
+
+    <!-- ═══ FINDINGS / RESULTS ═══ -->
+    <div id="tab-findings" class="tab-pane">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">Results</div>
+          <div class="card-sub" id="findCount"></div>
+        </div>
+        <div class="filter-bar">
+          <select id="fRepo"><option value="">All projects</option></select>
+          <select id="fSev">
+            <option value="">All severities</option>
+            <option>critical</option><option>high</option>
+            <option>medium</option><option>low</option><option>info</option>
+          </select>
+          <select id="fStatus">
+            <option value="open">To Review</option>
+            <option value="false_positive">Not Exploitable</option>
+            <option value="accepted">Risk Accepted</option>
+            <option value="fixed">Fixed</option>
+            <option value="">All</option>
+          </select>
+          <select id="fTool"><option value="">All engines</option>
+            <option>Semgrep</option><option>Trivy</option><option>gitleaks</option>
+          </select>
+        </div>
+        <div class="card-body tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Vulnerability</th><th>Severity</th><th>Engine</th>
+              <th>Location</th><th>State</th>
+            </tr></thead>
+            <tbody id="findRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ REPOS / PROJECTS ═══ -->
+    <div id="tab-repos" class="tab-pane">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-head">
+          <div class="card-title">Add project</div>
+        </div>
+        <div class="form-row">
+          <input type="text" id="repoName" placeholder="Name  (e.g. k19x/my-api)" onkeydown="if(event.key==='Enter')addRepo()">
+          <input type="text" id="repoUrl"  placeholder="URL (optional)">
+          <button class="btn-primary" onclick="addRepo()">Add project</button>
+          <span class="form-msg" id="repoMsg"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">Projects</div>
+          <div class="card-sub" id="repoCount"></div>
+        </div>
+        <div class="card-body tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Project</th><th>Last scan</th><th>Scans</th>
+              <th>Open</th><th>Crit / High</th><th>Integration</th><th></th>
+            </tr></thead>
+            <tbody id="repoRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
 
 <script>
-const $ = (id) => document.getElementById(id);
-const api = (path) => fetch(path).then(r => r.json());
-let chart;
+/* ── helpers ── */
+const $ = id => document.getElementById(id);
+const api = path => fetch(path).then(r => r.json());
+const esc = s => (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sevClass = s => ({critical:'critical',high:'high',medium:'medium',low:'low',info:'info'}[s]||'info');
 
-async function loadOverview() {
+let chart, jobTimer, currentTab = 'dashboard';
+
+/* ── Tab switching ── */
+function showTab(tab, el) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  $(`tab-${tab}`).classList.add('active');
+  if (el) el.classList.add('active');
+  currentTab = tab;
+  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Results', repos:'Projects'};
+  $('topbarTitle').textContent = titles[tab] || tab;
+  clearInterval(jobTimer);
+  if (tab === 'dashboard') loadDashboard();
+  if (tab === 'jobs')      { loadJobs(); jobTimer = setInterval(loadJobs, 15000); }
+  if (tab === 'findings')  loadFindings();
+  if (tab === 'repos')     loadRepos();
+}
+
+function refreshCurrent() { showTab(currentTab, document.querySelector('.nav-item.active')); }
+
+/* ── Dashboard ── */
+async function loadDashboard() {
   const data = await api('/api/overview');
   const sev = data.open_by_severity;
-  $('cards').innerHTML = `
-    <div class="card critical"><div class="n">${sev.critical}</div><div class="l">Critical abertos</div></div>
-    <div class="card high"><div class="n">${sev.high}</div><div class="l">High abertos</div></div>
-    <div class="card medium"><div class="n">${sev.medium}</div><div class="l">Medium abertos</div></div>
-    <div class="card low"><div class="n">${sev.low}</div><div class="l">Low abertos</div></div>
-    <div class="card"><div class="n">${data.by_status.fixed || 0}</div><div class="l">Corrigidos</div></div>
-    <div class="card"><div class="n">${data.repos.length}</div><div class="l">Repositórios</div></div>`;
+  const total = Object.values(sev).reduce((a,b)=>a+b,0);
+  $('s-total').textContent   = total;
+  $('s-critical').textContent = sev.critical || 0;
+  $('s-high').textContent    = sev.high || 0;
+  $('s-medium').textContent  = sev.medium || 0;
+  $('s-low').textContent     = sev.low || 0;
+  $('s-fixed').textContent   = data.by_status.fixed || 0;
 
-  for (const selId of ['fRepo', 'trendRepo']) {
-    const sel = $(selId);
-    const current = sel.value;
-    sel.length = selId === 'fRepo' ? 1 : 0;
-    if (selId === 'trendRepo' && data.repos.length)
-      sel.add(new Option('(selecione)', data.repos[0]));
+  // populate repo selects
+  ['trendRepo','fRepo'].forEach(id => {
+    const sel = $(id), cur = sel.value;
+    while (sel.options.length > (id==='fRepo'?1:0)) sel.remove(id==='fRepo'?1:0);
+    if (id==='trendRepo' && data.repos.length) sel.add(new Option(data.repos[0], data.repos[0]));
     data.repos.forEach(r => sel.add(new Option(r, r)));
-    if (current) sel.value = current;
-  }
+    if (cur) sel.value = cur;
+  });
+
+  // badge
+  const badge = $('topbarBadge');
+  if (sev.critical > 0) {
+    badge.hidden = false;
+    badge.textContent = `${sev.critical} Critical`;
+  } else { badge.hidden = true; }
+
+  // last scans table
+  const tbody = $('lastScans');
+  tbody.innerHTML = data.last_scans.map(s => `
+    <tr>
+      <td class="primary">${esc(s.repo)}</td>
+      <td class="mono">${s.last_scan ? s.last_scan.slice(0,16).replace('T',' ') : '<span style="color:var(--muted)">—</span>'}</td>
+      <td><span class="sev critical" style="${s.critical?'':'opacity:.3'}">${s.critical||0}</span></td>
+      <td><span class="sev high"     style="${s.high?'':'opacity:.3'}">${s.high||0}</span></td>
+    </tr>`).join('');
+
+  if ($('trendRepo').value) loadTrend();
 }
 
 async function loadTrend() {
   const repo = $('trendRepo').value;
   if (!repo) return;
   const data = await api('/api/trend?repo=' + encodeURIComponent(repo));
-  const labels = data.scans.map(s => s.created_at.slice(5, 16).replace('T', ' '));
-  const ds = (key, color) => ({
-    label: key, data: data.scans.map(s => s[key]), borderColor: color,
-    backgroundColor: color, tension: .25, pointRadius: 3,
+  const labels = data.scans.map(s => s.created_at.slice(5,16).replace('T',' '));
+  const c = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const ds = (key, col) => ({
+    label: key, data: data.scans.map(s => s[key]),
+    borderColor: col, backgroundColor: col+'22',
+    tension: .3, pointRadius: 3, fill: true,
   });
-  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
   if (chart) chart.destroy();
   chart = new Chart($('trendChart'), {
     type: 'line',
     data: { labels, datasets: [
-      ds('critical', css('--critical')), ds('high', css('--high')),
-      ds('medium', css('--medium')), ds('low', css('--low')),
+      ds('critical', c('--crit')), ds('high', c('--high')),
+      ds('medium', c('--med')), ds('low', c('--low')),
     ]},
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: css('--text') } } },
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: c('--text2'), font: { size: 11 }, boxWidth: 12 } } },
       scales: {
-        x: { ticks: { color: css('--muted') }, grid: { color: css('--border') } },
-        y: { ticks: { color: css('--muted'), precision: 0 }, grid: { color: css('--border') },
-             beginAtZero: true },
+        x: { ticks: { color: c('--muted'), font:{size:11} }, grid: { color: c('--border') } },
+        y: { ticks: { color: c('--muted'), font:{size:11}, precision:0 }, grid: { color: c('--border') }, beginAtZero: true },
       },
     },
   });
 }
 
+/* ── Jobs ── */
+function jobStatusBadge(run) {
+  const map = {
+    completed: run.conclusion || 'unknown',
+    in_progress: 'running',
+    queued: 'queued',
+  };
+  const cls = map[run.status] || run.conclusion || 'unknown';
+  const label = cls.replace(/_/g,' ');
+  return `<span class="status ${cls}"><span class="status-dot"></span>${label}</span>`;
+}
+
+async function loadJobs() {
+  const data = await api('/api/runs');
+  $('jobsAge').textContent = 'Updated ' + new Date().toLocaleTimeString('pt-BR');
+  const tbody = $('jobRows');
+  if (!data.runs.length) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><p>No scans found. Set GITHUB_TOKEN to see private repositories.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.runs.map(r => `
+    <tr>
+      <td class="primary">${esc(r.repo)}</td>
+      <td class="mono">${esc(r.branch)}</td>
+      <td class="mono">${r.commit}</td>
+      <td>${jobStatusBadge(r)}</td>
+      <td class="mono" style="font-size:12px">${r.created_at.slice(0,16).replace('T',' ')}</td>
+      <td><a href="${esc(r.url)}" target="_blank" style="color:var(--orange);font-size:12px;text-decoration:none">View ↗</a></td>
+    </tr>`).join('');
+}
+
+/* ── Findings ── */
+['fRepo','fSev','fStatus','fTool'].forEach(id => $(id) && $(id).addEventListener('change', loadFindings));
+
 async function loadFindings() {
-  const params = new URLSearchParams();
-  if ($('fRepo').value) params.set('repo', $('fRepo').value);
-  if ($('fSeverity').value) params.set('severity', $('fSeverity').value);
-  params.set('status', $('fStatus').value);
-  const data = await api('/api/findings?' + params);
-  const tbody = $('rows');
+  const p = new URLSearchParams();
+  if ($('fRepo').value)   p.set('repo',     $('fRepo').value);
+  if ($('fSev').value)    p.set('severity', $('fSev').value);
+  p.set('status', $('fStatus').value);
+  if ($('fTool').value)   p.set('tool',     $('fTool').value);
+  const data = await api('/api/findings?' + p);
+  $('findCount').textContent = `${data.count} result${data.count!==1?'s':''}`;
+  const tbody = $('findRows');
   if (!data.findings.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhum finding para os filtros atuais 🎉</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><p>No results for the selected filters</p></div></td></tr>`;
     return;
   }
   tbody.innerHTML = data.findings.map(f => `
     <tr>
-      <td><span class="sev ${f.severity}">${f.severity}</span></td>
-      <td>${f.repo}</td>
-      <td>${f.tool}</td>
-      <td class="mono">${f.rule}</td>
-      <td class="mono">${f.file}${f.line ? ':' + f.line : ''}</td>
-      <td class="msg">${escapeHtml(f.message)}</td>
+      <td class="primary msg-cell" title="${esc(f.message)}">${esc(f.rule)}</td>
+      <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span></td>
+      <td style="color:var(--muted);font-size:12px">${esc(f.tool)}</td>
+      <td class="mono file-cell" title="${esc(f.file)}">${esc(f.file)}${f.line?':'+f.line:''}</td>
       <td>
-        <select onchange="setTriage('${f.repo}','${f.fid}',this.value)">
-          ${['open','false_positive','accepted','fixed'].map(s =>
-            `<option value="${s}" ${s===f.status?'selected':''}>${s}</option>`).join('')}
+        <select class="triage" onchange="setTriage('${esc(f.repo)}','${f.fid}',this.value)">
+          <option value="open"           ${f.status==='open'           ?'selected':''}>To Review</option>
+          <option value="false_positive" ${f.status==='false_positive' ?'selected':''}>Not Exploitable</option>
+          <option value="accepted"       ${f.status==='accepted'       ?'selected':''}>Risk Accepted</option>
+          <option value="fixed"          ${f.status==='fixed'          ?'selected':''}>Fixed</option>
         </select>
       </td>
     </tr>`).join('');
 }
 
-function escapeHtml(s) {
-  return (s || '').replace(/[&<>"']/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
 async function setTriage(repo, fid, status) {
   await fetch(`/api/findings/${encodeURIComponent(repo)}/${fid}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({status}),
   });
-  await Promise.all([loadOverview(), loadFindings()]);
+  await Promise.all([loadDashboard(), loadFindings()]);
 }
 
-// ---------- aba Jobs ----------
-let jobsTimer;
-
-function jobBadge(run) {
-  const label = run.status === 'completed' ? (run.conclusion || 'unknown') : run.status;
-  const cls = run.status === 'completed' ? (run.conclusion || 'unknown') : run.status;
-  return `<span class="badge ${cls.replace('_','-')}">${label.replace('_',' ')}</span>`;
-}
-
-async function loadJobs() {
-  const data = await api('/api/runs');
-  $('jobsAge').textContent = 'atualizado ' + new Date().toLocaleTimeString('pt-BR');
-  const tbody = $('jobRows');
-  if (!data.runs.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhum scan encontrado. Verifique se GITHUB_TOKEN está configurado no servidor ou se há repos cadastrados.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = data.runs.map(r => `
-    <tr>
-      <td><strong>${escapeHtml(r.repo)}</strong></td>
-      <td class="mono">${escapeHtml(r.branch)}</td>
-      <td class="mono">${r.commit}</td>
-      <td>${jobBadge(r)}</td>
-      <td class="mono" style="font-size:12px">${r.created_at.slice(5,16).replace('T',' ')}</td>
-      <td><a href="${escapeHtml(r.url)}" target="_blank" style="color:var(--accent);font-size:12px">ver no GitHub ↗</a></td>
-    </tr>`).join('');
-}
-
-// ---------- aba Repositórios ----------
-const PLATFORM_REPO = 'k19x/ci_cd'; // repo da plataforma no GitHub
-
-function showTab(tab) {
-  $('tab-dashboard').hidden = tab !== 'dashboard';
-  $('tab-jobs').hidden = tab !== 'jobs';
-  $('tab-repos').hidden = tab !== 'repos';
-  $('navDash').classList.toggle('active', tab === 'dashboard');
-  $('navJobs').classList.toggle('active', tab === 'jobs');
-  $('navRepos').classList.toggle('active', tab === 'repos');
-  clearInterval(jobsTimer);
-  if (tab === 'jobs') { loadJobs(); jobsTimer = setInterval(loadJobs, 15000); }
-  if (tab === 'repos') loadRepos();
-}
-
-function yamlSnippet(name) {
-  return `# .github/workflows/security.yml no repo ${name}
-name: security
+/* ── Repos ── */
+const PLATFORM = 'k19x/ci_cd';
+function workflowYaml(name) {
+  return `name: security
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, master]
 jobs:
   scan:
-    uses: ${PLATFORM_REPO}/.github/workflows/security-scan.yml@main
+    uses: ${PLATFORM}/.github/workflows/security-scan.yml@main
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     with:
-      fail_on: high`;
+      fail_on: high
+    secrets: inherit`;
 }
 
 async function loadRepos() {
   const data = await api('/api/repos');
+  $('repoCount').textContent = `${data.repos.length} project${data.repos.length!==1?'s':''}`;
   const tbody = $('repoRows');
   if (!data.repos.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhum repositório cadastrado ainda.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>No projects yet. Add one above.</p></div></td></tr>`;
     return;
   }
   tbody.innerHTML = data.repos.map(r => `
     <tr>
       <td>
-        <strong>${escapeHtml(r.name)}</strong>
-        ${r.url ? `<div><a class="mono" href="${escapeHtml(r.url)}" target="_blank">${escapeHtml(r.url)}</a></div>` : ''}
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="repo-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+          <div>
+            <div class="primary" style="font-weight:600">${esc(r.name)}</div>
+            ${r.url ? `<div><a class="mono" href="${esc(r.url)}" target="_blank" style="color:var(--orange);font-size:11px">${esc(r.url)}</a></div>` : ''}
+          </div>
+        </div>
       </td>
-      <td>${r.last_scan ? r.last_scan.slice(0, 16).replace('T', ' ') : '<span class="mono">nunca escaneado</span>'}</td>
+      <td class="mono">${r.last_scan ? r.last_scan.slice(0,16).replace('T',' ') : '<span style="color:var(--muted)">Never scanned</span>'}</td>
       <td>${r.scan_count}</td>
       <td>${r.open_findings}</td>
       <td>${r.open_critical_high > 0
-            ? `<span class="sev critical">${r.open_critical_high}</span>` : '0'}</td>
+          ? `<span class="sev critical">${r.open_critical_high}</span>`
+          : '<span style="color:var(--muted)">0</span>'}</td>
       <td>
         <details class="snippet">
-          <summary>ver workflow</summary>
-          <pre class="yaml">${escapeHtml(yamlSnippet(r.name))}</pre>
+          <summary>security.yml</summary>
+          <pre class="yaml">${esc(workflowYaml(r.name))}</pre>
         </details>
       </td>
-      <td><button class="btn ghost" onclick="delRepo('${escapeHtml(r.name)}')">remover</button></td>
+      <td><button class="btn-ghost" onclick="delRepo('${esc(r.name)}')">Remove</button></td>
     </tr>`).join('');
 }
 
 async function addRepo() {
   const msg = $('repoMsg');
-  msg.className = 'formmsg';
-  msg.textContent = '';
-  const response = await fetch('/api/repos', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: $('repoName').value, url: $('repoUrl').value }),
+  msg.className = 'form-msg'; msg.textContent = '';
+  const res = await fetch('/api/repos', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name:$('repoName').value, url:$('repoUrl').value}),
   });
-  if (response.ok) {
-    msg.className = 'formmsg ok';
-    msg.textContent = 'cadastrado ✔';
+  if (res.ok) {
+    msg.className = 'form-msg ok'; msg.textContent = 'Project added';
     $('repoName').value = ''; $('repoUrl').value = '';
-    await Promise.all([loadRepos(), loadOverview()]);
+    await Promise.all([loadRepos(), loadDashboard()]);
   } else {
-    const body = await response.json().catch(() => ({}));
-    msg.className = 'formmsg err';
-    msg.textContent = body.detail || `erro ${response.status}`;
+    const b = await res.json().catch(()=>({}));
+    msg.className = 'form-msg err'; msg.textContent = b.detail || `Error ${res.status}`;
   }
 }
 
 async function delRepo(name) {
-  await fetch('/api/repos/' + encodeURIComponent(name), { method: 'DELETE' });
-  await Promise.all([loadRepos(), loadOverview()]);
+  await fetch('/api/repos/' + encodeURIComponent(name), {method:'DELETE'});
+  await Promise.all([loadRepos(), loadDashboard()]);
 }
 
-$('repoName').addEventListener('keydown', e => { if (e.key === 'Enter') addRepo(); });
-['fRepo', 'fSeverity', 'fStatus'].forEach(id => $(id).addEventListener('change', loadFindings));
-$('trendRepo').addEventListener('change', loadTrend);
-
-(async () => { await loadOverview(); await Promise.all([loadTrend(), loadFindings()]); })();
+/* ── Boot ── */
+loadDashboard();
 </script>
-</body>
-</html>
