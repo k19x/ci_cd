@@ -3,6 +3,11 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.10] - 2026-08-30
+
+### Changed
+- **Results — coluna Project**: adicionada coluna dedicada "Project" com o nome do repo em cada linha da tabela; coluna é ordenável; subtexto redundante removido da coluna Vulnerability
+
 ## [0.14.9] - 2026-08-30
 
 ### Changed

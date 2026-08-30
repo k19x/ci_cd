@@ -1471,6 +1471,7 @@ td { padding: 11px 16px; }
             <thead><tr>
               <th style="width:30px"><input type="checkbox" id="selAllPage" onchange="toggleSelPage(this.checked)" title="Selecionar página"></th>
               <th style="width:34px"></th>
+              <th class="sortable" data-k="res" data-c="0" onclick="sortBy('res',0,renderFindPage)">Project<span class="arr"></span></th>
               <th class="sortable" data-k="res" data-c="1" onclick="sortBy('res',1,renderFindPage)">Vulnerability<span class="arr"></span></th>
               <th class="sortable" data-k="res" data-c="2" onclick="sortBy('res',2,renderFindPage)">Severity<span class="arr"></span></th>
               <th class="sortable" data-k="res" data-c="3" onclick="sortBy('res',3,renderFindPage)">Engine<span class="arr"></span></th>
@@ -2564,7 +2565,7 @@ function renderFindPage() {
     ((f.rule||'') + ' ' + (f.file||'') + ' ' + (f.message||'') + ' ' + (f.repo||'')).toLowerCase().includes(q));
   if ($('fSlaOnly')?.checked) base = base.filter(slaBreach);
   _findingsView = applySort('res', base, {
-    1: f => f.rule || '', 2: f => SEV_ORD[f.severity] ?? 9, 3: f => f.tool || '',
+    0: f => f.repo || '', 1: f => f.rule || '', 2: f => SEV_ORD[f.severity] ?? 9, 3: f => f.tool || '',
     4: f => (f.file || '') + ':' + (f.line || 0), 5: f => f.status || '',
   });
   const total = _findingsView.length;
@@ -2590,9 +2591,9 @@ function renderFindPage() {
     <tr id="find-row-${gi}" class="${breach ? 'sla-row' : ''}">
       <td style="text-align:center"><input type="checkbox" class="selbox" data-key="${esc(key)}" ${_selKeys.has(key)?'checked':''} onchange="toggleSel(this)"></td>
       <td style="text-align:center"><button class="chev-btn" onclick="toggleFindDetail(${gi}, this)" title="Ver detalhes"><i data-lucide="chevron-right"></i></button></td>
+      <td class="mono" style="font-size:11px;color:var(--text2);white-space:nowrap">${esc(f.repo)}</td>
       <td class="primary vuln-name-cell" style="cursor:pointer" onclick="toggleFindDetail(${gi}, this.parentElement.querySelector('.chev-btn'))">
         <span class="vname" title="${esc(f.rule)}">${esc(f.rule)}</span>
-        <span class="vuln-repo-tag">${esc(f.repo)}</span>
       </td>
       <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span>${breach ? `<i data-lucide="alarm-clock" style="width:12px;height:12px;color:var(--crit);vertical-align:-2px;margin-left:5px" title="SLA estourado — aberto há ${ageDays(f)} dias"></i>` : ''}</td>
       <td style="color:var(--muted);font-size:12px">${esc(f.tool)}</td>
