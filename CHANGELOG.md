@@ -3,6 +3,15 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.1] - 2026-08-29
+
+### Added
+- **Aba Scans — motivo da falha**: botão **Why?** aparece em runs com `failure`/`timed_out`; expande uma linha inline com cada job, ícone de resultado (✓/✗/⏱) e os steps que falharam com link para o log no GitHub
+- **Backend `GET /api/runs/{repo}/{run_id}/jobs`**: consulta GitHub Jobs API, retorna nome do job, conclusão e steps com falha
+
+### Fixed
+- CDN Lucide trocado de `jsdelivr` para `unpkg` (path UMD correto); `createIcons()` protegido com guard `typeof lucide !== 'undefined'`
+
 ## [0.8.0] - 2026-08-29
 
 ### Added

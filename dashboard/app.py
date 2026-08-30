@@ -889,6 +889,41 @@ def change_password(username: str, payload: PasswordChange, user=Depends(get_cur
 
 
 # ── Re-run workflow ────────────────────────────────
+@app.get("/api/runs/{repo:path}/{run_id}/jobs")
+def get_run_jobs(repo: str, run_id: int, user=Depends(require_role("viewer"))):
+    """Return job-level failure details for a specific workflow run."""
+    token = os.environ.get("GITHUB_TOKEN", "")
+    hdrs = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    if token:
+        hdrs["Authorization"] = f"Bearer {token}"
+    try:
+        url = f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/jobs?per_page=30"
+        req = urllib.request.Request(url, headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        raise HTTPException(e.code, e.read().decode(errors="replace"))
+    except urllib.error.URLError as e:
+        raise HTTPException(502, str(e))
+
+    jobs = []
+    for job in data.get("jobs", []):
+        failed_steps = [
+            {"name": s["name"], "number": s["number"]}
+            for s in job.get("steps", [])
+            if s.get("conclusion") in ("failure", "timed_out")
+        ]
+        jobs.append({
+            "name": job["name"],
+            "conclusion": job.get("conclusion"),
+            "status": job.get("status"),
+            "failed_steps": failed_steps,
+            "url": job.get("html_url", ""),
+            "completed_at": job.get("completed_at", ""),
+        })
+    return {"jobs": jobs}
+
+
 @app.post("/api/runs/{repo:path}/{run_id}/rerun")
 def rerun_scan(repo: str, run_id: int, user=Depends(require_role("analyst"))):
     token = os.environ.get("GITHUB_TOKEN", "")

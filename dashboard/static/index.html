@@ -323,6 +323,18 @@ pre.yaml { background: var(--bg); border: 1px solid var(--border); border-radius
 .sev-bar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
 .sev-bar-fill { height: 100%; border-radius: 2px; }
 
+/* ── Scan failure details ── */
+.job-detail-row td { padding: 0 !important; }
+.job-detail-wrap { padding: 10px 16px 14px 48px; background: var(--bg);
+                   border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.job-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.job-row .job-name { color: var(--text2); font-weight: 500; }
+.job-row .job-steps { color: var(--crit); font-size: 11px; }
+.why-btn { background: none; border: 1px solid var(--crit); color: var(--crit); border-radius: var(--radius);
+           padding: 2px 8px; font-size: 11px; font-weight: 600; cursor: pointer; transition: background .12s; }
+.why-btn:hover { background: var(--crit-bg); }
+.why-btn.loading { opacity: .6; cursor: default; }
+
 /* ── Trend select ── */
 .card-head select { font-size: 12px; padding: 3px 8px; border-radius: var(--radius);
                     border: 1px solid var(--border); background: var(--surface); color: var(--text2); }
@@ -1011,22 +1023,63 @@ function jobStatusBadge(run) {
 
 async function loadJobs() {
   const data = await api('/api/runs');
+  if (!data) return;
   $('jobsAge').textContent = 'Updated ' + new Date().toLocaleTimeString('pt-BR');
   const tbody = $('jobRows');
   if (!data.runs.length) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><p>No scans found. Set GITHUB_TOKEN to see private repositories.</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>No scans found. Set GITHUB_TOKEN to see private repositories.</p></div></td></tr>`;
     return;
   }
-  tbody.innerHTML = data.runs.map(r => `
-    <tr>
+  tbody.innerHTML = data.runs.map(r => {
+    const isFailed = r.conclusion === 'failure' || r.conclusion === 'timed_out';
+    const repoKey  = r.repo.replace(/'/g, "\\'");
+    return `
+    <tr id="run-row-${r.run_id}">
       <td class="primary">${esc(r.repo)}</td>
       <td class="mono">${esc(r.branch)}</td>
       <td class="mono">${r.commit}</td>
       <td>${jobStatusBadge(r)}</td>
       <td class="mono" style="font-size:12px">${r.created_at.slice(0,16).replace('T',' ')}</td>
       <td><a href="${esc(r.url)}" target="_blank" style="color:var(--orange);font-size:12px;text-decoration:none">View ↗</a></td>
-    </tr>`).join('');
+      <td>${isFailed ? `<button class="why-btn" id="why-${r.run_id}" onclick="showRunJobs('${repoKey}',${r.run_id},this)">Why?</button>` : ''}</td>
+    </tr>`;
+  }).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
+}
+
+async function showRunJobs(repo, runId, btn) {
+  const detailId = `detail-${runId}`;
+  const existing = document.getElementById(detailId);
+  if (existing) { existing.remove(); btn.textContent = 'Why?'; return; }
+
+  btn.textContent = '…'; btn.classList.add('loading'); btn.disabled = true;
+  const data = await fetch(`/api/runs/${encodeURIComponent(repo)}/${runId}/jobs`)
+    .then(r => r.ok ? r.json() : null).catch(() => null);
+  btn.textContent = 'Why?'; btn.classList.remove('loading'); btn.disabled = false;
+  if (!data) return;
+
+  const conclusionIcon = c => ({failure:'✗', timed_out:'⏱', success:'✓', skipped:'—', cancelled:'✗'}[c] || '?');
+  const conclusionColor = c => ({failure:'var(--crit)', timed_out:'var(--high)', success:'var(--ok)', skipped:'var(--muted)', cancelled:'var(--muted)'}[c] || 'var(--muted)');
+
+  const jobsHtml = data.jobs.map(j => {
+    const stepsHtml = j.failed_steps.length
+      ? `<span class="job-steps"> → failed at: ${j.failed_steps.map(s => `<strong>${esc(s.name)}</strong>`).join(', ')}</span>`
+      : '';
+    const link = j.url ? `<a href="${esc(j.url)}" target="_blank" style="color:var(--orange);font-size:11px;margin-left:6px">↗</a>` : '';
+    return `<div class="job-row">
+      <span style="font-size:13px;color:${conclusionColor(j.conclusion)};font-weight:700">${conclusionIcon(j.conclusion)}</span>
+      <span class="job-name">${esc(j.name)}</span>${stepsHtml}${link}
+    </div>`;
+  }).join('');
+
+  const row = document.createElement('tr');
+  row.id = detailId;
+  row.className = 'job-detail-row';
+  row.innerHTML = `<td colspan="7"><div class="job-detail-wrap">${jobsHtml || '<span style="color:var(--muted);font-size:12px">No job details available.</span>'}</div></td>`;
+
+  const runRow = document.getElementById(`run-row-${runId}`);
+  if (runRow) runRow.after(row);
+  btn.textContent = '▲ Hide';
 }
 
 /* ── Findings ── */
