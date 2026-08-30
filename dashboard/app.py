@@ -1098,8 +1098,8 @@ def get_run_jobs(repo: str, run_id: int, user=Depends(require_role("viewer"))):
         is_pr = event == "pull_request" or (branch and branch != "main" and branch != "master")
         with db() as conn:
             row = conn.execute(
-                "SELECT SUM(CASE WHEN severity='critical' AND state='open' THEN 1 ELSE 0 END) as crits,"
-                " SUM(CASE WHEN severity='high'     AND state='open' THEN 1 ELSE 0 END) as highs"
+                "SELECT SUM(CASE WHEN severity='critical' AND status='open' THEN 1 ELSE 0 END) as crits,"
+                " SUM(CASE WHEN severity='high'     AND status='open' THEN 1 ELSE 0 END) as highs"
                 " FROM findings WHERE repo=?",
                 (repo,)
             ).fetchone()
