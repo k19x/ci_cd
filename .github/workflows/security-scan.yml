@@ -220,7 +220,8 @@ jobs:
       - name: Normalizar resultados
         run: python scripts/normalize.py sarif/ --output findings.json
       - name: Enviar para o dashboard
-        if: always() && vars.SECPIPE_DASHBOARD_URL != ''
+        # nunca em PR: o scan diff-only de PR é parcial e corromperia o estado do dashboard
+        if: always() && github.event_name != 'pull_request' && vars.SECPIPE_DASHBOARD_URL != ''
         continue-on-error: true
         env:
           SECPIPE_TOKEN: ${{ secrets.SECPIPE_TOKEN }}

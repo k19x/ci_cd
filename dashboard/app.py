@@ -69,8 +69,37 @@ def _verify_password(password: str, stored: str) -> bool:
     except Exception:
         return False
 
+def _set_repo_variable(repo: str, name: str, value: str, headers: dict) -> bool:
+    payload = _json.dumps({"name": name, "value": value}).encode()
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{repo}/actions/variables/{name}",
+            data=payload, method="PATCH", headers=headers,
+        )
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+        return True
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            try:
+                req = urllib.request.Request(
+                    f"https://api.github.com/repos/{repo}/actions/variables",
+                    data=payload, method="POST", headers=headers,
+                )
+                with urllib.request.urlopen(req, timeout=10):
+                    pass
+                return True
+            except Exception:
+                return False
+        return False
+    except Exception:
+        return False
+
+
 def _auto_register_tunnel():
-    """Background: polls cloudflared /quicktunnel and updates GitHub variable SECPIPE_DASHBOARD_URL."""
+    """Background: lê a URL do quick tunnel e atualiza SECPIPE_DASHBOARD_URL
+    no repo central E em todos os repos cadastrados (o `vars.` do workflow
+    reutilizável é resolvido no contexto do repo CALLER, não do ci_cd)."""
     gh_token = os.environ.get("GITHUB_TOKEN", "")
     gh_repo  = os.environ.get("SECPIPE_GITHUB_REPO", "k19x/ci_cd")
     if not gh_token:
@@ -88,26 +117,19 @@ def _auto_register_tunnel():
                 url = _json.loads(r.read()).get("url", "")
             if not url:
                 continue
-            payload = _json.dumps({"name": "SECPIPE_DASHBOARD_URL", "value": url}).encode()
+            targets = {gh_repo}
             try:
-                req = urllib.request.Request(
-                    f"https://api.github.com/repos/{gh_repo}/actions/variables/SECPIPE_DASHBOARD_URL",
-                    data=payload, method="PATCH", headers=headers,
-                )
-                with urllib.request.urlopen(req, timeout=10) as r:
-                    r.read()
-            except urllib.error.HTTPError as e:
-                if e.code == 404:
-                    req = urllib.request.Request(
-                        f"https://api.github.com/repos/{gh_repo}/actions/variables",
-                        data=_json.dumps({"name": "SECPIPE_DASHBOARD_URL", "value": url}).encode(),
-                        method="POST", headers=headers,
-                    )
-                    with urllib.request.urlopen(req, timeout=10) as r:
-                        r.read()
-                else:
-                    raise
-            print(f"[secpipe] SECPIPE_DASHBOARD_URL → {url}", flush=True)
+                with db() as conn:
+                    targets |= {row["name"] for row in conn.execute(
+                        "SELECT name FROM repos UNION SELECT DISTINCT repo FROM scans")}
+            except Exception:
+                pass
+            ok = 0
+            for repo in sorted(targets):
+                if "/" in repo and _set_repo_variable(repo, "SECPIPE_DASHBOARD_URL", url, headers):
+                    ok += 1
+            print(f"[secpipe] SECPIPE_DASHBOARD_URL → {url} ({ok}/{len(targets)} repos atualizados)",
+                  flush=True)
             return
         except Exception:
             pass

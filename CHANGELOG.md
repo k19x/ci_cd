@@ -3,6 +3,12 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.1] - 2026-08-30
+
+### Fixed
+- **Vulns corrigidas não sumiam do dashboard**: o `vars.SECPIPE_DASHBOARD_URL` é resolvido no contexto do repo CALLER — o auto-registro do tunnel só atualizava o `k19x/ci_cd`, então os demais repos enviavam findings para a URL morta do tunnel anterior (upload falhava em silêncio e o estado nunca refrescava). O auto-registro agora atualiza a variável em **todos os repos cadastrados** (repos + scans do banco) a cada boot
+- **Upload não roda mais em PRs**: com o Semgrep diff-only, o findings.json de PR é parcial e corromperia o estado do dashboard (falsos Fixed em massa)
+
 ## [0.14.0] - 2026-08-30
 
 ### Added — 6 features enterprise
