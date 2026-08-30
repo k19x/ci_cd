@@ -326,11 +326,27 @@ def overview(user=Depends(require_role("viewer"))):
                 " FROM scans GROUP BY repo ORDER BY repo"
             )
         ]
+        risk = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT repo,"
+                " SUM(CASE WHEN severity IN ('critical','high') THEN 1 ELSE 0 END) AS crit_high,"
+                " COUNT(*) AS open_total"
+                " FROM findings WHERE status='open' GROUP BY repo"
+            )
+        ]
+        engines = dict(
+            conn.execute(
+                "SELECT tool, COUNT(*) FROM findings WHERE status='open' GROUP BY tool"
+            ).fetchall()
+        )
     return {
         "repos": repos,
         "open_by_severity": {sev: totals.get(sev, 0) for sev in SEVERITIES},
         "by_status": by_status,
         "last_scans": last_scans,
+        "risk": risk,
+        "engines": engines,
     }
 
 

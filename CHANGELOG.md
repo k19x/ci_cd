@@ -3,6 +3,25 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.9] - 2026-08-30
+
+### Added
+- **Ordenação em todas as tabelas**: clique no cabeçalho ordena (↑/↓ com seta indicadora ciano) — Dashboard "Último scan", Scans, Results, Findings, Projects e Allowlist
+- Ordenação vive no estado (`_sort`) e sobrevive ao auto-refresh das abas Scans/Dashboard
+- Severity na aba Results ordena por criticidade real (critical → info), não alfabeticamente
+- **Cards do Dashboard finalmente populados**: "Projetos mais arriscados" (top 6 por critical+high abertos, clicável → Results), "Projetos mais seguros" (menos findings abertos) e "Distribuição por engine" (barras Semgrep/Trivy/Gitleaks) — estavam vazios desde a criação
+- `/api/overview` agora retorna `risk` (findings abertos por repo) e `engines` (distribuição por ferramenta)
+
+## [0.8.8] - 2026-08-30
+
+### Changed
+- **Sidebar redesenhada**: nav em pills arredondadas com margem (sem risco lateral colado na borda); item ativo com gradiente ciano, borda glow e dot luminoso à direita
+- Linha de brilho vertical na borda direita da sidebar (gradiente que esvai)
+- Brand maior (38px) com anel + glow; sub-label com tracking largo
+- Área do usuário virou card: avatar circular com inicial do username, nome com ellipsis, logout como botão-ícone que fica vermelho no hover
+- Footer minimalista em monospace centrado
+- Helper `setUserUI()` unifica os 3 pontos que preenchiam nome/role e agora também a inicial do avatar
+
 ## [0.8.7] - 2026-08-30
 
 ### Added

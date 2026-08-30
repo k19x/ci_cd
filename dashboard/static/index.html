@@ -179,62 +179,83 @@ body::after {
 
 /* ── Sidebar ── */
 .sidebar {
-  width: 220px; min-width: 220px;
-  background: rgba(6,16,30,.88);
+  width: 232px; min-width: 232px;
+  background: linear-gradient(180deg, rgba(6,16,30,.96) 0%, rgba(4,10,20,.96) 100%);
   border-right: 1px solid var(--bd);
   display: flex; flex-direction: column;
   overflow-y: auto; overflow-x: hidden; z-index: 10;
   position: relative;
   backdrop-filter: blur(18px);
 }
+/* glow line running down the right edge */
+.sidebar::after {
+  content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 1px;
+  background: linear-gradient(180deg, transparent 0%, rgba(0,200,255,.35) 18%, rgba(0,200,255,.08) 55%, transparent 100%);
+  pointer-events: none;
+}
 .sidebar-brand {
-  padding: 20px 18px 16px;
-  display: flex; align-items: center; gap: 10px;
-  border-bottom: 1px solid rgba(0,184,255,.06);
+  padding: 22px 18px 18px;
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 4px;
+  position: relative;
+}
+.sidebar-brand::after {
+  content: ''; position: absolute; left: 18px; right: 18px; bottom: 0; height: 1px;
+  background: linear-gradient(90deg, rgba(0,200,255,.25) 0%, transparent 100%);
 }
 .brand-icon {
-  width: 34px; height: 34px;
-  background: linear-gradient(135deg, #00b8ff 0%, #0070cc 100%);
-  border-radius: 9px;
+  width: 38px; height: 38px;
+  background: linear-gradient(135deg, #00c8ff 0%, #0058cc 100%);
+  border-radius: 11px;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  box-shadow: 0 0 14px rgba(0,184,255,.4);
+  box-shadow: 0 0 0 1px rgba(0,200,255,.35), 0 0 22px rgba(0,200,255,.35);
 }
-.brand-icon svg { width: 18px; height: 18px; }
-.brand-name { font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 800; color: #e2eeff; letter-spacing: -.01em; }
+.brand-icon svg { width: 19px; height: 19px; }
+.brand-name { font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 800; color: #eaf4ff; letter-spacing: -.01em; }
 .brand-sub {
-  font-size: 10px; color: var(--sidebar-label); margin-top: 1px;
-  text-transform: uppercase; letter-spacing: .07em;
+  font-size: 9px; color: #33506e; margin-top: 2px;
+  text-transform: uppercase; letter-spacing: .14em; font-weight: 600;
 }
 
-.nav-section { padding: 16px 0 4px; }
+.nav-section { padding: 14px 10px 4px; }
 .nav-label {
-  display: block; font-size: 9.5px; font-weight: 700;
-  color: var(--sidebar-label);
-  text-transform: uppercase; letter-spacing: .10em;
-  padding: 0 18px 6px;
+  display: block; font-size: 9px; font-weight: 700;
+  color: #2c435e;
+  text-transform: uppercase; letter-spacing: .14em;
+  padding: 0 10px 8px;
 }
 .nav-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 18px;
-  color: var(--sidebar-text); cursor: pointer;
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 12px; margin-bottom: 2px;
+  color: #5d7893; cursor: pointer;
   font-size: 13px; font-weight: 500;
-  border-left: 2px solid transparent;
+  border-radius: 9px;
+  border: 1px solid transparent;
   transition: background .15s, color .15s, border-color .15s;
   text-decoration: none;
+  position: relative;
 }
-.nav-item:hover { background: var(--sidebar-hover); color: #c9ddf0; }
+.nav-item:hover { background: rgba(0,200,255,.06); color: #b8d4ec; }
 .nav-item.active {
-  background: rgba(0,184,255,.08);
-  color: var(--accent);
-  border-left-color: var(--accent);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: linear-gradient(90deg, rgba(0,200,255,.14) 0%, rgba(0,200,255,.04) 100%);
+  border-color: rgba(0,200,255,.22);
+  color: #dff4ff;
+  font-weight: 600;
+  box-shadow: 0 0 16px rgba(0,200,255,.08);
 }
-.nav-item svg, .nav-item i[data-lucide] { width: 15px; height: 15px; flex-shrink: 0; opacity: .7; }
-.nav-item.active svg, .nav-item.active i[data-lucide] { opacity: 1; }
-.nav-item i[data-lucide] svg { width: 15px; height: 15px; }
+/* glowing dot marker on active item */
+.nav-item.active::after {
+  content: ''; position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 8px var(--accent);
+}
+.nav-item svg, .nav-item i[data-lucide] { width: 16px; height: 16px; flex-shrink: 0; opacity: .6; transition: opacity .15s; }
+.nav-item:hover svg, .nav-item:hover i[data-lucide] { opacity: .9; }
+.nav-item.active svg, .nav-item.active i[data-lucide] { opacity: 1; color: var(--accent); }
+.nav-item i[data-lucide] svg { width: 16px; height: 16px; }
 
-.sidebar-footer { margin-top: auto; padding: 12px 18px; border-top: 1px solid rgba(0,184,255,.06); }
-.sidebar-footer a { font-size: 11px; color: var(--sidebar-label); text-decoration: none; }
+.sidebar-footer { padding: 10px 18px 14px; text-align: center; }
+.sidebar-footer a { font-size: 10px; color: #2c435e; text-decoration: none; font-family: 'JetBrains Mono', monospace; letter-spacing: .03em; }
 .sidebar-footer a:hover { color: var(--accent); }
 
 /* ── Main ── */
@@ -378,6 +399,10 @@ thead th {
   border-bottom: 1px solid var(--bd);
   white-space: nowrap;
 }
+th.sortable { cursor: pointer; user-select: none; transition: color .12s; }
+th.sortable:hover { color: var(--accent); }
+th.sortable.sorted { color: var(--accent); }
+th.sortable .arr { font-size: 8px; }
 tbody tr { border-bottom: 1px solid var(--bd); transition: background .1s; }
 tbody tr:last-child { border-bottom: 0; }
 tbody tr:hover { background: rgba(0,184,255,.04); }
@@ -570,11 +595,29 @@ canvas { max-height: 200px; }
 
 /* ── Sidebar user ── */
 .sidebar-user {
-  padding: 12px 16px;
-  border-top: 1px solid rgba(0,184,255,.06);
+  margin: 10px 10px 6px;
+  padding: 10px 12px;
+  background: rgba(0,200,255,.05);
+  border: 1px solid rgba(0,200,255,.12);
+  border-radius: 11px;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
-.sidebar-user-name { font-size: 13px; font-weight: 600; color: #c9ddf0; }
+.user-avatar {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, rgba(0,200,255,.28) 0%, rgba(0,88,204,.28) 100%);
+  border: 1px solid rgba(0,200,255,.3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 800;
+  color: var(--accent); text-transform: uppercase;
+}
+.logout-btn {
+  background: none; border: 1px solid transparent; color: #4d6784; cursor: pointer;
+  padding: 6px; border-radius: 8px; display: flex; align-items: center;
+  transition: all .15s; flex-shrink: 0;
+}
+.logout-btn:hover { color: var(--crit); border-color: rgba(255,51,85,.3); background: rgba(255,51,85,.08); }
+.sidebar-user-name { font-size: 12.5px; font-weight: 600; color: #c9ddf0;
+                     max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-user-role { font-size: 10px; color: var(--t2); margin-top: 1px;
                      text-transform: uppercase; letter-spacing: .06em; }
 .role-badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 2px 7px;
@@ -819,16 +862,15 @@ pre.yaml {
   </nav>
 
   <div class="sidebar-user" id="sidebarUser">
-    <div style="display:flex;align-items:center;gap:8px">
-      <i data-lucide="user" style="width:14px;height:14px;color:var(--sidebar-text);flex-shrink:0"></i>
-      <div>
+    <div style="display:flex;align-items:center;gap:9px;min-width:0">
+      <div class="user-avatar" id="userAvatar">?</div>
+      <div style="min-width:0">
         <div class="sidebar-user-name" id="sidebarUsername">—</div>
         <div><span class="role-badge" id="sidebarRoleBadge"></span></div>
       </div>
     </div>
-    <button class="btn-ghost" style="font-size:11px;padding:4px 8px;display:flex;align-items:center;gap:4px" onclick="doLogout()">
-      <i data-lucide="log-out" style="width:12px;height:12px"></i>
-      Sair
+    <button class="logout-btn" onclick="doLogout()" title="Sair">
+      <i data-lucide="log-out" style="width:14px;height:14px"></i>
     </button>
   </div>
   <div class="sidebar-footer">
@@ -929,7 +971,12 @@ pre.yaml {
           </div>
           <div class="card-body tbl-wrap">
             <table>
-              <thead><tr><th>Projeto</th><th>Último scan</th><th>Critical</th><th>High</th></tr></thead>
+              <thead><tr>
+                <th class="sortable" data-k="last" data-c="0" onclick="sortBy('last',0,renderLastScans)">Projeto<span class="arr"></span></th>
+                <th class="sortable" data-k="last" data-c="1" onclick="sortBy('last',1,renderLastScans)">Último scan<span class="arr"></span></th>
+                <th class="sortable" data-k="last" data-c="2" onclick="sortBy('last',2,renderLastScans)">Critical<span class="arr"></span></th>
+                <th class="sortable" data-k="last" data-c="3" onclick="sortBy('last',3,renderLastScans)">High<span class="arr"></span></th>
+              </tr></thead>
               <tbody id="lastScans"></tbody>
             </table>
           </div>
@@ -969,8 +1016,12 @@ pre.yaml {
         <div class="card-body tbl-wrap">
           <table>
             <thead><tr>
-              <th>Projeto</th><th>Branch</th><th>Commit</th>
-              <th>Status</th><th>Iniciado</th><th>Link</th><th></th>
+              <th class="sortable" data-k="jobs" data-c="0" onclick="sortBy('jobs',0,renderJobs)">Projeto<span class="arr"></span></th>
+              <th class="sortable" data-k="jobs" data-c="1" onclick="sortBy('jobs',1,renderJobs)">Branch<span class="arr"></span></th>
+              <th>Commit</th>
+              <th class="sortable" data-k="jobs" data-c="3" onclick="sortBy('jobs',3,renderJobs)">Status<span class="arr"></span></th>
+              <th class="sortable" data-k="jobs" data-c="4" onclick="sortBy('jobs',4,renderJobs)">Iniciado<span class="arr"></span></th>
+              <th>Link</th><th></th>
             </tr></thead>
             <tbody id="jobRows"></tbody>
           </table>
@@ -1006,8 +1057,12 @@ pre.yaml {
         <div class="card-body tbl-wrap">
           <table>
             <thead><tr>
-              <th style="width:34px"></th><th>Vulnerability</th><th>Severity</th><th>Engine</th>
-              <th>Location</th><th>State</th>
+              <th style="width:34px"></th>
+              <th class="sortable" data-k="res" data-c="1" onclick="sortBy('res',1,renderFindPage)">Vulnerability<span class="arr"></span></th>
+              <th class="sortable" data-k="res" data-c="2" onclick="sortBy('res',2,renderFindPage)">Severity<span class="arr"></span></th>
+              <th class="sortable" data-k="res" data-c="3" onclick="sortBy('res',3,renderFindPage)">Engine<span class="arr"></span></th>
+              <th class="sortable" data-k="res" data-c="4" onclick="sortBy('res',4,renderFindPage)">Location<span class="arr"></span></th>
+              <th class="sortable" data-k="res" data-c="5" onclick="sortBy('res',5,renderFindPage)">State<span class="arr"></span></th>
             </tr></thead>
             <tbody id="findRows"></tbody>
           </table>
@@ -1029,8 +1084,15 @@ pre.yaml {
         <div class="card-body tbl-wrap">
           <table>
             <thead><tr>
-              <th>Projeto</th><th>Branch</th><th>Commit</th>
-              <th>Data</th><th style="text-align:center">C</th><th style="text-align:center">H</th><th style="text-align:center">M</th><th style="text-align:center">L</th><th style="text-align:center">Total</th><th></th>
+              <th class="sortable" data-k="vul" data-c="0" onclick="sortBy('vul',0,renderVulns)">Projeto<span class="arr"></span></th>
+              <th class="sortable" data-k="vul" data-c="1" onclick="sortBy('vul',1,renderVulns)">Branch<span class="arr"></span></th>
+              <th>Commit</th>
+              <th class="sortable" data-k="vul" data-c="3" onclick="sortBy('vul',3,renderVulns)">Data<span class="arr"></span></th>
+              <th class="sortable" data-k="vul" data-c="4" onclick="sortBy('vul',4,renderVulns)" style="text-align:center">C<span class="arr"></span></th>
+              <th class="sortable" data-k="vul" data-c="5" onclick="sortBy('vul',5,renderVulns)" style="text-align:center">H<span class="arr"></span></th>
+              <th class="sortable" data-k="vul" data-c="6" onclick="sortBy('vul',6,renderVulns)" style="text-align:center">M<span class="arr"></span></th>
+              <th class="sortable" data-k="vul" data-c="7" onclick="sortBy('vul',7,renderVulns)" style="text-align:center">L<span class="arr"></span></th>
+              <th class="sortable" data-k="vul" data-c="8" onclick="sortBy('vul',8,renderVulns)" style="text-align:center">Total<span class="arr"></span></th><th></th>
             </tr></thead>
             <tbody id="vulnRows"></tbody>
           </table>
@@ -1067,8 +1129,13 @@ pre.yaml {
         <div class="card-body tbl-wrap">
           <table>
             <thead><tr>
-              <th>Project</th><th>Languages</th><th>Last scan</th><th>Scans</th>
-              <th>Open</th><th>Crit / High</th><th>Integration</th><th></th>
+              <th class="sortable" data-k="rep" data-c="0" onclick="sortBy('rep',0,renderRepos)">Project<span class="arr"></span></th>
+              <th>Languages</th>
+              <th class="sortable" data-k="rep" data-c="2" onclick="sortBy('rep',2,renderRepos)">Last scan<span class="arr"></span></th>
+              <th class="sortable" data-k="rep" data-c="3" onclick="sortBy('rep',3,renderRepos)">Scans<span class="arr"></span></th>
+              <th class="sortable" data-k="rep" data-c="4" onclick="sortBy('rep',4,renderRepos)">Open<span class="arr"></span></th>
+              <th class="sortable" data-k="rep" data-c="5" onclick="sortBy('rep',5,renderRepos)">Crit / High<span class="arr"></span></th>
+              <th>Integration</th><th></th>
             </tr></thead>
             <tbody id="repoRows"></tbody>
           </table>
@@ -1143,7 +1210,11 @@ pre.yaml {
         </div>
         <div class="card-body tbl-wrap">
           <table>
-            <thead><tr><th>Entrada</th><th>Tipo</th><th></th></tr></thead>
+            <thead><tr>
+              <th class="sortable" data-k="alw" data-c="0" onclick="sortBy('alw',0,renderAllowlist)">Entrada<span class="arr"></span></th>
+              <th class="sortable" data-k="alw" data-c="1" onclick="sortBy('alw',1,renderAllowlist)">Tipo<span class="arr"></span></th>
+              <th></th>
+            </tr></thead>
             <tbody id="allowRows"></tbody>
           </table>
         </div>
@@ -1220,6 +1291,40 @@ const $ = id => document.getElementById(id);
 const esc = s => (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sevClass = s => ({critical:'critical',high:'high',medium:'medium',low:'low',info:'info'}[s]||'info');
 
+/* ── Ordenação de tabelas ── */
+const SEV_ORD = {critical:0, high:1, medium:2, low:3, info:4};
+const _sort = {};   // tableKey -> {col, dir}
+
+function sortBy(key, col, reload) {
+  const s = _sort[key];
+  if (s && s.col === col) s.dir = -s.dir;
+  else _sort[key] = {col, dir: 1};
+  refreshArrows(key);
+  reload();
+}
+
+function refreshArrows(key) {
+  const s = _sort[key];
+  document.querySelectorAll(`th[data-k="${key}"]`).forEach(th => {
+    const active = s && s.col === +th.dataset.c;
+    const arr = th.querySelector('.arr');
+    if (arr) arr.textContent = active ? (s.dir === 1 ? ' ▲' : ' ▼') : '';
+    th.classList.toggle('sorted', !!active);
+  });
+}
+
+function applySort(key, arr, accs) {
+  const s = _sort[key];
+  if (!s || !accs[s.col]) return arr;
+  const acc = accs[s.col];
+  return [...arr].sort((x, y) => {
+    let a = acc(x), b = acc(y);
+    if (a == null) a = ''; if (b == null) b = '';
+    if (typeof a === 'string' && typeof b === 'string') { a = a.toLowerCase(); b = b.toLowerCase(); }
+    return (a < b ? -1 : a > b ? 1 : 0) * s.dir;
+  });
+}
+
 let _currentRole = 'viewer';
 
 async function api(path, opts) {
@@ -1251,11 +1356,16 @@ function applyRole(role) {
   });
 }
 
+function setUserUI(username, role) {
+  $('sidebarUsername').textContent = username;
+  $('sidebarRoleBadge').textContent = role;
+  $('userAvatar').textContent = (username || '?').charAt(0);
+}
+
 async function initApp() {
   const me = await fetch('/api/auth/me').then(r => r.ok ? r.json() : null).catch(() => null);
   if (!me) { showLogin(); return; }
-  $('sidebarUsername').textContent = me.username;
-  $('sidebarRoleBadge').textContent = me.role;
+  setUserUI(me.username, me.role);
   applyRole(me.role);
   hideLogin();
   loadDashboard().then(updateDashAge);
@@ -1277,8 +1387,7 @@ async function doLogin() {
       if (body.require_totp) {
         showTOTPStep(body.partial);
       } else {
-        $('sidebarUsername').textContent = body.username;
-        $('sidebarRoleBadge').textContent = body.role;
+        setUserUI(body.username, body.role);
         applyRole(body.role);
         hideLogin();
         loadDashboard().then(updateDashAge);
@@ -1362,16 +1471,57 @@ async function loadDashboard() {
   } else { badge.hidden = true; }
 
   // last scans table
-  const tbody = $('lastScans');
-  tbody.innerHTML = data.last_scans.map(s => `
+  _dashLast = data.last_scans;
+  renderLastScans();
+
+  // risk cards + engine distribution
+  const riskMap = Object.fromEntries((data.risk || []).map(r => [r.repo, r]));
+  const allRepos = data.repos || [];
+  const riskiest = (data.risk || []).filter(r => r.crit_high > 0)
+    .sort((a,b) => b.crit_high - a.crit_high || b.open_total - a.open_total).slice(0, 6);
+  $('riskiestRows').innerHTML = riskiest.length ? riskiest.map(r => `
+    <tr style="cursor:pointer" onclick="goToFindings('','open','${esc(r.repo)}')">
+      <td class="primary">${esc(r.repo)}</td>
+      <td style="text-align:right"><span class="sev critical">${r.crit_high}</span></td>
+    </tr>`).join('')
+    : `<tr><td colspan="2"><div class="empty-state" style="padding:20px"><p>Nenhum projeto com critical/high abertos 🎉</p></div></td></tr>`;
+
+  const safest = allRepos
+    .map(name => ({repo: name, open: riskMap[name]?.open_total || 0}))
+    .sort((a,b) => a.open - b.open || a.repo.localeCompare(b.repo)).slice(0, 6);
+  $('safestRows').innerHTML = safest.map(r => `
+    <tr>
+      <td class="primary">${esc(r.repo)}</td>
+      <td style="text-align:right"><span class="${r.open === 0 ? 'sev' : ''}" style="${r.open === 0 ? 'background:var(--ok-bg);color:var(--ok)' : 'color:var(--text2)'}">${r.open}</span></td>
+    </tr>`).join('');
+
+  const engines = data.engines || {};
+  const engTotal = Object.values(engines).reduce((a,b) => a+b, 0) || 1;
+  const engColors = {Semgrep:'var(--accent)', Trivy:'var(--high)', gitleaks:'var(--crit)'};
+  $('engineDist').innerHTML = Object.entries(engines).sort((a,b) => b[1]-a[1]).map(([tool, n]) => `
+    <div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span style="color:var(--text2)">${esc(tool)}</span>
+        <span class="mono" style="color:var(--text)">${n}</span>
+      </div>
+      <div class="sev-bar"><div class="sev-bar-fill" style="width:${Math.round(n/engTotal*100)}%;background:${engColors[tool]||'var(--low)'}"></div></div>
+    </div>`).join('') || '<span style="color:var(--muted);font-size:12px">Sem findings abertos.</span>';
+
+  if ($('trendRepo').value) loadTrend();
+}
+
+let _dashLast = [];
+function renderLastScans() {
+  const sorted = applySort('last', _dashLast, {
+    0: s => s.repo, 1: s => s.last_scan || '', 2: s => +(s.critical||0), 3: s => +(s.high||0),
+  });
+  $('lastScans').innerHTML = sorted.map(s => `
     <tr style="cursor:pointer" onclick="goToFindings('','open','${esc(s.repo)}')" title="Ver findings de ${esc(s.repo)}">
       <td class="primary" style="color:var(--orange)">${esc(s.repo)}</td>
       <td class="mono">${s.last_scan ? s.last_scan.slice(0,16).replace('T',' ') : '<span style="color:var(--muted)">—</span>'}</td>
       <td onclick="event.stopPropagation();goToFindings('critical','open','${esc(s.repo)}')" title="Ver criticals de ${esc(s.repo)}"><span class="sev critical" style="${s.critical?'':'opacity:.3'}">${s.critical||0}</span></td>
       <td onclick="event.stopPropagation();goToFindings('high','open','${esc(s.repo)}')"    title="Ver highs de ${esc(s.repo)}"><span class="sev high"     style="${s.high?'':'opacity:.3'}">${s.high||0}</span></td>
     </tr>`).join('');
-
-  if ($('trendRepo').value) loadTrend();
 }
 
 async function loadTrend() {
@@ -1416,16 +1566,25 @@ function jobStatusBadge(run) {
   return `<span class="status ${cls}"><span class="status-dot"></span>${label}</span>`;
 }
 
+let _runs = [];
 async function loadJobs() {
   const data = await api('/api/runs');
   if (!data) return;
   $('jobsAge').textContent = 'Updated ' + new Date().toLocaleTimeString('pt-BR');
+  _runs = data.runs;
+  renderJobs();
+}
+
+function renderJobs() {
   const tbody = $('jobRows');
-  if (!data.runs.length) {
+  if (!_runs.length) {
     tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>No scans found. Set GITHUB_TOKEN to see private repositories.</p></div></td></tr>`;
     return;
   }
-  tbody.innerHTML = data.runs.map(r => {
+  const sorted = applySort('jobs', _runs, {
+    0: r => r.repo, 1: r => r.branch, 3: r => r.conclusion || r.status || '', 4: r => r.created_at,
+  });
+  tbody.innerHTML = sorted.map(r => {
     const isFailed = r.conclusion === 'failure' || r.conclusion === 'timed_out';
     const repoKey  = r.repo.replace(/'/g, "\\'");
     return `
@@ -1503,12 +1662,17 @@ async function loadFindings(resetPage = true) {
   renderFindPage();
 }
 
+let _findingsView = [];
 function renderFindPage() {
-  const total = _findings.length;
+  _findingsView = applySort('res', _findings, {
+    1: f => f.rule || '', 2: f => SEV_ORD[f.severity] ?? 9, 3: f => f.tool || '',
+    4: f => (f.file || '') + ':' + (f.line || 0), 5: f => f.status || '',
+  });
+  const total = _findingsView.length;
   const pages = Math.max(1, Math.ceil(total / _findPageSize));
   _findPage = Math.min(_findPage, pages - 1);
   const start = _findPage * _findPageSize;
-  const slice = _findings.slice(start, start + _findPageSize);
+  const slice = _findingsView.slice(start, start + _findPageSize);
 
   $('findCount').textContent = `${total} result${total!==1?'s':''}`;
 
@@ -1621,7 +1785,7 @@ function toggleFindDetail(gi, btn) {
   const existing = document.getElementById(detailId);
   if (existing) { existing.remove(); if (btn) btn.classList.remove('open'); return; }
 
-  const f = _findings[gi];
+  const f = _findingsView[gi] || _findings[gi];
   if (!f) return;
   const {tips, refs, dod} = buildRemediation(f);
 
@@ -1704,14 +1868,18 @@ function setVisFilter(vis, btn) {
 
 function renderRepos() {
   const tbody = $('repoRows');
-  const list = _visFilter === 'all' ? _allRepos
-             : _allRepos.filter(r => r.visibility === _visFilter);
+  let list = _visFilter === 'all' ? _allRepos
+           : _allRepos.filter(r => r.visibility === _visFilter);
   $('repoCount').textContent = `${list.length} project${list.length!==1?'s':''}`;
   if (!list.length) {
     const msg = _visFilter !== 'all' ? `No ${_visFilter} projects.` : 'No projects yet. Add one above.';
     tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>${msg}</p></div></td></tr>`;
     return;
   }
+  list = applySort('rep', list, {
+    0: r => r.name, 2: r => r.last_scan || '', 3: r => +(r.scan_count||0),
+    4: r => +(r.open_findings||0), 5: r => +(r.open_critical_high||0),
+  });
   tbody.innerHTML = list.map(r => {
     const visBadge = r.visibility
       ? `<span class="vis-badge ${r.visibility}">${r.visibility === 'private' ? '🔒 Private' : '🌐 Public'}</span>`
@@ -1855,13 +2023,24 @@ async function loadVulns() {
   repos.forEach(r => sel.add(new Option(r,r)));
   if (cur) sel.value = cur;
 
+  _vulnScans = data.scans;
+  renderVulns();
+}
+
+let _vulnScans = [];
+function renderVulns() {
   const chip = (cls, n) => `<span class="chip ${cls}${n===0?' zero':''}">${n}</span>`;
   const tbody = $('vulnRows');
-  if (!data.scans.length) {
+  if (!_vulnScans.length) {
     tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><p>Nenhum scan registrado ainda.</p></div></td></tr>`;
     return;
   }
-  tbody.innerHTML = data.scans.map((s, i) => {
+  const sorted = applySort('vul', _vulnScans, {
+    0: s => s.repo, 1: s => s.branch || '', 3: s => s.created_at,
+    4: s => +(s.critical||0), 5: s => +(s.high||0), 6: s => +(s.medium||0), 7: s => +(s.low||0),
+    8: s => (s.critical||0)+(s.high||0)+(s.medium||0)+(s.low||0)+(s.info||0),
+  });
+  tbody.innerHTML = sorted.map((s, i) => {
     const total = (s.critical||0)+(s.high||0)+(s.medium||0)+(s.low||0)+(s.info||0);
     return `<tr id="vuln-row-${i}">
       <td class="primary">${esc(s.repo)}</td>
@@ -1940,7 +2119,9 @@ function renderAllowlist() {
     tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><p>Nenhuma entrada. Adicione rule IDs ou globs de arquivos para suprimir falsos positivos.</p></div></td></tr>`;
     return;
   }
-  tbody.innerHTML = _allowlist.map((e, i) => `
+  const entries = _allowlist.map((e, i) => ({e, i}));
+  const sorted = applySort('alw', entries, {0: x => x.e, 1: x => allowType(x.e)});
+  tbody.innerHTML = sorted.map(({e, i}) => `
     <tr>
       <td class="primary mono">${esc(e)}</td>
       <td><span class="allow-type">${allowType(e)}</span></td>
@@ -2035,8 +2216,7 @@ async function doTOTP() {
     const body = await res.json().catch(() => ({}));
     if (res.ok) {
       _partialToken = null;
-      $('sidebarUsername').textContent = body.username;
-      $('sidebarRoleBadge').textContent = body.role;
+      setUserUI(body.username, body.role);
       applyRole(body.role);
       hideLogin();
       cancelTOTP();
