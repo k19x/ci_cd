@@ -3,6 +3,11 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.6] - 2026-08-30
+
+### Added
+- **Scan all projects com 1 clique**: botão "Scan all" na aba Projects dispara o `security.yml` em todos os repos cadastrados em paralelo (até 6 simultâneos); exibe feedback `X/Y repos disparados` em verde/amarelo por 6s; requer role analyst; backend `POST /api/runs/dispatch-all` com ThreadPoolExecutor e resultado por repo
+
 ## [0.14.5] - 2026-08-30
 
 ### Added

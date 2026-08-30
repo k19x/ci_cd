@@ -645,6 +645,35 @@ def dispatch_scan(repo: str, user=Depends(require_role("analyst"))):
     return {"ok": True, "repo": repo}
 
 
+@app.post("/api/runs/dispatch-all")
+def dispatch_all_scans(user=Depends(require_role("analyst"))):
+    """Dispara security.yml em todos os repos cadastrados em paralelo."""
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT name FROM repos UNION SELECT DISTINCT repo FROM scans ORDER BY 1"
+        ).fetchall()
+    repos = [r["name"] for r in rows]
+    if not repos:
+        raise HTTPException(status_code=404, detail="Nenhum repo cadastrado")
+
+    results = []
+
+    def _try_dispatch(repo: str) -> dict:
+        try:
+            _dispatch_security_scan(repo)
+            _audit(user["username"], "scan_dispatch", repo)
+            return {"repo": repo, "ok": True}
+        except Exception as e:
+            return {"repo": repo, "ok": False, "error": str(e)}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+        for res in ex.map(_try_dispatch, repos):
+            results.append(res)
+
+    ok_count = sum(1 for r in results if r["ok"])
+    return {"dispatched": ok_count, "total": len(repos), "results": results}
+
+
 @app.get("/api/runs")
 def list_runs(repo: str | None = None, limit: int = 30, user=Depends(require_role("viewer"))):
     """Consulta runs do GitHub Actions em paralelo via API."""

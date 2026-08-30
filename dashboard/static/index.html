@@ -1365,6 +1365,11 @@ tr.sla-row td:first-child { background: rgba(255,51,85,.04); }
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <input id="rSearch" placeholder="Buscar projeto..." oninput="renderRepos()"
                    style="font-size:12px;padding:4px 10px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);height:28px;width:170px">
+            <button id="scanAllBtn" class="btn-ghost" onclick="dispatchAllScans(this)" data-min-role="analyst"
+                    style="display:flex;align-items:center;gap:5px;font-size:12px;height:28px;padding:0 10px">
+              <i data-lucide="play-circle" style="width:13px;height:13px"></i> Scan all
+            </button>
+            <span id="scanAllMsg" style="font-size:11.5px;color:var(--muted)"></span>
             <div class="vis-tabs" id="visFilter">
               <button class="vis-tab active" data-vis="all"   onclick="setVisFilter('all',this)">All</button>
               <button class="vis-tab"        data-vis="public" onclick="setVisFilter('public',this)">Public</button>
@@ -3107,6 +3112,21 @@ function renderRepos() {
     </tr>`;
   }).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
+}
+
+async function dispatchAllScans(btn) {
+  const msg = $('scanAllMsg');
+  btnLabel(btn, 'loader-circle', 'Disparando...', true);
+  if (msg) msg.textContent = '';
+  const data = await api('/api/runs/dispatch-all', {method:'POST'});
+  btnLabel(btn, 'play-circle', 'Scan all', false);
+  if (!data) { if (msg) msg.textContent = 'Erro ao disparar.'; return; }
+  const { dispatched, total } = data;
+  if (msg) {
+    msg.textContent = `${dispatched}/${total} repos disparados`;
+    msg.style.color = dispatched === total ? 'var(--ok)' : 'var(--high)';
+    setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 6000);
+  }
 }
 
 async function loadRepos() {
