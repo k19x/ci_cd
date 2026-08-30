@@ -3,6 +3,14 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.14] - 2026-08-30
+
+### Added
+- **Resize vertical e diagonal dos cards**: além da alça lateral (largura), cada card ganhou alça inferior (altura livre, 140–900px) e alça de canto (largura + altura juntos)
+- Card com altura fixa vira flex-column: o conteúdo interno (tabela) ganha scroll próprio
+- **Duplo clique** na alça inferior/canto volta à altura automática
+- Alturas persistem em `localStorage` junto com ordem, visibilidade e larguras
+
 ## [0.8.13] - 2026-08-30
 
 ### Added

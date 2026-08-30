@@ -842,8 +842,33 @@ pre.yaml {
   transition: background .12s, box-shadow .12s;
 }
 .resize-h:hover::after { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+/* alça vertical (borda inferior) */
+.resize-v { display: none; position: absolute; left: 0; right: 0; bottom: 0; height: 10px;
+            cursor: ns-resize; z-index: 5; }
+.dash-grid.editing .resize-v { display: block; }
+.resize-v::after {
+  content: ''; position: absolute; left: 50%; bottom: 3px; transform: translateX(-50%);
+  height: 3px; width: 36px; border-radius: 2px; background: var(--bd2);
+  transition: background .12s, box-shadow .12s;
+}
+.resize-v:hover::after { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+/* alça de canto (ambos os eixos) */
+.resize-c { display: none; position: absolute; right: 0; bottom: 0; width: 16px; height: 16px;
+            cursor: nwse-resize; z-index: 6; }
+.dash-grid.editing .resize-c { display: block; }
+.resize-c::after {
+  content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px;
+  border-right: 2px solid var(--bd2); border-bottom: 2px solid var(--bd2); border-radius: 1px;
+  transition: border-color .12s;
+}
+.resize-c:hover::after { border-color: var(--accent); }
 .dash-grid .card.resizing { border-color: var(--accent); border-style: solid;
                             box-shadow: 0 0 24px var(--accent-glow); }
+/* card com altura fixa: conteúdo interno flexível com scroll */
+.card.h-fixed { display: flex; flex-direction: column; }
+.card.h-fixed .card-body { flex: 1; min-height: 0; }
+.card.h-fixed .tbl-wrap { max-height: none; overflow-y: auto; flex: 1; }
+.card.h-fixed .chart-wrap { flex: 1; min-height: 0; }
 .card-tools button {
   background: var(--s2); border: 1px solid var(--bd); color: var(--t1);
   border-radius: 6px; padding: 2px 7px; font-size: 10px; cursor: pointer;
@@ -2446,6 +2471,7 @@ if (!_dashLayout.spans) _dashLayout.spans = {};
 Object.keys(DASH_SPANS).forEach(c => {
   if (!_dashLayout.spans[c]) _dashLayout.spans[c] = DASH_SPANS[c];
 });
+if (!_dashLayout.heights) _dashLayout.heights = {};
 
 function saveDashLayout() {
   try { localStorage.setItem('secpipe-dash', JSON.stringify(_dashLayout)); } catch(e) {}
@@ -2463,6 +2489,9 @@ function applyDashLayout() {
     if (!el) return;
     el.style.display = _dashLayout.hidden.includes(id) ? 'none' : '';
     el.style.gridColumn = 'span ' + (_dashLayout.spans[id] || DASH_SPANS[id] || 3);
+    const h = _dashLayout.heights[id];
+    el.style.height = h ? h + 'px' : '';
+    el.classList.toggle('h-fixed', !!h);
   });
   renderDashAddList();
 }
@@ -2524,34 +2553,62 @@ function initDashDnD() {
     if (tools) tools.insertAdjacentHTML('afterbegin',
       `<button onclick="resizeCard('${id}',-1)" title="Diminuir largura">−</button>` +
       `<button onclick="resizeCard('${id}',1)" title="Aumentar largura">+</button>`);
-    el.insertAdjacentHTML('beforeend', `<div class="resize-h" title="Arraste para redimensionar"></div>`);
+    el.insertAdjacentHTML('beforeend',
+      `<div class="resize-h" title="Arraste: largura"></div>` +
+      `<div class="resize-v" title="Arraste: altura · duplo clique: altura automática"></div>` +
+      `<div class="resize-c" title="Arraste: largura + altura"></div>`);
   });
 
-  // resize por arrasto da alça
+  // resize por arrasto das alças (h = largura, v = altura, c = ambos)
   wrap.addEventListener('mousedown', e => {
-    const h = e.target.closest('.resize-h');
+    const h = e.target.closest('.resize-h, .resize-v, .resize-c');
     if (!h || !wrap.classList.contains('editing')) return;
     e.preventDefault();
     const el = h.closest('[data-card]');
     const id = el.dataset.card;
+    const mode = h.classList.contains('resize-c') ? 'c' : h.classList.contains('resize-v') ? 'v' : 'h';
     el.draggable = false;
     el.classList.add('resizing');
     const span = _dashLayout.spans[id] || DASH_SPANS[id] || 3;
-    _rz = {id, el, x: e.clientX, colW: wrap.clientWidth / 6, start: span, cur: span};
+    const height = el.getBoundingClientRect().height;
+    _rz = {id, el, mode, x: e.clientX, y: e.clientY, colW: wrap.clientWidth / 6,
+           start: span, cur: span, startH: height, curH: height, hChanged: false};
   });
   document.addEventListener('mousemove', e => {
     if (!_rz) return;
-    const delta = Math.round((e.clientX - _rz.x) / _rz.colW);
-    const span = Math.min(6, Math.max(2, _rz.start + delta));
-    if (span !== _rz.cur) { _rz.cur = span; _rz.el.style.gridColumn = 'span ' + span; }
+    if (_rz.mode !== 'v') {
+      const delta = Math.round((e.clientX - _rz.x) / _rz.colW);
+      const span = Math.min(6, Math.max(2, _rz.start + delta));
+      if (span !== _rz.cur) { _rz.cur = span; _rz.el.style.gridColumn = 'span ' + span; }
+    }
+    if (_rz.mode !== 'h') {
+      const newH = Math.min(900, Math.max(140, Math.round(_rz.startH + (e.clientY - _rz.y))));
+      if (newH !== _rz.curH) {
+        _rz.curH = newH; _rz.hChanged = true;
+        _rz.el.style.height = newH + 'px';
+        _rz.el.classList.add('h-fixed');
+      }
+    }
   });
   document.addEventListener('mouseup', () => {
     if (!_rz) return;
     _rz.el.classList.remove('resizing');
     _rz.el.draggable = wrap.classList.contains('editing');
-    _dashLayout.spans[_rz.id] = _rz.cur;
+    if (_rz.mode !== 'v') _dashLayout.spans[_rz.id] = _rz.cur;
+    if (_rz.mode !== 'h' && _rz.hChanged) _dashLayout.heights[_rz.id] = _rz.curH;
     saveDashLayout();
     _rz = null;
+  });
+
+  // duplo clique na alça vertical/canto: volta à altura automática
+  wrap.addEventListener('dblclick', e => {
+    const h = e.target.closest('.resize-v, .resize-c');
+    if (!h || !wrap.classList.contains('editing')) return;
+    const el = h.closest('[data-card]');
+    delete _dashLayout.heights[el.dataset.card];
+    el.style.height = '';
+    el.classList.remove('h-fixed');
+    saveDashLayout();
   });
 
   wrap.addEventListener('dragstart', e => {
