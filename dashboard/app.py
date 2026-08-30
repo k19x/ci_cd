@@ -1052,23 +1052,36 @@ def get_run_jobs(repo: str, run_id: int, user=Depends(require_role("viewer"))):
     hdrs = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     if token:
         hdrs["Authorization"] = f"Bearer {token}"
-    try:
-        url = f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/jobs?per_page=30"
+
+    def gh_get(url):
         req = urllib.request.Request(url, headers=hdrs)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = _json.loads(resp.read())
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return _json.loads(r.read())
+
+    try:
+        jobs_data = gh_get(f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/jobs?per_page=30")
     except urllib.error.HTTPError as e:
         raise HTTPException(e.code, e.read().decode(errors="replace"))
     except urllib.error.URLError as e:
         raise HTTPException(502, str(e))
 
+    # Fetch run metadata to get branch and event type
+    run_meta: dict = {}
+    try:
+        run_meta = gh_get(f"https://api.github.com/repos/{repo}/actions/runs/{run_id}")
+    except Exception:
+        pass
+
     jobs = []
-    for job in data.get("jobs", []):
+    gate_failed = False
+    for job in jobs_data.get("jobs", []):
         failed_steps = [
             {"name": s["name"], "number": s["number"]}
             for s in job.get("steps", [])
             if s.get("conclusion") in ("failure", "timed_out")
         ]
+        if job.get("conclusion") == "failure" and any(s["name"] == "Enforce gate" for s in failed_steps):
+            gate_failed = True
         jobs.append({
             "name": job["name"],
             "conclusion": job.get("conclusion"),
@@ -1077,7 +1090,36 @@ def get_run_jobs(repo: str, run_id: int, user=Depends(require_role("viewer"))):
             "url": job.get("html_url", ""),
             "completed_at": job.get("completed_at", ""),
         })
-    return {"jobs": jobs}
+
+    gate_context = None
+    if gate_failed:
+        branch = run_meta.get("head_branch", "")
+        event = run_meta.get("event", "push")
+        is_pr = event == "pull_request" or (branch and branch != "main" and branch != "master")
+        with db() as conn:
+            row = conn.execute(
+                "SELECT SUM(CASE WHEN severity='critical' AND state='open' THEN 1 ELSE 0 END) as crits,"
+                " SUM(CASE WHEN severity='high'     AND state='open' THEN 1 ELSE 0 END) as highs"
+                " FROM findings WHERE repo=?",
+                (repo,)
+            ).fetchone()
+        crits = row["crits"] or 0
+        highs = row["highs"] or 0
+        if is_pr:
+            note = (
+                f"Esta PR foi bloqueada pelo gate por <strong>{crits} finding(s) crítico(s)</strong> "
+                f"já existentes no repositório. "
+                f"Trivy e Gitleaks não são diff-aware — eles escaneiam o repo inteiro, "
+                f"não apenas as mudanças da PR. Corrija os criticals na branch base para desbloquear."
+            )
+        else:
+            note = (
+                f"Gate bloqueado: <strong>{crits} critical(s)</strong> e <strong>{highs} high(s)</strong> "
+                f"em aberto no repositório. Corrija os findings ou ajuste a política <code>fail_on</code>."
+            )
+        gate_context = {"critical_count": crits, "high_count": highs, "is_pr": is_pr, "note": note, "branch": branch}
+
+    return {"jobs": jobs, "gate_context": gate_context}
 
 
 @app.post("/api/runs/{repo:path}/{run_id}/rerun")

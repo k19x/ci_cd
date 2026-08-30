@@ -3,6 +3,15 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.2] - 2026-08-30
+
+### Fixed
+- **Why? panel destruído pelo auto-refresh**: aba Scans regenerava `tbody.innerHTML` a cada 15s mesmo com painel aberto — corrigido com guard (`if document.querySelector('.job-detail-row') return`) antes de regenerar
+- **Gate failure sem contexto no PR**: ao falhar no "Enforce gate", o painel Why? agora exibe banner vermelho explicativo distinguindo PR bloqueada por findings pré-existentes (Trivy/Gitleaks não são diff-aware) de failure no push; inclui contagem de criticals/highs abertos no repo via DB local
+
+### Added
+- **`gate_context` no `/api/runs/{repo}/{run_id}/jobs`**: quando o gate falha, o backend retorna `{critical_count, high_count, is_pr, note, branch}` consultando o banco local — o frontend renderiza o banner automaticamente
+
 ## [0.14.1] - 2026-08-30
 
 ### Fixed

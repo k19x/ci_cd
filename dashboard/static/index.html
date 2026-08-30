@@ -1973,6 +1973,8 @@ function jobStatusBadge(run) {
 
 let _runs = [];
 async function loadJobs() {
+  // Skip refresh while a Why? detail panel is open (would destroy it)
+  if (document.querySelector('.job-detail-row')) return;
   const data = await api('/api/runs');
   if (!data) return;
   $('jobsAge').textContent = 'Updated ' + new Date().toLocaleTimeString('pt-BR');
@@ -2045,6 +2047,21 @@ async function showRunJobs(repo, runId, btn) {
   }).join('');
 
   const repoKey = repo.replace(/'/g, "\\'");
+
+  // Gate context banner — shown when gate failed with details about why
+  let gateBannerHtml = '';
+  if (data.gate_context) {
+    const gc = data.gate_context;
+    const iconHtml = gc.is_pr
+      ? '<i data-lucide="git-pull-request" style="width:14px;height:14px;flex-shrink:0"></i>'
+      : '<i data-lucide="shield-alert" style="width:14px;height:14px;flex-shrink:0"></i>';
+    gateBannerHtml = `
+      <div style="margin-top:10px;padding:10px 12px;border-radius:6px;border-left:3px solid var(--crit);background:color-mix(in srgb,var(--crit) 8%,var(--card));display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5">
+        ${iconHtml}
+        <span>${gc.note}</span>
+      </div>`;
+  }
+
   const aiSection = `
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">
       <button class="detail-btn" onclick="aiDiagnose('${repoKey}', ${runId}, this)" data-min-role="analyst"><i data-lucide="sparkles"></i> Diagnosticar com IA</button>
@@ -2054,7 +2071,7 @@ async function showRunJobs(repo, runId, btn) {
   const row = document.createElement('tr');
   row.id = detailId;
   row.className = 'job-detail-row';
-  row.innerHTML = `<td colspan="7"><div class="job-detail-wrap">${jobsHtml || '<span style="color:var(--muted);font-size:12px">No job details available.</span>'}${aiSection}</div></td>`;
+  row.innerHTML = `<td colspan="7"><div class="job-detail-wrap">${jobsHtml || '<span style="color:var(--muted);font-size:12px">No job details available.</span>'}${gateBannerHtml}${aiSection}</div></td>`;
 
   const runRow = document.getElementById(`run-row-${runId}`);
   if (runRow) runRow.after(row);
