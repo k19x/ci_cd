@@ -163,17 +163,29 @@ jobs:
           xargs -a specs.txt npx --yes @stoplight/spectral-cli lint \
             -f json -o spectral.json || true
       - uses: actions/setup-python@v5
-        if: steps.specs.outputs.found == 'true'
         with:
           python-version: "3.12"
       - name: Converter para SARIF
         if: steps.specs.outputs.found == 'true'
         run: python __secpipe/scripts/spectral2sarif.py spectral.json --output api.sarif
+      - name: Detectar shadow APIs
+        if: always()
+        run: |
+          SPEC_ARG=""
+          if [ -s specs.txt ]; then
+            SPEC_ARG="--spec $(head -1 specs.txt)"
+          fi
+          python __secpipe/scripts/shadow_api.py . --output shadow_api.sarif $SPEC_ARG || true
       - uses: actions/upload-artifact@v4
         if: steps.specs.outputs.found == 'true'
         with:
           name: sarif-api
           path: api.sarif
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sarif-shadow
+          path: shadow_api.sarif
 
   supply-chain:
     name: Supply Chain (OSSF Scorecard)

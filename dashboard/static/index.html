@@ -982,6 +982,11 @@ tr.sla-row td:first-child { background: rgba(255,51,85,.04); }
         <i data-lucide="clock"></i>
         Scans
       </a>
+      <a class="nav-item" id="navActivity" onclick="showTab('activity',this)">
+        <i data-lucide="activity"></i>
+        Jobs
+        <span id="navActivityBadge" hidden style="margin-left:auto;background:var(--crit);color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;line-height:1.6"></span>
+      </a>
       <a class="nav-item" onclick="showTab('findings',this)">
         <i data-lucide="table-2"></i>
         Results
@@ -1611,6 +1616,44 @@ tr.sla-row td:first-child { background: rgba(255,51,85,.04); }
 
     </div><!-- /tab-settings -->
 
+    <!-- ═══ JOBS / ATIVIDADE ═══ -->
+    <div id="tab-activity" class="tab-pane">
+      <div style="display:flex;flex-direction:column;gap:20px">
+
+        <!-- Scans GitHub -->
+        <div class="card">
+          <div class="card-head" style="padding-bottom:0">
+            <div class="card-title" style="display:flex;align-items:center;gap:7px">
+              <i data-lucide="radar" style="width:15px;height:15px;color:var(--accent)"></i>
+              Scans GitHub Actions
+            </div>
+            <div class="card-sub">Runs em andamento e recentes (últimas 2h)</div>
+          </div>
+          <div id="actScans" style="padding:0 18px 14px">
+            <div style="color:var(--muted);font-size:13px;padding:24px 0;text-align:center">
+              <i data-lucide="loader-circle" style="width:16px;height:16px;animation:spin 1s linear infinite"></i>
+              Carregando...
+            </div>
+          </div>
+        </div>
+
+        <!-- IA Engine -->
+        <div class="card">
+          <div class="card-head" style="padding-bottom:0">
+            <div class="card-title" style="display:flex;align-items:center;gap:7px">
+              <i data-lucide="cpu" style="width:15px;height:15px;color:var(--accent)"></i>
+              IA Engine
+            </div>
+            <div class="card-sub">Correções, diagnósticos e sugestões</div>
+          </div>
+          <div id="actAiJobs" style="padding:0 18px 14px">
+            <div style="color:var(--muted);font-size:13px;padding:24px 0;text-align:center">Nenhum job de IA recente.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <!-- ═══ AUDIT LOG ═══ -->
     <div id="tab-audit" class="tab-pane">
       <div class="card">
@@ -1713,6 +1756,7 @@ function showLogin() {
   $('loginPass').value = '';
   clearInterval(jobTimer);
   clearInterval(dashTimer);
+  clearInterval(activityTimer);
 }
 
 function hideLogin() {
@@ -1779,10 +1823,11 @@ async function doLogout() {
   await fetch('/api/auth/logout', {method:'POST'}).catch(() => {});
   clearInterval(jobTimer);
   clearInterval(dashTimer);
+  clearInterval(activityTimer);
   showLogin();
 }
 
-let chart, jobTimer, dashTimer, currentTab = 'dashboard';
+let chart, jobTimer, dashTimer, activityTimer, currentTab = 'dashboard';
 
 /* ── Tab switching ── */
 function showTab(tab, el) {
@@ -1791,21 +1836,149 @@ function showTab(tab, el) {
   $(`tab-${tab}`).classList.add('active');
   if (el) el.classList.add('active');
   currentTab = tab;
-  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Results', vulns:'Findings', repos:'Projects', settings:'Settings', audit:'Audit Log'};
+  const titles = {dashboard:'Dashboard', jobs:'Scans', activity:'Jobs', findings:'Results', vulns:'Findings', repos:'Projects', settings:'Settings', audit:'Audit Log'};
   $('topbarTitle').textContent = titles[tab] || tab;
   clearInterval(jobTimer);
   clearInterval(dashTimer);
+  clearInterval(activityTimer);
   $('topbarAge').hidden = true;
   if (tab === 'dashboard') {
     loadDashboard();
     dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
   }
   if (tab === 'jobs')     { loadJobs(); jobTimer = setInterval(loadJobs, 15000); }
+  if (tab === 'activity') { loadActivity(); activityTimer = setInterval(loadActivity, 10000); }
   if (tab === 'findings') loadFindings();
   if (tab === 'vulns')    loadVulns();
   if (tab === 'repos')    loadRepos();
   if (tab === 'settings') loadSettings();
   if (tab === 'audit')    loadAudit();
+}
+
+/* ── Jobs / Activity ── */
+async function loadActivity() {
+  renderActivityAiJobs();
+  await renderActivityScans();
+  updateNavActivityBadge();
+}
+
+function _elapsed(ms) {
+  const s = Math.floor(ms/1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s/60);
+  if (m < 60) return `${m}min`;
+  return `${Math.floor(m/60)}h ${m%60}min`;
+}
+
+function _timeAgo(ts) {
+  return _elapsed(Date.now() - ts) + ' atrás';
+}
+
+const ACT_STATUS_META = {
+  completed:   { cls:'ok',     icon:'circle-check',     label:'Concluído' },
+  success:     { cls:'ok',     icon:'circle-check',     label:'Concluído' },
+  failure:     { cls:'crit',   icon:'circle-x',         label:'Falhou' },
+  cancelled:   { cls:'muted',  icon:'circle-minus',     label:'Cancelado' },
+  in_progress: { cls:'accent', icon:'loader-circle',    label:'Em andamento', spin:true },
+  queued:      { cls:'muted',  icon:'clock',            label:'Na fila' },
+  waiting:     { cls:'muted',  icon:'hourglass',        label:'Aguardando' },
+};
+
+const AI_JOB_META = {
+  running: { cls:'accent', icon:'loader-circle', spin:true, label:'Em andamento' },
+  done:    { cls:'ok',     icon:'circle-check',  label:'Concluído' },
+  error:   { cls:'crit',   icon:'circle-x',      label:'Erro' },
+};
+
+function _typeIconFromLabel(label) {
+  if (!label) return 'cpu';
+  const l = label.toLowerCase();
+  if (l.startsWith('autofix:')) return 'wrench';
+  if (l.startsWith('sugestão:') || l.startsWith('sugestao:')) return 'lightbulb';
+  if (l.startsWith('verificação:') || l.startsWith('verificacao:')) return 'scan-search';
+  if (l.startsWith('diagnóstico:') || l.startsWith('diagnostico:')) return 'stethoscope';
+  return 'cpu';
+}
+
+function renderActivityAiJobs() {
+  const el = $('actAiJobs'); if (!el) return;
+  const j = _ajPrune(_ajLoad());
+  const entries = Object.entries(j).sort((a,b) => (b[1].started||0)-(a[1].started||0));
+  if (!entries.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:24px 0;text-align:center">Nenhum job de IA recente.</div>';
+    return;
+  }
+  el.innerHTML = entries.map(([id, x]) => {
+    const meta = AI_JOB_META[x.status] || AI_JOB_META.done;
+    const typeIcon = _typeIconFromLabel(x.label);
+    const spinAttr = meta.spin ? 'style="animation:spin 1s linear infinite"' : '';
+    const age = x.done ? _timeAgo(x.done) : _elapsed(Date.now() - (x.started||Date.now()));
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd)">
+      <i data-lucide="${typeIcon}" style="width:15px;height:15px;margin-top:1px;color:var(--accent);flex-shrink:0"></i>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:500;word-break:break-word">${esc(x.label||id)}</div>
+        ${x.error ? `<div style="font-size:11.5px;color:var(--crit);margin-top:2px">${esc(x.error)}</div>` : ''}
+        ${x.result && !x.error ? `<div style="font-size:11.5px;color:var(--ok);margin-top:2px">${x.result}</div>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
+        <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--${meta.cls})">
+          <i data-lucide="${meta.icon}" style="width:12px;height:12px" ${spinAttr}></i>${meta.label}
+        </span>
+        <span style="font-size:10.5px;color:var(--muted)">${age}</span>
+      </div>
+    </div>`;
+  }).join('');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function renderActivityScans() {
+  const el = $('actScans'); if (!el) return;
+  const data = await api('/api/runs');
+  if (!data) return;
+  const cutoff = Date.now() - 2 * 3600 * 1000;
+  const runs = (data.runs || []).filter(r => {
+    const t = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+    return r.status === 'in_progress' || r.status === 'queued' || t > cutoff;
+  }).slice(0, 30);
+
+  if (!runs.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:24px 0;text-align:center">Nenhum scan recente nas últimas 2h.</div>';
+    return;
+  }
+
+  el.innerHTML = runs.map(r => {
+    // completed → usar conclusion para status visual
+    const effectiveStatus = (r.status === 'completed' && r.conclusion) ? r.conclusion : r.status;
+    const meta = ACT_STATUS_META[effectiveStatus] || { cls:'muted', icon:'circle', label: effectiveStatus };
+    const spinAttr = meta.spin ? 'style="animation:spin 1s linear infinite"' : '';
+    const ts = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+    const age = ts ? _timeAgo(ts) : '';
+    const repo = (r.repo||'').split('/').pop();
+    const fullRepo = esc(r.repo||'');
+    const ghUrl = esc(r.url||'');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd)">
+      <i data-lucide="radar" style="width:15px;height:15px;color:var(--accent);flex-shrink:0"></i>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:500">${ghUrl ? `<a href="${ghUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(repo)}</a>` : esc(repo)}</div>
+        <div style="font-size:11px;color:var(--muted)">${fullRepo}${r.branch ? ' · ' + esc(r.branch) : ''}${r.commit ? ' · ' + esc(r.commit) : ''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
+        <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--${meta.cls})">
+          <i data-lucide="${meta.icon}" style="width:12px;height:12px" ${spinAttr}></i>${meta.label}
+        </span>
+        <span style="font-size:10.5px;color:var(--muted)">${age}</span>
+      </div>
+    </div>`;
+  }).join('');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function updateNavActivityBadge() {
+  const badge = $('navActivityBadge'); if (!badge) return;
+  const j = _ajLoad();
+  const running = Object.values(j).filter(x => x.status === 'running').length;
+  badge.textContent = running;
+  badge.hidden = running === 0;
 }
 
 /* ── Audit Log ── */
@@ -2596,6 +2769,7 @@ function _ajRender() {
   const running = entries.filter(([,x]) => x.status==='running').length;
   const badge = $('ajBadge');
   if (badge) { badge.textContent=running; badge.hidden=running===0; }
+  updateNavActivityBadge();
   const drawer = $('ajDrawer');
   if (!drawer || drawer.hidden) return;
   if (!entries.length) { drawer.innerHTML='<p style="color:var(--muted);font-size:12px;text-align:center;padding:16px 8px">Nenhum job de IA recente.</p>'; return; }

@@ -3,6 +3,12 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.5] - 2026-08-30
+
+### Added
+- **Aba Jobs**: nova aba na sidebar que agrega em um único lugar todos os serviços em andamento — seção "Scans GitHub Actions" (runs in_progress/queued e recentes das últimas 2h, com status visual colorido, link para o GitHub e tempo relativo) e seção "IA Engine" (jobs de autofix, sugestão, verificação e diagnóstico do localStorage, com ícone por tipo, status animado e tempo decorrido); badge vermelho na nav indica quantidade de jobs IA em andamento; auto-refresh a cada 10s enquanto a aba está ativa
+- **Shadow API detection** (`scripts/shadow_api.py`): analisa estaticamente qualquer repo buscando definições de rota em 12 frameworks (FastAPI, Flask, Django, Express, Fastify, Hapi, Gin, Chi, Spring, Rails, Laravel, Actix, ASP.NET); quando há spec OpenAPI no repo, compara e emite `warning` para endpoints não documentados; sem spec, emite `note` informacional; integrado no job `api-security` do workflow com output `sarif-shadow`
+
 ## [0.14.4] - 2026-08-30
 
 ### Added
