@@ -3,6 +3,11 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.12] - 2026-08-30
+
+### Added
+- **Drag & drop nos cards do Dashboard**: no modo "⚙ Personalizar", arraste qualquer card e solte onde quiser — a reordenação acontece ao vivo durante o arrasto (cursor grab/grabbing, card translúcido com glow ciano enquanto arrastado); a nova ordem persiste em `localStorage` ao soltar
+
 ## [0.8.11] - 2026-08-30
 
 ### Added

@@ -825,7 +825,13 @@ pre.yaml {
 @media (max-width: 1100px) { .dash-grid .span-3, .dash-grid .span-2 { grid-column: span 6; } }
 .card-tools { display: none; align-items: center; gap: 4px; }
 .dash-grid.editing .card-tools { display: inline-flex; }
-.dash-grid.editing .card { border-color: var(--bd2); border-style: dashed; }
+.dash-grid.editing .card { border-color: var(--bd2); border-style: dashed; cursor: grab; }
+.dash-grid.editing .card:active { cursor: grabbing; }
+.dash-grid.editing .card.dragging {
+  opacity: .5; border-style: solid; border-color: var(--accent);
+  box-shadow: 0 0 28px var(--accent-glow); transform: scale(.985);
+}
+.dash-grid.editing .card { transition: transform .15s, opacity .15s, box-shadow .15s; }
 .card-tools button {
   background: var(--s2); border: 1px solid var(--bd); color: var(--t1);
   border-radius: 6px; padding: 2px 7px; font-size: 10px; cursor: pointer;
@@ -2476,6 +2482,46 @@ function toggleDashEdit() {
   const on = wrap.classList.toggle('editing');
   $('dashAddBar').hidden = !on;
   $('dashEditBtn').textContent = on ? '✓ Concluir' : '⚙ Personalizar';
+  wrap.querySelectorAll('[data-card]').forEach(el => el.setAttribute('draggable', on ? 'true' : 'false'));
+}
+
+/* drag & drop dos cards (ativo no modo Personalizar) */
+let _dragCardId = null;
+function initDashDnD() {
+  const wrap = $('dashCards');
+  if (!wrap) return;
+
+  wrap.addEventListener('dragstart', e => {
+    const card = e.target.closest('[data-card]');
+    if (!card || !wrap.classList.contains('editing')) { e.preventDefault(); return; }
+    _dragCardId = card.dataset.card;
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', _dragCardId); } catch(err) {}
+    requestAnimationFrame(() => card.classList.add('dragging'));
+  });
+
+  wrap.addEventListener('dragover', e => {
+    if (!_dragCardId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const over = e.target.closest('[data-card]');
+    const dragged = wrap.querySelector(`[data-card="${_dragCardId}"]`);
+    if (!over || !dragged || over === dragged) return;
+    // reordena ao vivo: solta antes ou depois conforme a posição atual
+    const kids = [...wrap.querySelectorAll('[data-card]')];
+    if (kids.indexOf(dragged) < kids.indexOf(over)) over.after(dragged);
+    else wrap.insertBefore(dragged, over);
+  });
+
+  wrap.addEventListener('drop', e => e.preventDefault());
+
+  wrap.addEventListener('dragend', () => {
+    const dragged = wrap.querySelector(`[data-card="${_dragCardId}"]`);
+    if (dragged) dragged.classList.remove('dragging');
+    _dragCardId = null;
+    _dashLayout.order = [...wrap.querySelectorAll('[data-card]')].map(el => el.dataset.card);
+    saveDashLayout();
+  });
 }
 
 /* ── Boot ── */
@@ -2485,6 +2531,7 @@ function toggleDashEdit() {
   applyTheme(saved);
 })();
 applyDashLayout();
+initDashDnD();
 if(typeof lucide!=='undefined')lucide.createIcons();
 initApp();
 </script>
