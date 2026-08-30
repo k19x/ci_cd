@@ -3,6 +3,15 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] - 2026-08-30
+
+### Added — paridade de funções estilo Checkmarx em todas as abas
+- **Scans**: busca por projeto/branch, filtro por status (success/failure/running/queued/...), exportação CSV
+- **Results**: busca livre (regra, arquivo, mensagem, projeto), **triagem em massa** — checkbox por linha + selecionar página inteira, barra "Aplicar a N" com os 4 estados de triage — e exportação CSV do resultado filtrado
+- **Findings**: busca por projeto/branch/commit, exportação CSV do histórico de scans
+- **Projects**: busca por nome/linguagem (combina com o filtro Public/Private), exportação CSV
+- Helper genérico `exportCSV()` com escaping correto e BOM UTF-8 (abre certo no Excel)
+
 ## [0.8.14] - 2026-08-30
 
 ### Added

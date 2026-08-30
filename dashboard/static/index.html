@@ -820,6 +820,9 @@ pre.yaml {
 /* ── Dashboard customizável ── */
 .dash-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; align-items: start; }
 #dashAddBar:not([hidden]) { display: flex; }
+#bulkBar:not([hidden]) { display: inline-flex; gap: 6px; align-items: center;
+                         padding-left: 10px; border-left: 1px solid var(--bd); }
+.selbox { accent-color: var(--accent); cursor: pointer; }
 .dash-grid .span-3 { grid-column: span 3; }
 .dash-grid .span-2 { grid-column: span 2; }
 @media (max-width: 1100px) { .dash-grid .span-3, .dash-grid .span-2 { grid-column: span 6; } }
@@ -1129,6 +1132,19 @@ pre.yaml {
           <div class="card-title">Scans recentes</div>
           <div class="card-sub" id="jobsAge"></div>
         </div>
+        <div class="filter-bar">
+          <input id="jSearch" placeholder="Buscar projeto ou branch..." oninput="renderJobs()">
+          <select id="jStatus" onchange="renderJobs()">
+            <option value="">All status</option>
+            <option value="success">success</option>
+            <option value="failure">failure</option>
+            <option value="running">running</option>
+            <option value="queued">queued</option>
+            <option value="startup_failure">startup_failure</option>
+            <option value="cancelled">cancelled</option>
+          </select>
+          <button class="btn-ghost" onclick="exportJobsCSV()" title="Exportar CSV">⬇ CSV</button>
+        </div>
         <div class="card-body tbl-wrap">
           <table>
             <thead><tr>
@@ -1153,6 +1169,7 @@ pre.yaml {
           <div class="card-sub" id="findCount"></div>
         </div>
         <div class="filter-bar">
+          <input id="fSearch" placeholder="Buscar regra, arquivo, mensagem..." oninput="_findPage=0;renderFindPage()">
           <select id="fRepo"><option value="">All projects</option></select>
           <select id="fSev">
             <option value="">All severities</option>
@@ -1169,10 +1186,21 @@ pre.yaml {
           <select id="fTool"><option value="">All engines</option>
             <option>Semgrep</option><option>Trivy</option><option>gitleaks</option>
           </select>
+          <button class="btn-ghost" onclick="exportFindingsCSV()" title="Exportar CSV">⬇ CSV</button>
+          <span id="bulkBar" hidden>
+            <select id="bulkStatus">
+              <option value="false_positive">Not Exploitable</option>
+              <option value="accepted">Risk Accepted</option>
+              <option value="fixed">Fixed</option>
+              <option value="open">To Review</option>
+            </select>
+            <button class="btn-primary" id="bulkApplyBtn" onclick="applyBulk()" style="padding:5px 12px;font-size:11px">Aplicar</button>
+          </span>
         </div>
         <div class="card-body tbl-wrap">
           <table>
             <thead><tr>
+              <th style="width:30px"><input type="checkbox" id="selAllPage" onchange="toggleSelPage(this.checked)" title="Selecionar página"></th>
               <th style="width:34px"></th>
               <th class="sortable" data-k="res" data-c="1" onclick="sortBy('res',1,renderFindPage)">Vulnerability<span class="arr"></span></th>
               <th class="sortable" data-k="res" data-c="2" onclick="sortBy('res',2,renderFindPage)">Severity<span class="arr"></span></th>
@@ -1195,7 +1223,9 @@ pre.yaml {
           <div class="card-sub" id="vulnCount"></div>
         </div>
         <div class="filter-bar">
+          <input id="vSearch" placeholder="Buscar projeto, branch, commit..." oninput="renderVulns()">
           <select id="vRepo"><option value="">All projects</option></select>
+          <button class="btn-ghost" onclick="exportVulnsCSV()" title="Exportar CSV">⬇ CSV</button>
         </div>
         <div class="card-body tbl-wrap">
           <table>
@@ -1233,12 +1263,15 @@ pre.yaml {
       <div class="card">
         <div class="card-head">
           <div class="card-title">Projects</div>
-          <div style="display:flex;align-items:center;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <input id="rSearch" placeholder="Buscar projeto..." oninput="renderRepos()"
+                   style="font-size:12px;padding:4px 10px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);height:28px;width:170px">
             <div class="vis-tabs" id="visFilter">
               <button class="vis-tab active" data-vis="all"   onclick="setVisFilter('all',this)">All</button>
               <button class="vis-tab"        data-vis="public" onclick="setVisFilter('public',this)">Public</button>
               <button class="vis-tab"        data-vis="private" onclick="setVisFilter('private',this)">Private</button>
             </div>
+            <button class="btn-ghost" onclick="exportReposCSV()" title="Exportar CSV">⬇ CSV</button>
             <div class="card-sub" id="repoCount"></div>
           </div>
         </div>
@@ -1427,6 +1460,23 @@ function refreshArrows(key) {
     if (arr) arr.textContent = active ? (s.dir === 1 ? ' ▲' : ' ▼') : '';
     th.classList.toggle('sorted', !!active);
   });
+}
+
+/* ── Exportação CSV ── */
+function exportCSV(filename, rows) {
+  if (!rows.length) return;
+  const cols = Object.keys(rows[0]);
+  const csv = [cols.join(',')].concat(rows.map(r => cols.map(c => {
+    let v = r[c] == null ? '' : String(r[c]);
+    if (/[",\n;]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"';
+    return v;
+  }).join(','))).join('\r\n');
+  const blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
 function applySort(key, arr, accs) {
@@ -1693,11 +1743,17 @@ async function loadJobs() {
 
 function renderJobs() {
   const tbody = $('jobRows');
-  if (!_runs.length) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>No scans found. Set GITHUB_TOKEN to see private repositories.</p></div></td></tr>`;
+  let list = _runs;
+  const q  = ($('jSearch')?.value || '').toLowerCase();
+  const st = $('jStatus')?.value || '';
+  if (q)  list = list.filter(r => (r.repo + ' ' + (r.branch||'')).toLowerCase().includes(q));
+  if (st) list = list.filter(r => (r.conclusion || r.status) === st);
+  if (!list.length) {
+    const msg = _runs.length ? 'Nenhum scan corresponde aos filtros.' : 'No scans found. Set GITHUB_TOKEN to see private repositories.';
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>${msg}</p></div></td></tr>`;
     return;
   }
-  const sorted = applySort('jobs', _runs, {
+  const sorted = applySort('jobs', list, {
     0: r => r.repo, 1: r => r.branch, 3: r => r.conclusion || r.status || '', 4: r => r.created_at,
   });
   tbody.innerHTML = sorted.map(r => {
@@ -1715,6 +1771,13 @@ function renderJobs() {
     </tr>`;
   }).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
+}
+
+function exportJobsCSV() {
+  exportCSV('secpipe-scans.csv', _runs.map(r => ({
+    repo: r.repo, branch: r.branch, commit: r.commit,
+    status: r.conclusion || r.status, started: r.created_at, url: r.url,
+  })));
 }
 
 async function showRunJobs(repo, runId, btn) {
@@ -1780,7 +1843,11 @@ async function loadFindings(resetPage = true) {
 
 let _findingsView = [];
 function renderFindPage() {
-  _findingsView = applySort('res', _findings, {
+  let base = _findings;
+  const q = ($('fSearch')?.value || '').toLowerCase();
+  if (q) base = base.filter(f =>
+    ((f.rule||'') + ' ' + (f.file||'') + ' ' + (f.message||'') + ' ' + (f.repo||'')).toLowerCase().includes(q));
+  _findingsView = applySort('res', base, {
     1: f => f.rule || '', 2: f => SEV_ORD[f.severity] ?? 9, 3: f => f.tool || '',
     4: f => (f.file || '') + ':' + (f.line || 0), 5: f => f.status || '',
   });
@@ -1794,15 +1861,17 @@ function renderFindPage() {
 
   const tbody = $('findRows');
   if (!total) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i data-lucide="circle-check-big"></i><p>No results for the selected filters</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i data-lucide="circle-check-big"></i><p>No results for the selected filters</p></div></td></tr>`;
     $('findPager').hidden = true;
     return;
   }
 
   tbody.innerHTML = slice.map((f, i) => {
     const gi = start + i;
+    const key = f.repo + '||' + f.fid;
     return `
     <tr id="find-row-${gi}">
+      <td style="text-align:center"><input type="checkbox" class="selbox" data-key="${esc(key)}" ${_selKeys.has(key)?'checked':''} onchange="toggleSel(this)"></td>
       <td style="text-align:center"><button class="chev-btn" onclick="toggleFindDetail(${gi}, this)" title="Ver detalhes">▶</button></td>
       <td class="primary msg-cell" title="${esc(f.message)}" style="cursor:pointer" onclick="toggleFindDetail(${gi}, this.parentElement.querySelector('.chev-btn'))">${esc(f.rule)}</td>
       <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span></td>
@@ -1908,7 +1977,7 @@ function toggleFindDetail(gi, btn) {
   const row = document.createElement('tr');
   row.id = detailId;
   row.className = 'find-detail';
-  row.innerHTML = `<td colspan="6"><div class="find-detail-wrap">
+  row.innerHTML = `<td colspan="7"><div class="find-detail-wrap">
     <div class="fd-section full">
       <div class="fd-label">Descrição</div>
       <div class="fd-text">${esc(f.message) || '<em>Sem descrição fornecida pela engine.</em>'}</div>
@@ -1942,6 +2011,52 @@ function toggleFindDetail(gi, btn) {
   const findRow = document.getElementById(`find-row-${gi}`);
   if (findRow) findRow.after(row);
   if (btn) btn.classList.add('open');
+}
+
+/* ── Seleção múltipla + triagem em massa ── */
+const _selKeys = new Set();
+function toggleSel(cb) {
+  if (cb.checked) _selKeys.add(cb.dataset.key); else _selKeys.delete(cb.dataset.key);
+  updateBulkBar();
+}
+function toggleSelPage(on) {
+  document.querySelectorAll('#findRows .selbox').forEach(cb => {
+    cb.checked = on;
+    if (on) _selKeys.add(cb.dataset.key); else _selKeys.delete(cb.dataset.key);
+  });
+  updateBulkBar();
+}
+function updateBulkBar() {
+  const n = _selKeys.size;
+  $('bulkBar').hidden = n === 0;
+  $('bulkApplyBtn').textContent = `Aplicar a ${n}`;
+}
+async function applyBulk() {
+  const status = $('bulkStatus').value;
+  const keys = [..._selKeys];
+  const btn = $('bulkApplyBtn');
+  btn.disabled = true; btn.textContent = 'Aplicando…';
+  for (const k of keys) {
+    const idx = k.indexOf('||');
+    const repo = k.slice(0, idx), fid = k.slice(idx + 2);
+    await fetch(`/api/findings/${encodeURIComponent(repo)}/${fid}`, {
+      method: 'PATCH', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({status}),
+    }).catch(() => {});
+  }
+  _selKeys.clear();
+  const selAll = $('selAllPage'); if (selAll) selAll.checked = false;
+  btn.disabled = false;
+  updateBulkBar();
+  await Promise.all([loadDashboard(), loadFindings(false)]);
+}
+
+function exportFindingsCSV() {
+  exportCSV('secpipe-results.csv', _findingsView.map(f => ({
+    repo: f.repo, severity: f.severity, rule: f.rule, tool: f.tool,
+    file: f.file, line: f.line, status: f.status, message: f.message,
+    first_seen: f.first_seen, last_seen: f.last_seen,
+  })));
 }
 
 async function setTriage(repo, fid, status) {
@@ -1982,10 +2097,20 @@ function setVisFilter(vis, btn) {
   renderRepos();
 }
 
+function exportReposCSV() {
+  exportCSV('secpipe-projects.csv', _allRepos.map(r => ({
+    name: r.name, visibility: r.visibility, languages: r.languages,
+    last_scan: r.last_scan, scans: r.scan_count,
+    open_findings: r.open_findings, open_critical_high: r.open_critical_high, url: r.url,
+  })));
+}
+
 function renderRepos() {
   const tbody = $('repoRows');
   let list = _visFilter === 'all' ? _allRepos
            : _allRepos.filter(r => r.visibility === _visFilter);
+  const q = ($('rSearch')?.value || '').toLowerCase();
+  if (q) list = list.filter(r => (r.name + ' ' + (r.languages||'')).toLowerCase().includes(q));
   $('repoCount').textContent = `${list.length} project${list.length!==1?'s':''}`;
   if (!list.length) {
     const msg = _visFilter !== 'all' ? `No ${_visFilter} projects.` : 'No projects yet. Add one above.';
@@ -2147,11 +2272,16 @@ let _vulnScans = [];
 function renderVulns() {
   const chip = (cls, n) => `<span class="chip ${cls}${n===0?' zero':''}">${n}</span>`;
   const tbody = $('vulnRows');
-  if (!_vulnScans.length) {
-    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><p>Nenhum scan registrado ainda.</p></div></td></tr>`;
+  let list = _vulnScans;
+  const q = ($('vSearch')?.value || '').toLowerCase();
+  if (q) list = list.filter(s =>
+    (s.repo + ' ' + (s.branch||'') + ' ' + (s.commit_sha||'')).toLowerCase().includes(q));
+  if (!list.length) {
+    const msg = _vulnScans.length ? 'Nenhum scan corresponde à busca.' : 'Nenhum scan registrado ainda.';
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><p>${msg}</p></div></td></tr>`;
     return;
   }
-  const sorted = applySort('vul', _vulnScans, {
+  const sorted = applySort('vul', list, {
     0: s => s.repo, 1: s => s.branch || '', 3: s => s.created_at,
     4: s => +(s.critical||0), 5: s => +(s.high||0), 6: s => +(s.medium||0), 7: s => +(s.low||0),
     8: s => (s.critical||0)+(s.high||0)+(s.medium||0)+(s.low||0)+(s.info||0),
@@ -2172,6 +2302,13 @@ function renderVulns() {
     </tr>`;
   }).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
+}
+
+function exportVulnsCSV() {
+  exportCSV('secpipe-findings.csv', _vulnScans.map(s => ({
+    repo: s.repo, branch: s.branch, commit: s.commit_sha, date: s.created_at,
+    critical: s.critical||0, high: s.high||0, medium: s.medium||0, low: s.low||0, info: s.info||0,
+  })));
 }
 
 async function showScanFindings(idx, repo, btn) {
