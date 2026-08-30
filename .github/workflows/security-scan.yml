@@ -6,7 +6,7 @@ on:
       fail_on:
         description: "Severidade mínima que bloqueia o merge (critical|high|medium|low)"
         type: string
-        default: "high"
+        default: "critical"
   push:
     branches: [main]
   pull_request:
@@ -120,7 +120,7 @@ jobs:
             --commit "${{ github.sha }}" \
             --token "$SECPIPE_TOKEN"
       - name: Aplicar gate
-        run: python scripts/gate.py findings.json --policy policy/policy.yml --fail-on "${{ inputs.fail_on || 'high' }}"
+        run: python scripts/gate.py findings.json --policy policy/policy.yml --fail-on "${{ inputs.fail_on || 'critical' }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

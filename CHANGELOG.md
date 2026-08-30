@@ -3,6 +3,12 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.3] - 2026-08-30
+
+### Changed
+- **Gate default: `high` → `critical`** (input `fail_on` e fallback do workflow reutilizável): 9 repos reprovavam todo scan por terem ≥1 high aberto (~130 highs de backlog). Highs continuam reportados no dashboard e contam na política, mas só critical bloqueia o merge até o backlog ser zerado via AI autofix — aí o default pode voltar a `high`
+- Repos que passam `fail_on: high` explicitamente no caller continuam estritos (o input sobrepõe o default)
+
 ## [0.12.2] - 2026-08-30
 
 ### Changed — Lucide icons em toda a aplicação (sem emojis em controles)
