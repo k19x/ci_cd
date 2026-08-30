@@ -3,6 +3,11 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.8] - 2026-08-30
+
+### Changed
+- **Aba Jobs layout lado a lado**: Scans GitHub Actions e IA Engine agora ficam em grid 2 colunas (1fr / 1fr) com scroll independente por coluna (max-height 70vh), em vez de empilhados verticalmente
+
 ## [0.14.7] - 2026-08-30
 
 ### Fixed
