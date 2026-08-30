@@ -2015,7 +2015,10 @@ function toggleFindDetail(gi, btn) {
     </div>
     <div class="fd-section full">
       <div class="fd-label">✨ AI Engine</div>
-      <button class="detail-btn" onclick="aiFix(${gi}, this)" data-min-role="analyst">✨ Sugerir correção com IA</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="detail-btn" onclick="aiFix(${gi}, this)" data-min-role="analyst">✨ Sugerir correção com IA</button>
+        <button class="detail-btn" onclick="aiAutofix(${gi}, this)" data-min-role="analyst" style="border-color:rgba(34,212,114,.4);color:var(--ok)">🔧 Aplicar correção (abre PR)</button>
+      </div>
       <div id="aiFixOut-${gi}" style="margin-top:8px"></div>
     </div>
   </div></td>`;
@@ -2064,6 +2067,39 @@ async function aiFix(gi, btn) {
     btn.textContent = '✨ Sugerir correção com IA';
   }
   btn.disabled = false;
+}
+
+async function aiAutofix(gi, btn) {
+  const f = _findingsView[gi] || _findings[gi];
+  if (!f) return;
+  if (!confirm(`Aplicar correção automática?\n\nRepo: ${f.repo}\nArquivo: ${f.file}:${f.line}\n\nA IA vai editar o código num branch novo e abrir um Pull Request — nada vai direto para a ${'main'}. Você revisa antes do merge.`)) return;
+  const out = $(`aiFixOut-${gi}`);
+  btn.disabled = true; btn.textContent = '🔧 Aplicando…';
+  out.innerHTML = '<div class="fd-text" style="color:var(--muted)">Clonando o repo, corrigindo o código e abrindo o PR… (1–3 min)</div>';
+  try {
+    const res = await fetch('/api/ai/autofix', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({repo: f.repo, fid: f.fid, rule: f.rule, severity: f.severity,
+                            file: f.file, line: f.line, message: f.message, tool: f.tool}),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.applied) {
+      out.innerHTML = `
+        <div class="fd-text" style="color:var(--ok)">✅ Correção aplicada no branch <code>${esc(body.branch)}</code></div>
+        <div style="margin:8px 0"><a class="fd-ref" href="${esc(body.pr_url)}" target="_blank" rel="noopener">Abrir Pull Request ↗</a></div>
+        ${body.summary ? renderMd(body.summary) : ''}
+        <details style="margin-top:6px"><summary style="cursor:pointer;color:var(--accent);font-size:11px">Ver diff</summary>
+          <pre class="yaml">${esc(body.diff || '')}</pre></details>`;
+    } else if (res.ok) {
+      out.innerHTML = `<div class="fd-text" style="color:var(--med)">${esc(body.detail || 'A IA não fez alterações.')}</div>`
+        + (body.analysis ? renderMd(body.analysis) : '');
+    } else {
+      out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(body.detail || 'Erro ' + res.status)}</div>`;
+    }
+  } catch (e) {
+    out.innerHTML = '<div class="fd-text" style="color:var(--crit)">Falha de rede ao chamar a IA.</div>';
+  }
+  btn.disabled = false; btn.textContent = '🔧 Aplicar correção (abre PR)';
 }
 
 async function aiDiagnose(repo, runId, btn) {

@@ -3,6 +3,16 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.0] - 2026-08-30
+
+### Added — Autofix: a IA aplica a correção e abre PR
+- **"🔧 Aplicar correção (abre PR)"** no painel de cada finding: o backend clona o repo (depth 1) em tmpfs, roda o **Claude Code em modo agente** (tools Edit/Write/Read/Grep/Glob, até 25 turns) para corrigir o código de verdade, commita num branch `secpipe/ai-fix-<ts>`, faz push e **abre um Pull Request** via API do GitHub
+- Nada vai direto para a main: o PR traz tabela do finding, resumo do que a IA mudou e aviso de revisão; o scan de segurança roda automaticamente no PR
+- UI mostra link do PR, resumo e o **diff completo** expansível; confirm() antes de executar
+- Endpoint `POST /api/ai/autofix` (role analyst); workdir temporário sempre limpo (`finally`); token do GitHub mascarado em qualquer erro de git
+- Se a IA não alterar nada, retorna a análise sem criar branch/PR
+- Dockerfile: adicionado `git` à imagem
+
 ## [0.10.1] - 2026-08-30
 
 ### Changed

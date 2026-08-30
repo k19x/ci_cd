@@ -11,7 +11,9 @@ Auth:   se a env SECPIPE_TOKEN estiver definida, o /api/ingest exige o
 
 import base64
 import concurrent.futures
+import shutil
 import subprocess
+import tempfile
 import contextlib
 import json as _json
 import os
@@ -1154,6 +1156,110 @@ def ai_fix(r: AIFixRequest, user=Depends(require_role("analyst"))):
     analysis = _claude(system, prompt)
     _ai_cache[ck] = analysis
     return {"analysis": analysis, "cached": False}
+
+
+def _run_git(args: list, cwd: str, timeout: int = 60) -> str:
+    proc = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+    if proc.returncode != 0:
+        msg = (proc.stderr or proc.stdout or "")[:300]
+        tok = os.environ.get("GITHUB_TOKEN", "")
+        if tok:
+            msg = msg.replace(tok, "***")
+        raise HTTPException(502, f"git {args[0]}: {msg}")
+    return proc.stdout
+
+
+@app.post("/api/ai/autofix")
+def ai_autofix(r: AIFixRequest, user=Depends(require_role("analyst"))):
+    """Clona o repo, deixa o Claude Code corrigir o finding e abre um Pull Request."""
+    gh_token = os.environ.get("GITHUB_TOKEN", "")
+    if not gh_token:
+        raise HTTPException(400, "GITHUB_TOKEN não configurado")
+    if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")):
+        raise HTTPException(400, "Configure ANTHROPIC_API_KEY ou CLAUDE_CODE_OAUTH_TOKEN no .env")
+    if not r.file:
+        raise HTTPException(400, "Finding sem arquivo associado — correção automática indisponível")
+
+    workdir = tempfile.mkdtemp(prefix="secpipe-fix-", dir="/tmp")
+    try:
+        clone_url = f"https://x-access-token:{gh_token}@github.com/{r.repo}.git"
+        _run_git(["clone", "--depth", "1", clone_url, workdir], cwd="/tmp", timeout=120)
+        branch = f"secpipe/ai-fix-{int(time.time())}"
+        _run_git(["checkout", "-b", branch], cwd=workdir)
+
+        prompt = (
+            f"Você está no repositório {r.repo}. Corrija este finding de segurança:\n"
+            f"- Engine: {r.tool}\n- Regra: {r.rule}\n- Severidade: {r.severity}\n"
+            f"- Arquivo: {r.file} (linha {r.line})\n- Mensagem: {r.message}\n\n"
+            "Instruções:\n"
+            "1. Leia o arquivo apontado e entenda o contexto\n"
+            "2. Aplique a correção mínima e segura — não refatore nada além do necessário\n"
+            "3. Se a correção exigir mudanças em outros pontos do MESMO padrão vulnerável no arquivo, corrija também\n"
+            "4. NÃO altere arquivos não relacionados, não adicione dependências, não crie arquivos novos\n"
+            "5. Ao final, resuma em 2-3 frases o que mudou"
+        )
+        env = dict(os.environ)
+        env["HOME"] = "/tmp"
+        proc = subprocess.run(
+            ["claude", "-p", "--output-format", "text", "--model", AI_MODEL,
+             "--allowedTools", "Edit,Write,Read,Grep,Glob", "--max-turns", "25"],
+            input=prompt, capture_output=True, text=True, timeout=300, env=env, cwd=workdir,
+        )
+        if proc.returncode != 0:
+            raise HTTPException(502, f"Claude Code: {(proc.stderr or proc.stdout or '')[:300]}")
+        summary = proc.stdout.strip()[:2000]
+
+        if not _run_git(["status", "--porcelain"], cwd=workdir).strip():
+            return {"applied": False, "detail": "A IA analisou mas não fez alterações no código.",
+                    "analysis": summary}
+
+        diff = _run_git(["diff"], cwd=workdir)[:8000]
+        _run_git(["add", "-A"], cwd=workdir)
+        _run_git(["-c", "user.name=SecPipe AI", "-c", "user.email=secpipe-ai@users.noreply.github.com",
+                  "commit", "-m",
+                  f"fix(security): {r.rule or 'finding'} em {r.file}\n\n"
+                  f"Correção automática gerada pelo SecPipe AI Engine (Claude).\n"
+                  f"Finding: {r.tool} / {r.severity} / linha {r.line}"],
+                 cwd=workdir)
+        _run_git(["push", "origin", branch], cwd=workdir, timeout=90)
+
+        # branch padrão do repo (para o base do PR)
+        hdrs = {"Authorization": f"Bearer {gh_token}", "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"}
+        base = "main"
+        try:
+            req = urllib.request.Request(f"https://api.github.com/repos/{r.repo}", headers=hdrs)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                base = _json.loads(resp.read()).get("default_branch", "main")
+        except Exception:
+            pass
+
+        pr_payload = _json.dumps({
+            "title": f"[SecPipe AI] fix: {r.rule or r.file}",
+            "head": branch, "base": base,
+            "body": (f"## 🤖 Correção automática — SecPipe AI Engine\n\n"
+                     f"| | |\n|---|---|\n| **Engine** | {r.tool} |\n| **Regra** | `{r.rule}` |\n"
+                     f"| **Severidade** | {r.severity} |\n| **Arquivo** | `{r.file}:{r.line}` |\n\n"
+                     f"**Mensagem do scanner:** {r.message}\n\n"
+                     f"**Resumo da IA:**\n{summary}\n\n"
+                     f"> ⚠️ Correção gerada por IA — revise antes do merge. "
+                     f"O scan de segurança rodará automaticamente neste PR."),
+        }).encode()
+        try:
+            req = urllib.request.Request(f"https://api.github.com/repos/{r.repo}/pulls",
+                                         data=pr_payload, headers=hdrs, method="POST")
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                pr = _json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            raise HTTPException(e.code, f"Branch enviado ({branch}) mas o PR falhou: "
+                                        f"{e.read().decode(errors='replace')[:200]}")
+
+        return {"applied": True, "pr_url": pr.get("html_url", ""), "branch": branch,
+                "diff": diff, "summary": summary}
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "Correção automática excedeu o tempo limite")
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 class AIDiagnoseRequest(BaseModel):

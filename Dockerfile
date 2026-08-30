@@ -2,7 +2,7 @@ FROM python:3.12-slim AS base
 
 # ── dependências de sistema (+ Node.js para o Claude Code CLI) ────────────
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl nodejs npm \
+ && apt-get install -y --no-install-recommends curl git nodejs npm \
  && npm install -g @anthropic-ai/claude-code \
  && npm cache clean --force \
  && rm -rf /var/lib/apt/lists/* \
