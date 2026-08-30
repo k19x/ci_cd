@@ -1319,6 +1319,12 @@ pre.yaml {
 
     <!-- ═══ CONFIGURAÇÕES ═══ -->
     <div id="tab-settings" class="tab-pane">
+      <div class="vis-tabs" style="display:inline-flex;margin-bottom:16px">
+        <button class="vis-tab active" onclick="showSettingsTab('policy',this)">Policy</button>
+        <button class="vis-tab" onclick="showSettingsTab('ai',this)">AI</button>
+      </div>
+
+      <div id="settingsPane-policy">
       <div class="grid-2" style="margin-bottom:16px">
 
         <!-- Thresholds -->
@@ -1454,6 +1460,37 @@ pre.yaml {
         </div>
       </div>
     </div>
+    </div><!-- /settingsPane-policy -->
+
+    <!-- ── Sub-aba AI ── -->
+    <div id="settingsPane-ai" style="display:none">
+      <div class="card" style="max-width:640px">
+        <div class="card-head">
+          <div class="card-title">🤖 AI Engine</div>
+          <div class="card-sub" id="aiCfgStatus">—</div>
+        </div>
+        <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+          <div>
+            <label style="display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px">Modelo Claude</label>
+            <select id="aiModelSel"
+                    onchange="$('aiModelCustom').style.display=this.value==='__custom'?'block':'none'"
+                    style="width:100%;font-size:13px;padding:9px 11px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text)"></select>
+            <input id="aiModelCustom" placeholder="ID do modelo (ex: claude-sonnet-4-6)"
+                   style="display:none;margin-top:8px;width:100%;font-size:13px;padding:9px 11px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);box-sizing:border-box">
+          </div>
+          <div style="font-size:12px;color:var(--muted)" id="aiCfgVia"></div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;background:rgba(0,0,0,.15);border:1px solid var(--bd);border-radius:var(--radius);padding:10px 12px">
+            O modelo escolhido é usado nas três operações de IA: <strong>sugerir correção</strong>, <strong>aplicar correção (PR)</strong> e <strong>diagnosticar scans</strong>.
+            Sonnet é o equilíbrio ideal; Haiku é mais rápido/barato; Opus/Fable para análises mais profundas.
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn-primary" onclick="saveAIModel()" data-min-role="admin">Salvar modelo</button>
+            <span class="form-msg" id="aiCfgMsg"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     </div><!-- /tab-settings -->
 
   </div><!-- /content -->
@@ -2051,6 +2088,67 @@ function toggleFindDetail(gi, btn) {
   const findRow = document.getElementById(`find-row-${gi}`);
   if (findRow) findRow.after(row);
   if (btn) btn.classList.add('open');
+}
+
+/* ── Settings: sub-abas ── */
+function showSettingsTab(k, btn) {
+  document.querySelectorAll('#tab-settings > .vis-tabs .vis-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  $('settingsPane-policy').style.display = k === 'policy' ? '' : 'none';
+  $('settingsPane-ai').style.display     = k === 'ai'     ? '' : 'none';
+  if (k === 'ai') loadAIConfig();
+}
+
+const AI_MODEL_LABELS = {
+  'claude-sonnet-4-6':        'Claude Sonnet 4.6',
+  'claude-sonnet-5':          'Claude Sonnet 5',
+  'claude-opus-5':            'Claude Opus 5',
+  'claude-fable-5':           'Claude Fable 5',
+  'claude-haiku-4-5-20251001':'Claude Haiku 4.5 (rápido)',
+};
+
+async function loadAIConfig() {
+  const c = await api('/api/ai/config');
+  if (!c) return;
+  $('aiCfgStatus').textContent = c.enabled
+    ? `ativo · via ${c.via === 'claude-code' ? 'Claude Code (sua conta)' : 'API key'}`
+    : 'desativado — configure ANTHROPIC_API_KEY ou CLAUDE_CODE_OAUTH_TOKEN no .env';
+  const sel = $('aiModelSel');
+  sel.innerHTML = '';
+  const known = c.models || Object.keys(AI_MODEL_LABELS);
+  known.forEach(m => sel.add(new Option(AI_MODEL_LABELS[m] || m, m)));
+  sel.add(new Option('Outro (digitar ID)…', '__custom'));
+  if (known.includes(c.model)) {
+    sel.value = c.model;
+    $('aiModelCustom').style.display = 'none';
+  } else {
+    sel.value = '__custom';
+    const inp = $('aiModelCustom');
+    inp.style.display = 'block';
+    inp.value = c.model;
+  }
+  $('aiCfgVia').textContent = `Modelo em uso: ${c.model}`;
+}
+
+async function saveAIModel() {
+  const sel = $('aiModelSel');
+  const model = sel.value === '__custom' ? $('aiModelCustom').value.trim() : sel.value;
+  const msg = $('aiCfgMsg');
+  msg.className = 'form-msg';
+  if (!model) { msg.className = 'form-msg err'; msg.textContent = 'Informe o ID do modelo'; return; }
+  const res = await fetch('/api/ai/config', {
+    method: 'PUT', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({model}),
+  });
+  const b = await res.json().catch(() => ({}));
+  if (res.ok) {
+    msg.className = 'form-msg ok';
+    msg.textContent = `Salvo — as próximas análises usarão ${model}`;
+    $('aiCfgVia').textContent = `Modelo em uso: ${model}`;
+  } else {
+    msg.className = 'form-msg err';
+    msg.textContent = b.detail || ('Erro ' + res.status);
+  }
 }
 
 /* ── Modais (substituem alert/confirm nativos) ── */

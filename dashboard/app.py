@@ -180,6 +180,7 @@ _migrations = [
     "ALTER TABLE repos ADD COLUMN languages TEXT DEFAULT ''",
     "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT ''",
     "ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0",
+    "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')",
 ]
 for _mig in _migrations:
     try:
@@ -1023,8 +1024,31 @@ def rerun_scan(repo: str, run_id: int, user=Depends(require_role("analyst"))):
 
 
 # ── AI Engine (Claude) ────────────────────────────────────────────────────
-AI_MODEL  = os.environ.get("SECPIPE_AI_MODEL", "claude-sonnet-5")
+AI_MODELS = ["claude-sonnet-4-6", "claude-sonnet-5", "claude-opus-5",
+             "claude-fable-5", "claude-haiku-4-5-20251001"]
 _ai_cache: dict = {}   # (kind, repo, key) -> analysis text
+
+
+def _get_setting(key: str, default: str = "") -> str:
+    try:
+        with db() as conn:
+            row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        return row["value"] if row else default
+    except Exception:
+        return default
+
+
+def _set_setting(key: str, value: str) -> None:
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO settings(key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value),
+        )
+
+
+def _ai_model() -> str:
+    return _get_setting("ai_model") or os.environ.get("SECPIPE_AI_MODEL", "claude-sonnet-5")
 _ai_jobs:  dict = {}   # job_id -> {status: running|done|error, result?, error?, ts}
 
 
@@ -1070,7 +1094,7 @@ def _claude_cli(system: str, prompt: str) -> str:
     env["HOME"] = "/tmp"          # CLI precisa de home gravável (container é read-only + tmpfs)
     try:
         proc = subprocess.run(
-            ["claude", "-p", "--output-format", "text", "--model", AI_MODEL],
+            ["claude", "-p", "--output-format", "text", "--model", _ai_model()],
             input=f"{system}\n\n{prompt}",
             capture_output=True, text=True, timeout=180, env=env, cwd="/tmp",
         )
@@ -1089,7 +1113,7 @@ def _claude_cli(system: str, prompt: str) -> str:
 def _claude_api(system: str, prompt: str, max_tokens: int = 1600) -> str:
     key = os.environ.get("ANTHROPIC_API_KEY", "")
     body = _json.dumps({
-        "model": AI_MODEL,
+        "model": _ai_model(),
         "max_tokens": max_tokens,
         "system": system,
         "messages": [{"role": "user", "content": prompt}],
@@ -1118,7 +1142,28 @@ def _claude_api(system: str, prompt: str, max_tokens: int = 1600) -> str:
 def ai_status(user=Depends(require_role("viewer"))):
     via = ("api" if os.environ.get("ANTHROPIC_API_KEY")
            else "claude-code" if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") else None)
-    return {"enabled": via is not None, "via": via, "model": AI_MODEL}
+    return {"enabled": via is not None, "via": via, "model": _ai_model()}
+
+
+class AIConfig(BaseModel):
+    model: str
+
+
+@app.get("/api/ai/config")
+def ai_config_get(user=Depends(require_role("viewer"))):
+    via = ("api" if os.environ.get("ANTHROPIC_API_KEY")
+           else "claude-code" if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") else None)
+    return {"model": _ai_model(), "models": AI_MODELS, "enabled": via is not None, "via": via}
+
+
+@app.put("/api/ai/config")
+def ai_config_put(cfg: AIConfig, user=Depends(require_role("admin"))):
+    m = cfg.model.strip()
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+    if not m or len(m) > 80 or any(c not in allowed for c in m):
+        raise HTTPException(400, "ID de modelo inválido")
+    _set_setting("ai_model", m)
+    return {"ok": True, "model": m}
 
 
 class AIFixRequest(BaseModel):
@@ -1226,7 +1271,7 @@ def _do_autofix(r: AIFixRequest):
         env = dict(os.environ)
         env["HOME"] = "/tmp"
         proc = subprocess.run(
-            ["claude", "-p", "--output-format", "text", "--model", AI_MODEL,
+            ["claude", "-p", "--output-format", "text", "--model", _ai_model(),
              "--allowedTools", "Edit,Write,Read,Grep,Glob", "--max-turns", "25"],
             input=prompt, capture_output=True, text=True, timeout=300, env=env, cwd=workdir,
         )

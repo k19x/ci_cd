@@ -3,6 +3,15 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.0] - 2026-08-30
+
+### Added
+- **Settings → sub-aba "AI"**: seletor de modelo Claude para o AI Engine — Sonnet 4.6, Sonnet 5, Opus 5, Fable 5, Haiku 4.5, ou ID customizado digitado
+- Modelo escolhido persiste no SQLite (tabela `settings`) e vale imediatamente para as três operações (sugerir, aplicar PR, diagnosticar) — sem restart
+- Endpoints `GET /api/ai/config` (viewer) e `PUT /api/ai/config` (admin, com validação do ID)
+- Sub-aba mostra status do engine (ativo via Claude Code/API key) e o modelo em uso
+- Settings reorganizado em sub-abas **Policy** | **AI**
+
 ## [0.11.1] - 2026-08-30
 
 ### Fixed
