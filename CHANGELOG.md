@@ -3,6 +3,21 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.5] - 2026-08-30
+
+### Changed
+- **UI v2 — efeitos reais**: blobs de luz animados no fundo (`drift` 18s) + dot-grid em camada separada
+- Stat strip virou **cards individuais** com gap, borda glow por severidade, hover com `translateY(-2px)` e sombra colorida
+- Números das métricas em **Space Grotesk 36px/800** — critical com pulso de text-shadow contínuo
+- Cards com glassmorphism real: `backdrop-filter: blur(14px)`, fundo translúcido, linha de brilho ciano no topo
+- Sidebar e topbar translúcidos com blur; títulos de card/topbar em uppercase espaçado
+- Login: blobs animados atrás do card, glassmorphism mais forte, título em Space Grotesk
+- Fonte Space Grotesk adicionada (display numérico + brand)
+- `prefers-reduced-motion` respeitado em todas as animações
+
+### Fixed
+- `addRepo()` valida o nome no cliente antes de enviar — submeter o form vazio não dispara mais `POST /api/repos` 400 no console; mostra mensagem inline e foca o campo
+
 ## [0.8.4] - 2026-08-30
 
 ### Changed
