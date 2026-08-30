@@ -3,6 +3,15 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.4] - 2026-08-30
+
+### Added
+- **AI Jobs Tracker com persistência em localStorage**: jobs de IA (autofix, sugestão, verificação, diagnóstico) agora persistem entre reloads de página e trocas de aba — um widget na topbar (ícone CPU) exibe badge com contagem de jobs em andamento e drawer listando o histórico recente (até 1h); ao relogar, jobs com status "running" têm o polling retomado automaticamente via `aiJobsResumeAll()`; jobs concluídos ficam acessíveis no drawer até expirar
+- **Scrollbars temáticos**: trilha e thumb dos scrollbars seguem as variáveis CSS do tema atual (claro/escuro/system) via `scrollbar-color` e `::webkit-scrollbar`
+
+### Fixed
+- **`aiJobsResumeAll()` chamado em todos os paths de login**: o resumo de jobs perdidos agora é chamado nos três caminhos de autenticação (login direto, login com 2FA na primeira etapa, e verificação TOTP)
+
 ## [0.14.3] - 2026-08-30
 
 ### Added

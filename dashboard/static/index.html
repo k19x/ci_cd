@@ -138,6 +138,22 @@
 
 /* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; }
+
+/* ── Scrollbars temáticos ── */
+:root {
+  --sb-track: var(--s1);
+  --sb-thumb: var(--bd);
+  --sb-thumb-hover: var(--accent);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sb-thumb) var(--sb-track);
+}
+*::-webkit-scrollbar        { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track  { background: var(--sb-track); border-radius: 3px; }
+*::-webkit-scrollbar-thumb  { background: var(--sb-thumb); border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--sb-thumb-hover); }
+
 body {
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 14px; line-height: 1.5;
@@ -1063,7 +1079,21 @@ tr.sla-row td:first-child { background: rgba(255,51,85,.04); }
     <div class="topbar-actions">
       <span id="topbarAge" hidden style="font-size:11px;color:var(--muted)"></span>
       <span class="topbar-badge" id="topbarBadge" hidden></span>
-      <button class="theme-btn" id="themeToggle" onclick="toggleTheme()" title="Alternar tema claro/escuro">
+      <!-- AI Jobs Widget -->
+      <div style="position:relative">
+        <button class="theme-btn" onclick="toggleAiJobs()" title="Jobs de IA em andamento" style="position:relative">
+          <i data-lucide="cpu" style="width:14px;height:14px"></i>
+          <span id="ajBadge" hidden style="position:absolute;top:2px;right:2px;background:var(--crit);color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;line-height:1"></span>
+        </button>
+        <div id="ajDrawer" hidden style="position:absolute;right:0;top:calc(100% + 6px);width:320px;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:0 12px 4px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:420px;overflow-y:auto">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0 6px;border-bottom:1px solid var(--bd);margin-bottom:4px">
+            <span style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px"><i data-lucide="cpu" style="width:13px;height:13px"></i> Jobs de IA</span>
+            <button onclick="localStorage.removeItem('secpipe_ai_jobs');_ajRender()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:10px">Limpar</button>
+          </div>
+          <p style="color:var(--muted);font-size:12px;text-align:center;padding:16px 8px">Nenhum job recente.</p>
+        </div>
+      </div>
+      <button class="theme-btn" id="themeToggle" onclick="toggleTheme()" title="Alternar tema claro/escuro" style="position:relative">
         <svg id="themeIconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
         <svg id="themeIconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
       </button>
@@ -1712,6 +1742,7 @@ async function initApp() {
   hideLogin();
   loadDashboard().then(updateDashAge);
   dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
+  aiJobsResumeAll();
 }
 
 async function doLogin() {
@@ -1734,6 +1765,7 @@ async function doLogin() {
         hideLogin();
         loadDashboard().then(updateDashAge);
         dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
+        aiJobsResumeAll();
       }
     } else {
       err.textContent = body.detail || 'Credenciais inválidas';
@@ -2506,7 +2538,7 @@ async function aiAutofixFromPending(fid, btn) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
-    pollAiJob(body.job, out, done, fail);
+    pollAiJobTracked(body.job, `Autofix: ${f.repo} / ${f.rule||f.fid}`, out, done, fail);
   } catch (e) { fail('Falha de rede.'); }
 }
 
@@ -2531,6 +2563,87 @@ function pollAiJob(jobId, out, onDone, onFail) {
     setTimeout(tick, 4000);
   };
   setTimeout(tick, 3000);
+}
+
+/* ── AI Jobs Tracker (persiste em localStorage entre reloads) ── */
+const _AJ_KEY = 'secpipe_ai_jobs';
+
+function _ajLoad() { try { return JSON.parse(localStorage.getItem(_AJ_KEY)||'{}'); } catch(e) { return {}; } }
+function _ajSave(j) { try { localStorage.setItem(_AJ_KEY, JSON.stringify(j)); } catch(e) {} }
+function _ajPrune(j) {
+  const now = Date.now();
+  Object.keys(j).forEach(id => { if (j[id].done && now - j[id].done > 3_600_000) delete j[id]; });
+  return j;
+}
+
+function aiJobTrack(jobId, label) {
+  const j = _ajPrune(_ajLoad());
+  j[jobId] = { label, started: Date.now(), status: 'running' };
+  _ajSave(j); _ajRender();
+}
+function aiJobDone(jobId, resultHtml) {
+  const j = _ajLoad(); if (j[jobId]) { j[jobId].status='done'; j[jobId].done=Date.now(); j[jobId].result=resultHtml||'Concluído.'; }
+  _ajSave(j); _ajRender();
+}
+function aiJobFail(jobId, err) {
+  const j = _ajLoad(); if (j[jobId]) { j[jobId].status='error'; j[jobId].done=Date.now(); j[jobId].error=err; }
+  _ajSave(j); _ajRender();
+}
+
+function _ajRender() {
+  const j = _ajPrune(_ajLoad());
+  const entries = Object.entries(j).sort((a,b) => (b[1].started||0)-(a[1].started||0));
+  const running = entries.filter(([,x]) => x.status==='running').length;
+  const badge = $('ajBadge');
+  if (badge) { badge.textContent=running; badge.hidden=running===0; }
+  const drawer = $('ajDrawer');
+  if (!drawer || drawer.hidden) return;
+  if (!entries.length) { drawer.innerHTML='<p style="color:var(--muted);font-size:12px;text-align:center;padding:16px 8px">Nenhum job de IA recente.</p>'; return; }
+  drawer.innerHTML = entries.map(([id,x]) => {
+    const age = x.done ? `${Math.round((Date.now()-x.done)/60000)}min atrás`
+                       : `${Math.round((Date.now()-x.started)/1000)}s`;
+    const icon = x.status==='running'?'<i data-lucide="loader-circle" style="width:13px;height:13px;animation:spin 1s linear infinite"></i>' : x.status==='done'?'✅':'❌';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--bd);font-size:12px">
+      <div style="display:flex;align-items:center;gap:6px">
+        ${icon}<span style="flex:1;font-weight:500;word-break:break-word">${esc(x.label)}</span>
+        <span style="color:var(--muted);font-size:10px;white-space:nowrap">${age}</span>
+      </div>
+      ${x.result ? `<div style="margin-top:4px;color:var(--ok)">${x.result}</div>` : ''}
+      ${x.error  ? `<div style="margin-top:4px;color:var(--crit)">${esc(x.error)}</div>` : ''}
+    </div>`;
+  }).join('');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function toggleAiJobs() {
+  const d = $('ajDrawer');
+  if (!d) return;
+  d.hidden = !d.hidden;
+  if (!d.hidden) _ajRender();
+}
+
+// Retoma polling de jobs que sobreviveram a um reload de página
+function aiJobsResumeAll() {
+  const j = _ajLoad(); const now = Date.now();
+  for (const [jobId, x] of Object.entries(j)) {
+    if (x.status !== 'running') continue;
+    if (now - x.started > 1_200_000) { aiJobFail(jobId, 'Tempo esgotado ou serviço reiniciou.'); continue; }
+    const dummy = document.createElement('div');
+    pollAiJob(jobId, dummy,
+      r => aiJobDone(jobId, r?.pr_url ? `PR: <a href="${esc(r.pr_url)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(r.branch||'ver PR')}</a>` : r?.applied===false?(r.detail||'IA não fez alterações.') : 'Concluído.'),
+      err => aiJobFail(jobId, err)
+    );
+  }
+  _ajRender();
+}
+
+// Wrapper que rastreia + faz polling
+function pollAiJobTracked(jobId, label, out, onDone, onFail) {
+  aiJobTrack(jobId, label);
+  pollAiJob(jobId, out,
+    r => { aiJobDone(jobId, ''); onDone(r); },
+    e => { aiJobFail(jobId, e); onFail(e); }
+  );
 }
 
 /* ── AI Engine ── */
@@ -2568,7 +2681,7 @@ async function aiFix(gi, btn) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
-    pollAiJob(body.job, out, done, fail);
+    pollAiJobTracked(body.job, `Sugestão: ${f.repo} / ${f.rule||f.fid}`, out, done, fail);
   } catch (e) { fail('Falha de rede ao chamar a IA.'); }
 }
 
@@ -2609,7 +2722,7 @@ async function aiAutofix(gi, btn) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
-    pollAiJob(body.job, out, done, fail);
+    pollAiJobTracked(body.job, `Autofix: ${f.repo} / ${f.rule||f.fid}`, out, done, fail);
   } catch (e) { fail('Falha de rede ao chamar a IA.'); }
 }
 
@@ -2645,7 +2758,7 @@ async function aiVerify(gi, btn) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
-    pollAiJob(body.job, out, done, fail);
+    pollAiJobTracked(body.job, `Verificação: ${f.repo} / ${f.rule||f.fid}`, out, done, fail);
   } catch (e) { fail('Falha de rede.'); }
 }
 
@@ -2662,7 +2775,7 @@ async function aiDiagnose(repo, runId, btn) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
-    pollAiJob(body.job, out, done, fail);
+    pollAiJobTracked(body.job, `Diagnóstico: ${repo} / run-${runId}`, out, done, fail);
   } catch (e) { fail('Falha de rede ao chamar a IA.'); }
 }
 
@@ -3137,6 +3250,7 @@ async function doTOTP() {
       cancelTOTP();
       loadDashboard().then(updateDashAge);
       dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
+      aiJobsResumeAll();
     } else {
       err.textContent = body.detail || 'Código inválido';
     }
