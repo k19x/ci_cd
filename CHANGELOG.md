@@ -3,6 +3,12 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.2] - 2026-08-30
+
+### Fixed
+- Step "Enviar para o dashboard" no workflow não bloqueia mais o Policy Gate quando o upload falha (adicionado `continue-on-error: true`)
+- `upload.py` agora imprime o código HTTP e body da resposta em caso de erro 4xx/5xx, facilitando diagnóstico
+
 ## [0.8.1] - 2026-08-29
 
 ### Added

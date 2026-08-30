@@ -44,6 +44,13 @@ def main() -> int:
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             body = json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        print(f"ERRO HTTP {exc.code} ao enviar para o dashboard: {exc.reason}", file=sys.stderr)
+        try:
+            print(f"Body: {exc.read().decode()}", file=sys.stderr)
+        except Exception:
+            pass
+        return 1
     except urllib.error.URLError as exc:
         print(f"ERRO ao enviar para o dashboard: {exc}", file=sys.stderr)
         return 1
