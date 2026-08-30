@@ -3,6 +3,18 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.7] - 2026-08-30
+
+### Added
+- **Painel de detalhes do finding (aba Results)**: chevron ▶ (ou clique no nome da regra) expande painel completo com:
+  - **Descrição** completa da engine
+  - **Localização** com link direto para o arquivo e linha exata no GitHub (`blob/main/...#L<linha>`), repo, regra, engine e datas first/last seen
+  - **Remediação sugerida** gerada por padrão da regra (SQLi, XSS, secrets, crypto fraca, path traversal, SSRF, deserialização, TLS, CVE/GHSA de dependência, etc.)
+  - **Definition of Done** em checklist: correção mergeada, re-scan limpo, sem regressão — com itens extras para secrets (rotação obrigatória) e dependências (bump de versão)
+  - **Referências**: NVD para CVEs, GitHub Advisory para GHSA, Semgrep Registry, Aqua Vuln DB e link do código
+- Coluna Location da aba Results agora é link clicável para o GitHub na linha exata
+- Arquivos na expansão da aba Findings também viraram links
+
 ## [0.8.6] - 2026-08-30
 
 ### Added

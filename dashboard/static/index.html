@@ -684,6 +684,49 @@ pre.yaml {
 .detail-btn:hover { background: var(--accent-dim); box-shadow: 0 0 8px var(--accent-glow); }
 .detail-btn.loading { opacity: .5; cursor: default; }
 
+/* ── Finding detail panel ── */
+.chev-btn {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 10px; padding: 2px 6px; transition: color .12s, transform .15s;
+  display: inline-block;
+}
+.chev-btn:hover { color: var(--accent); }
+.chev-btn.open { transform: rotate(90deg); color: var(--accent); }
+.find-detail td { padding: 0 !important; }
+.find-detail-wrap {
+  padding: 16px 20px 18px 44px;
+  background: rgba(0,0,0,.22);
+  border-bottom: 1px solid var(--bd);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px 28px;
+}
+.fd-section { min-width: 0; }
+.fd-section.full { grid-column: 1 / -1; }
+.fd-label {
+  font-size: 9.5px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .09em; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 5px;
+}
+.fd-text { font-size: 12.5px; color: var(--text2); line-height: 1.6; }
+.fd-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.fd-list li { font-size: 12px; color: var(--text2); display: flex; gap: 7px; align-items: baseline; line-height: 1.5; }
+.fd-list li::before { content: '▸'; color: var(--accent); font-size: 10px; flex-shrink: 0; }
+.fd-list.dod li::before { content: '☐'; color: var(--ok); font-size: 12px; }
+.fd-file-link {
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  color: var(--accent); text-decoration: none; word-break: break-all;
+  border-bottom: 1px dashed var(--bd2);
+}
+.fd-file-link:hover { border-bottom-style: solid; }
+.fd-refs { display: flex; flex-wrap: wrap; gap: 8px; }
+.fd-ref {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; color: var(--accent);
+  padding: 3px 10px; border: 1px solid var(--bd2); border-radius: 99px;
+  text-decoration: none; transition: background .12s;
+}
+.fd-ref:hover { background: var(--accent-dim); }
+@media (max-width: 900px) { .find-detail-wrap { grid-template-columns: 1fr; } }
+
 /* ── Trend select ── */
 .card-head select {
   font-size: 12px; padding: 3px 8px; border-radius: var(--radius);
@@ -963,7 +1006,7 @@ pre.yaml {
         <div class="card-body tbl-wrap">
           <table>
             <thead><tr>
-              <th>Vulnerability</th><th>Severity</th><th>Engine</th>
+              <th style="width:34px"></th><th>Vulnerability</th><th>Severity</th><th>Engine</th>
               <th>Location</th><th>State</th>
             </tr></thead>
             <tbody id="findRows"></tbody>
@@ -1471,17 +1514,20 @@ function renderFindPage() {
 
   const tbody = $('findRows');
   if (!total) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><i data-lucide="circle-check-big"></i><p>No results for the selected filters</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i data-lucide="circle-check-big"></i><p>No results for the selected filters</p></div></td></tr>`;
     $('findPager').hidden = true;
     return;
   }
 
-  tbody.innerHTML = slice.map(f => `
-    <tr>
-      <td class="primary msg-cell" title="${esc(f.message)}">${esc(f.rule)}</td>
+  tbody.innerHTML = slice.map((f, i) => {
+    const gi = start + i;
+    return `
+    <tr id="find-row-${gi}">
+      <td style="text-align:center"><button class="chev-btn" onclick="toggleFindDetail(${gi}, this)" title="Ver detalhes">▶</button></td>
+      <td class="primary msg-cell" title="${esc(f.message)}" style="cursor:pointer" onclick="toggleFindDetail(${gi}, this.parentElement.querySelector('.chev-btn'))">${esc(f.rule)}</td>
       <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span></td>
       <td style="color:var(--muted);font-size:12px">${esc(f.tool)}</td>
-      <td class="mono file-cell" title="${esc(f.file)}">${esc(f.file)}${f.line?':'+f.line:''}</td>
+      <td class="mono file-cell" title="${esc(f.file)}"><a class="fd-file-link" href="${fileLink(f)}" target="_blank" rel="noopener">${esc(f.file)}${f.line?':'+f.line:''}</a></td>
       <td>
         <select class="triage" onchange="setTriage('${esc(f.repo)}','${f.fid}',this.value)">
           <option value="open"           ${f.status==='open'           ?'selected':''}>To Review</option>
@@ -1490,7 +1536,8 @@ function renderFindPage() {
           <option value="fixed"          ${f.status==='fixed'          ?'selected':''}>Fixed</option>
         </select>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
 
   const pager = $('findPager');
@@ -1505,6 +1552,116 @@ function renderFindPage() {
       <span class="pager-info">Pág. ${_findPage+1} / ${pages}</span>
       <button onclick="_findPage++;renderFindPage()" ${_findPage>=pages-1?'disabled':''}>Próxima →</button>
     </div>`;
+}
+
+/* ── Finding detail: link, remediação e DoD ── */
+function fileLink(f) {
+  const base = `https://github.com/${f.repo}/blob/main/${f.file}`;
+  return f.line ? `${base}#L${f.line}` : base;
+}
+
+function buildRemediation(f) {
+  const rule = (f.rule || '').toLowerCase();
+  const tool = (f.tool || '').toLowerCase();
+  const tips = [], refs = [], dod = [];
+
+  // referências por tipo de regra
+  const cve  = (f.rule || '').match(/CVE-\d{4}-\d+/i);
+  const ghsa = (f.rule || '').match(/GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}/i);
+  if (cve)  refs.push({label: cve[0].toUpperCase(), url: `https://nvd.nist.gov/vuln/detail/${cve[0].toUpperCase()}`});
+  if (ghsa) refs.push({label: 'GitHub Advisory', url: `https://github.com/advisories/${ghsa[0].toUpperCase()}`});
+  if (tool.includes('semgrep') && f.rule && !cve)
+    refs.push({label: 'Semgrep Registry', url: `https://semgrep.dev/r?q=${encodeURIComponent(f.rule)}`});
+  if (tool.includes('trivy') && /^(avd|ds|ksv)-/i.test(f.rule || ''))
+    refs.push({label: 'Aqua Vuln DB', url: `https://avd.aquasec.com/search?q=${encodeURIComponent(f.rule)}`});
+  refs.push({label: 'Código no GitHub ↗', url: fileLink(f)});
+
+  // dicas por padrão da regra
+  const K = [
+    [/sql/,                      'Use queries parametrizadas / prepared statements — nunca concatene input do usuário no SQL.'],
+    [/xss|innerhtml|dangerously/,'Escape/sanitize toda saída renderizada; considere Content-Security-Policy.'],
+    [/\beval\b|exec|command|subprocess|os-system/, 'Evite eval/exec com dados externos; valide com allowlist ou use APIs seguras.'],
+    [/random|prng/,              'Troque por gerador criptográfico: `secrets` (Python) / `crypto.randomBytes` (Node).'],
+    [/hardcod|secret|password|api.?key|token/, 'Remova o segredo do código: use variável de ambiente ou vault. Rotacione a credencial exposta.'],
+    [/path.?travers|\.\.\//,     'Normalize o path (`os.path.realpath`) e valide que fica dentro do diretório permitido.'],
+    [/ssrf/,                     'Valide URLs de destino contra allowlist; bloqueie IPs internos/metadata endpoints.'],
+    [/csrf/,                     'Adicione token anti-CSRF nas operações de escrita e valide no servidor.'],
+    [/\bmd5\b|\bsha1\b|\bdes\b|weak.?(hash|crypto|cipher)/, 'Migre para algoritmos modernos: SHA-256+ para hash, AES-GCM para cifra, PBKDF2/bcrypt para senhas.'],
+    [/tls|ssl|verify|certificate/, 'Habilite verificação de certificado TLS; nunca use `verify=False` em produção.'],
+    [/deserial|pickle|yaml.?load|unmarshal/, 'Não desserialize dados não confiáveis; use `yaml.safe_load` / formatos como JSON.'],
+    [/cors/,                     'Restrinja `Access-Control-Allow-Origin` a origens conhecidas — nunca `*` com credenciais.'],
+    [/privileg|run.?as.?root|allow.?privilege/, 'Aplique menor privilégio: rode como usuário não-root, remova capabilities desnecessárias.'],
+    [/debug/,                    'Desabilite modo debug em produção — ele expõe stacktraces e consoles interativos.'],
+    [/jwt|jws/,                  'Valide algoritmo e assinatura do JWT; rejeite `alg: none` e use segredos fortes.'],
+  ];
+  for (const [re, tip] of K) if (re.test(rule)) { tips.push(tip); break; }
+
+  // dicas por engine
+  if (tool.includes('trivy') && (cve || ghsa)) {
+    tips.push('Atualize a dependência vulnerável para a versão com o fix (veja o advisory) e rode o lockfile update.');
+    dod.push('Dependência atualizada para versão sem a vulnerabilidade');
+  } else if (tool.includes('gitleaks')) {
+    tips.push('O segredo já está exposto no histórico git — rotacionar é obrigatório, remover do código não basta.');
+    dod.push('Credencial rotacionada/revogada no provedor');
+    dod.push('Segredo removido do código e do histórico (git filter-repo) ou repositório tratado como comprometido');
+  } else if (!tips.length) {
+    tips.push('Revise o trecho apontado e aplique a correção sugerida na documentação da regra (links abaixo).');
+  }
+
+  // DoD comum
+  dod.push('Correção aplicada e mergeada na branch principal via PR revisado');
+  dod.push('Novo scan do SecPipe executado sem este finding (auto-marcado como Fixed)');
+  dod.push(`Sem regressão: nenhum finding novo de severidade ≥ ${esc(f.severity)} introduzido pela correção`);
+
+  return {tips, refs, dod};
+}
+
+function toggleFindDetail(gi, btn) {
+  const detailId = `find-detail-${gi}`;
+  const existing = document.getElementById(detailId);
+  if (existing) { existing.remove(); if (btn) btn.classList.remove('open'); return; }
+
+  const f = _findings[gi];
+  if (!f) return;
+  const {tips, refs, dod} = buildRemediation(f);
+
+  const row = document.createElement('tr');
+  row.id = detailId;
+  row.className = 'find-detail';
+  row.innerHTML = `<td colspan="6"><div class="find-detail-wrap">
+    <div class="fd-section full">
+      <div class="fd-label">Descrição</div>
+      <div class="fd-text">${esc(f.message) || '<em>Sem descrição fornecida pela engine.</em>'}</div>
+    </div>
+    <div class="fd-section">
+      <div class="fd-label">Localização</div>
+      <div class="fd-text">
+        <a class="fd-file-link" href="${fileLink(f)}" target="_blank" rel="noopener">${esc(f.file)}${f.line ? ':' + f.line : ''}</a>
+        <div style="font-size:11px;color:var(--muted);margin-top:5px">
+          ${f.line ? `Linha ${f.line} · ` : ''}${esc(f.repo)} · regra <span class="mono">${esc(f.rule)}</span> · ${esc(f.tool)}
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">
+          Visto pela 1ª vez: ${(f.first_seen||'').slice(0,16).replace('T',' ') || '—'} · Último scan: ${(f.last_seen||'').slice(0,16).replace('T',' ') || '—'}
+        </div>
+      </div>
+    </div>
+    <div class="fd-section">
+      <div class="fd-label">Remediação sugerida</div>
+      <ul class="fd-list">${tips.map(t => `<li>${t}</li>`).join('')}</ul>
+    </div>
+    <div class="fd-section">
+      <div class="fd-label">Definition of Done</div>
+      <ul class="fd-list dod">${dod.map(d => `<li>${d}</li>`).join('')}</ul>
+    </div>
+    <div class="fd-section">
+      <div class="fd-label">Referências</div>
+      <div class="fd-refs">${refs.map(r => `<a class="fd-ref" href="${r.url}" target="_blank" rel="noopener">${esc(r.label)}</a>`).join('')}</div>
+    </div>
+  </div></td>`;
+
+  const findRow = document.getElementById(`find-row-${gi}`);
+  if (findRow) findRow.after(row);
+  if (btn) btn.classList.add('open');
 }
 
 async function setTriage(repo, fid, status) {
@@ -1736,7 +1893,7 @@ async function showScanFindings(idx, repo, btn) {
   const rows = shown.map(f => `<div class="job-row">
       <span class="sev ${sevClass(f.severity)}">${esc(f.severity)}</span>
       <span class="mono" style="color:var(--text)">${esc(f.rule || f.fid || '')}</span>
-      <span class="mono" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.file)}${f.line ? ':'+f.line : ''}</span>
+      <a class="fd-file-link" href="${fileLink(f)}" target="_blank" rel="noopener" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.file)}${f.line ? ':'+f.line : ''}</a>
       <span style="font-size:11px;color:var(--muted)">${esc(f.tool)}</span>
       <span class="msg-cell" style="font-size:11px;color:var(--text2)">${esc(f.message)}</span>
     </div>`).join('');
