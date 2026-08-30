@@ -729,6 +729,17 @@ pre.yaml {
 .detail-btn:hover { background: var(--accent-dim); box-shadow: 0 0 8px var(--accent-glow); }
 .detail-btn.loading { opacity: .5; cursor: default; }
 
+/* ── Lucide sizing nos controles ── */
+.detail-btn, .why-btn, .btn-ghost { display: inline-flex; align-items: center; gap: 5px; }
+.detail-btn i[data-lucide], .detail-btn svg.lucide,
+.why-btn i[data-lucide], .why-btn svg.lucide,
+.btn-ghost i[data-lucide], .btn-ghost svg.lucide { width: 12px; height: 12px; flex-shrink: 0; }
+.card-tools button { display: inline-flex; align-items: center; justify-content: center; }
+.card-tools i[data-lucide], .card-tools svg.lucide { width: 11px; height: 11px; }
+.chev-btn i[data-lucide], .chev-btn svg.lucide { width: 13px; height: 13px; }
+.modal-title i[data-lucide], .modal-title svg.lucide { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
+.card-title i[data-lucide], .card-title svg.lucide { width: 14px; height: 14px; vertical-align: -2px; margin-right: 5px; color: var(--accent); }
+
 /* ── Finding detail panel ── */
 .chev-btn {
   background: none; border: none; color: var(--muted); cursor: pointer;
@@ -1013,7 +1024,7 @@ pre.yaml {
     <!-- TOTP step (hidden until server asks for it) -->
     <div id="totpStep" style="display:none">
       <div style="text-align:center;margin-bottom:12px">
-        <div style="font-size:28px;margin-bottom:4px">🔐</div>
+        <div style="margin-bottom:6px"><i data-lucide="shield-check" style="width:32px;height:32px;color:var(--accent)"></i></div>
         <div style="font-weight:600;color:var(--text)">Verificação em dois fatores</div>
         <div style="font-size:12px;color:var(--muted);margin-top:4px">Insira o código de 6 dígitos do seu app autenticador</div>
       </div>
@@ -1070,7 +1081,7 @@ pre.yaml {
           <span style="font-size:11px;color:var(--muted)">Adicionar:</span>
           <span id="dashAddList"></span>
         </div>
-        <button class="refresh-btn" id="dashEditBtn" onclick="toggleDashEdit()">⚙ Personalizar</button>
+        <button class="refresh-btn" id="dashEditBtn" onclick="toggleDashEdit()"><i data-lucide="sliders-horizontal" style="width:13px;height:13px"></i> Personalizar</button>
       </div>
 
       <div class="dash-grid" id="dashCards">
@@ -1079,9 +1090,9 @@ pre.yaml {
             <div class="card-title">Tendência de findings</div>
             <select id="trendRepo" onchange="loadTrend()"></select>
             <span class="card-tools">
-              <button onclick="moveCard('trend',-1)" title="Mover para trás">◀</button>
-              <button onclick="moveCard('trend',1)" title="Mover para frente">▶</button>
-              <button class="ct-x" onclick="removeCard('trend')" title="Remover card">✕</button>
+              <button onclick="moveCard('trend',-1)" title="Mover para trás"><i data-lucide="chevron-left"></i></button>
+              <button onclick="moveCard('trend',1)" title="Mover para frente"><i data-lucide="chevron-right"></i></button>
+              <button class="ct-x" onclick="removeCard('trend')" title="Remover card"><i data-lucide="x"></i></button>
             </span>
           </div>
           <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
@@ -1091,9 +1102,9 @@ pre.yaml {
           <div class="card-head">
             <div class="card-title">Último scan por projeto</div>
             <span class="card-tools">
-              <button onclick="moveCard('lastScans',-1)" title="Mover para trás">◀</button>
-              <button onclick="moveCard('lastScans',1)" title="Mover para frente">▶</button>
-              <button class="ct-x" onclick="removeCard('lastScans')" title="Remover card">✕</button>
+              <button onclick="moveCard('lastScans',-1)" title="Mover para trás"><i data-lucide="chevron-left"></i></button>
+              <button onclick="moveCard('lastScans',1)" title="Mover para frente"><i data-lucide="chevron-right"></i></button>
+              <button class="ct-x" onclick="removeCard('lastScans')" title="Remover card"><i data-lucide="x"></i></button>
             </span>
           </div>
           <div class="card-body tbl-wrap tbl-scroll">
@@ -1112,9 +1123,9 @@ pre.yaml {
         <div class="card span-2" data-card="riskiest">
           <div class="card-head"><div class="card-title">Projetos mais arriscados</div>
             <span class="card-tools">
-              <button onclick="moveCard('riskiest',-1)" title="Mover para trás">◀</button>
-              <button onclick="moveCard('riskiest',1)" title="Mover para frente">▶</button>
-              <button class="ct-x" onclick="removeCard('riskiest')" title="Remover card">✕</button>
+              <button onclick="moveCard('riskiest',-1)" title="Mover para trás"><i data-lucide="chevron-left"></i></button>
+              <button onclick="moveCard('riskiest',1)" title="Mover para frente"><i data-lucide="chevron-right"></i></button>
+              <button class="ct-x" onclick="removeCard('riskiest')" title="Remover card"><i data-lucide="x"></i></button>
             </span>
           </div>
           <div class="card-body tbl-wrap">
@@ -1126,9 +1137,9 @@ pre.yaml {
         <div class="card span-2" data-card="safest">
           <div class="card-head"><div class="card-title">Projetos mais seguros</div>
             <span class="card-tools">
-              <button onclick="moveCard('safest',-1)" title="Mover para trás">◀</button>
-              <button onclick="moveCard('safest',1)" title="Mover para frente">▶</button>
-              <button class="ct-x" onclick="removeCard('safest')" title="Remover card">✕</button>
+              <button onclick="moveCard('safest',-1)" title="Mover para trás"><i data-lucide="chevron-left"></i></button>
+              <button onclick="moveCard('safest',1)" title="Mover para frente"><i data-lucide="chevron-right"></i></button>
+              <button class="ct-x" onclick="removeCard('safest')" title="Remover card"><i data-lucide="x"></i></button>
             </span>
           </div>
           <div class="card-body tbl-wrap">
@@ -1140,9 +1151,9 @@ pre.yaml {
         <div class="card span-2" data-card="engines">
           <div class="card-head"><div class="card-title">Distribuição por engine</div>
             <span class="card-tools">
-              <button onclick="moveCard('engines',-1)" title="Mover para trás">◀</button>
-              <button onclick="moveCard('engines',1)" title="Mover para frente">▶</button>
-              <button class="ct-x" onclick="removeCard('engines')" title="Remover card">✕</button>
+              <button onclick="moveCard('engines',-1)" title="Mover para trás"><i data-lucide="chevron-left"></i></button>
+              <button onclick="moveCard('engines',1)" title="Mover para frente"><i data-lucide="chevron-right"></i></button>
+              <button class="ct-x" onclick="removeCard('engines')" title="Remover card"><i data-lucide="x"></i></button>
             </span>
           </div>
           <div style="padding:16px;display:flex;flex-direction:column;gap:8px" id="engineDist"></div>
@@ -1168,7 +1179,7 @@ pre.yaml {
             <option value="startup_failure">startup_failure</option>
             <option value="cancelled">cancelled</option>
           </select>
-          <button class="btn-ghost" onclick="exportJobsCSV()" title="Exportar CSV">⬇ CSV</button>
+          <button class="btn-ghost" onclick="exportJobsCSV()" title="Exportar CSV"><i data-lucide="download"></i> CSV</button>
         </div>
         <div class="card-body tbl-wrap">
           <table>
@@ -1211,7 +1222,7 @@ pre.yaml {
           <select id="fTool"><option value="">All engines</option>
             <option>Semgrep</option><option>Trivy</option><option>gitleaks</option>
           </select>
-          <button class="btn-ghost" onclick="exportFindingsCSV()" title="Exportar CSV">⬇ CSV</button>
+          <button class="btn-ghost" onclick="exportFindingsCSV()" title="Exportar CSV"><i data-lucide="download"></i> CSV</button>
           <span id="bulkBar" hidden>
             <select id="bulkStatus">
               <option value="false_positive">Not Exploitable</option>
@@ -1250,7 +1261,7 @@ pre.yaml {
         <div class="filter-bar">
           <input id="vSearch" placeholder="Buscar projeto, branch, commit..." oninput="renderVulns()">
           <select id="vRepo"><option value="">All projects</option></select>
-          <button class="btn-ghost" onclick="exportVulnsCSV()" title="Exportar CSV">⬇ CSV</button>
+          <button class="btn-ghost" onclick="exportVulnsCSV()" title="Exportar CSV"><i data-lucide="download"></i> CSV</button>
         </div>
         <div class="card-body tbl-wrap">
           <table>
@@ -1296,7 +1307,7 @@ pre.yaml {
               <button class="vis-tab"        data-vis="public" onclick="setVisFilter('public',this)">Public</button>
               <button class="vis-tab"        data-vis="private" onclick="setVisFilter('private',this)">Private</button>
             </div>
-            <button class="btn-ghost" onclick="exportReposCSV()" title="Exportar CSV">⬇ CSV</button>
+            <button class="btn-ghost" onclick="exportReposCSV()" title="Exportar CSV"><i data-lucide="download"></i> CSV</button>
             <div class="card-sub" id="repoCount"></div>
           </div>
         </div>
@@ -1414,7 +1425,7 @@ pre.yaml {
     <!-- ── 2FA / TOTP ── -->
     <div class="card" style="margin-top:16px">
       <div class="card-head">
-        <div class="card-title">🔐 Two-Factor Authentication (2FA)</div>
+        <div class="card-title"><i data-lucide="shield-check"></i>Two-Factor Authentication (2FA)</div>
         <div class="card-sub">TOTP — Google Authenticator, Authy, 1Password</div>
       </div>
       <div style="padding:18px">
@@ -1466,7 +1477,7 @@ pre.yaml {
     <div id="settingsPane-ai" style="display:none">
       <div class="card" style="max-width:640px">
         <div class="card-head">
-          <div class="card-title">🤖 AI Engine</div>
+          <div class="card-title"><i data-lucide="bot"></i>AI Engine</div>
           <div class="card-sub" id="aiCfgStatus">—</div>
         </div>
         <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
@@ -1870,7 +1881,7 @@ async function showRunJobs(repo, runId, btn) {
   const repoKey = repo.replace(/'/g, "\\'");
   const aiSection = `
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">
-      <button class="detail-btn" onclick="aiDiagnose('${repoKey}', ${runId}, this)" data-min-role="analyst">✨ Diagnosticar com IA</button>
+      <button class="detail-btn" onclick="aiDiagnose('${repoKey}', ${runId}, this)" data-min-role="analyst"><i data-lucide="sparkles"></i> Diagnosticar com IA</button>
       <div id="aiDiag-${runId}" style="margin-top:8px"></div>
     </div>`;
 
@@ -1881,7 +1892,7 @@ async function showRunJobs(repo, runId, btn) {
 
   const runRow = document.getElementById(`run-row-${runId}`);
   if (runRow) runRow.after(row);
-  btn.textContent = '▲ Hide';
+  btnLabel(btn, 'chevron-up', 'Hide');
 }
 
 /* ── Findings ── */
@@ -1941,7 +1952,7 @@ function renderFindPage() {
     return `
     <tr id="find-row-${gi}">
       <td style="text-align:center"><input type="checkbox" class="selbox" data-key="${esc(key)}" ${_selKeys.has(key)?'checked':''} onchange="toggleSel(this)"></td>
-      <td style="text-align:center"><button class="chev-btn" onclick="toggleFindDetail(${gi}, this)" title="Ver detalhes">▶</button></td>
+      <td style="text-align:center"><button class="chev-btn" onclick="toggleFindDetail(${gi}, this)" title="Ver detalhes"><i data-lucide="chevron-right"></i></button></td>
       <td class="primary msg-cell" title="${esc(f.message)}" style="cursor:pointer" onclick="toggleFindDetail(${gi}, this.parentElement.querySelector('.chev-btn'))">${esc(f.rule)}</td>
       <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span></td>
       <td style="color:var(--muted);font-size:12px">${esc(f.tool)}</td>
@@ -2078,9 +2089,9 @@ function toggleFindDetail(gi, btn) {
     <div class="fd-section full">
       <div class="fd-label">✨ AI Engine</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="detail-btn" onclick="aiFix(${gi}, this)" data-min-role="analyst">✨ Sugerir correção com IA</button>
-        <button class="detail-btn" onclick="aiAutofix(${gi}, this)" data-min-role="analyst" style="border-color:rgba(34,212,114,.4);color:var(--ok)">🔧 Aplicar correção (abre PR)</button>
-        <button class="detail-btn" onclick="aiVerify(${gi}, this)" data-min-role="analyst" style="border-color:rgba(240,185,11,.4);color:var(--med)">🔁 Verificar (novo scan)</button>
+        <button class="detail-btn" onclick="aiFix(${gi}, this)" data-min-role="analyst"><i data-lucide="sparkles"></i> Sugerir correção com IA</button>
+        <button class="detail-btn" onclick="aiAutofix(${gi}, this)" data-min-role="analyst" style="border-color:rgba(34,212,114,.4);color:var(--ok)"><i data-lucide="wrench"></i> Aplicar correção (abre PR)</button>
+        <button class="detail-btn" onclick="aiVerify(${gi}, this)" data-min-role="analyst" style="border-color:rgba(240,185,11,.4);color:var(--med)"><i data-lucide="rotate-cw"></i> Verificar (novo scan)</button>
       </div>
       <div id="aiFixOut-${gi}" style="margin-top:8px"></div>
     </div>
@@ -2089,6 +2100,7 @@ function toggleFindDetail(gi, btn) {
   const findRow = document.getElementById(`find-row-${gi}`);
   if (findRow) findRow.after(row);
   if (btn) btn.classList.add('open');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 /* ── Settings: sub-abas ── */
@@ -2173,6 +2185,7 @@ function uiModal({title, message, confirmLabel, danger, alertOnly}) {
     });
     document.addEventListener('keydown', onKey);
     document.body.appendChild(back);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
     back.querySelector('[data-act="yes"]').focus();
   });
 }
@@ -2204,6 +2217,11 @@ function pollAiJob(jobId, out, onDone, onFail) {
 }
 
 /* ── AI Engine ── */
+function btnLabel(btn, icon, label) {
+  btn.innerHTML = `<i data-lucide="${icon}"></i>${label ? ' ' + label : ''}`;
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
 function renderMd(t) {
   return (t || '').split('```').map((p, i) => {
     if (i % 2 === 1) {
@@ -2221,10 +2239,10 @@ async function aiFix(gi, btn) {
   const f = _findingsView[gi] || _findings[gi];
   if (!f) return;
   const out = $(`aiFixOut-${gi}`);
-  btn.disabled = true; btn.textContent = '✨ Analisando…';
+  btn.disabled = true; btnLabel(btn, 'loader-circle', 'Analisando…');
   out.innerHTML = '<div class="fd-text ai-progress" style="color:var(--muted)">⏳ Claude está analisando o código…</div>';
-  const done = r => { out.innerHTML = renderMd(r.analysis); btn.textContent = '✨ Reanalisar'; btn.disabled = false; };
-  const fail = m => { out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(m)}</div>`; btn.textContent = '✨ Sugerir correção com IA'; btn.disabled = false; };
+  const done = r => { out.innerHTML = renderMd(r.analysis); btnLabel(btn, 'sparkles', 'Reanalisar'); btn.disabled = false; };
+  const fail = m => { out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(m)}</div>`; btnLabel(btn, 'sparkles', 'Sugerir correção com IA'); btn.disabled = false; };
   try {
     const res = await fetch('/api/ai/fix', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -2240,15 +2258,15 @@ async function aiFix(gi, btn) {
 async function aiAutofix(gi, btn) {
   const f = _findingsView[gi] || _findings[gi];
   if (!f) return;
-  const ok = await uiConfirm('🔧 Aplicar correção automática?',
+  const ok = await uiConfirm('<i data-lucide="wrench"></i> Aplicar correção automática?',
     `<strong>Repo:</strong> ${esc(f.repo)}\n<strong>Arquivo:</strong> <code>${esc(f.file)}:${f.line||''}</code>\n\nA IA vai editar o código num branch novo e abrir um <strong>Pull Request</strong> — nada vai direto para a main. Você revisa antes do merge.`,
     'Aplicar e abrir PR');
   if (!ok) return;
   const out = $(`aiFixOut-${gi}`);
-  btn.disabled = true; btn.textContent = '🔧 Aplicando…';
+  btn.disabled = true; btnLabel(btn, 'loader-circle', 'Aplicando…');
   out.innerHTML = '<div class="fd-text ai-progress" style="color:var(--muted)">⏳ Clonando o repo, corrigindo o código e abrindo o PR… (1–3 min)</div>';
   const done = body => {
-    btn.disabled = false; btn.textContent = '🔧 Aplicar correção (abre PR)';
+    btn.disabled = false; btnLabel(btn, 'wrench', 'Aplicar correção (abre PR)');
     if (body.applied) {
       out.innerHTML = `
         <div class="fd-text" style="color:var(--ok)">✅ Correção aplicada no branch <code>${esc(body.branch)}</code></div>
@@ -2262,7 +2280,7 @@ async function aiAutofix(gi, btn) {
     }
   };
   const fail = m => {
-    btn.disabled = false; btn.textContent = '🔧 Aplicar correção (abre PR)';
+    btn.disabled = false; btnLabel(btn, 'wrench', 'Aplicar correção (abre PR)');
     out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(m)}</div>`;
   };
   try {
@@ -2280,15 +2298,15 @@ async function aiAutofix(gi, btn) {
 async function aiVerify(gi, btn) {
   const f = _findingsView[gi] || _findings[gi];
   if (!f) return;
-  const ok = await uiConfirm('🔁 Verificar correção?',
+  const ok = await uiConfirm('<i data-lucide="rotate-cw"></i> Verificar correção?',
     `Um novo scan será disparado em <strong>${esc(f.repo)}</strong>. Quando o resultado chegar (2–10 min), o SecPipe confere se o finding <code>${esc(f.rule)}</code> sumiu — se sim, ele é marcado como <strong>Fixed</strong> automaticamente.`,
     'Disparar scan e verificar');
   if (!ok) return;
   const out = $(`aiFixOut-${gi}`);
-  btn.disabled = true; btn.textContent = '🔁 Verificando…';
+  btn.disabled = true; btnLabel(btn, 'loader-circle', 'Verificando…');
   out.innerHTML = '<div class="fd-text ai-progress" style="color:var(--muted)">⏳ Scan disparado — aguardando o pipeline rodar e o resultado ser ingerido…</div>';
   const done = async r => {
-    btn.disabled = false; btn.textContent = '🔁 Verificar (novo scan)';
+    btn.disabled = false; btnLabel(btn, 'rotate-cw', 'Verificar (novo scan)');
     if (r.verified && r.fixed) {
       out.innerHTML = `<div class="fd-text" style="color:var(--ok)">✅ Correção efetiva! O finding não apareceu no novo scan (${esc((r.scan_at||'').slice(0,16).replace('T',' '))}) e foi marcado como <strong>Fixed</strong>.</div>`;
       await Promise.all([loadDashboard(), loadFindings(false)]);
@@ -2299,7 +2317,7 @@ async function aiVerify(gi, btn) {
     }
   };
   const fail = m => {
-    btn.disabled = false; btn.textContent = '🔁 Verificar (novo scan)';
+    btn.disabled = false; btnLabel(btn, 'rotate-cw', 'Verificar (novo scan)');
     out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(m)}</div>`;
   };
   try {
@@ -2315,10 +2333,10 @@ async function aiVerify(gi, btn) {
 
 async function aiDiagnose(repo, runId, btn) {
   const out = $(`aiDiag-${runId}`);
-  btn.disabled = true; btn.textContent = '✨ Diagnosticando…';
+  btn.disabled = true; btnLabel(btn, 'loader-circle', 'Diagnosticando…');
   out.innerHTML = '<div class="fd-text ai-progress" style="color:var(--muted)">⏳ Claude está lendo os logs do run…</div>';
-  const done = r => { out.innerHTML = renderMd(r.analysis); btn.textContent = '✨ Rediagnosticar'; btn.disabled = false; };
-  const fail = m => { out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(m)}</div>`; btn.textContent = '✨ Diagnosticar com IA'; btn.disabled = false; };
+  const done = r => { out.innerHTML = renderMd(r.analysis); btnLabel(btn, 'sparkles', 'Rediagnosticar'); btn.disabled = false; };
+  const fail = m => { out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(m)}</div>`; btnLabel(btn, 'sparkles', 'Diagnosticar com IA'); btn.disabled = false; };
   try {
     const res = await fetch('/api/ai/diagnose', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -2440,7 +2458,7 @@ function renderRepos() {
   });
   tbody.innerHTML = list.map(r => {
     const visBadge = r.visibility
-      ? `<span class="vis-badge ${r.visibility}">${r.visibility === 'private' ? '🔒 Private' : '🌐 Public'}</span>`
+      ? `<span class="vis-badge ${r.visibility}"><i data-lucide="${r.visibility === 'private' ? 'lock' : 'globe'}" style="width:10px;height:10px"></i> ${r.visibility === 'private' ? 'Private' : 'Public'}</span>`
       : `<span class="vis-badge" style="background:var(--bg);color:var(--muted)">unknown</span>`;
     const langChips = r.languages
       ? r.languages.split(',').filter(Boolean).map(l =>
@@ -2539,7 +2557,7 @@ async function addRepo() {
 }
 
 async function delRepo(name) {
-  const ok = await uiConfirm('Remover projeto?',
+  const ok = await uiConfirm('<i data-lucide="trash-2" style="color:var(--crit)"></i> Remover projeto?',
     `<strong>${esc(name)}</strong> será removido do SecPipe junto com o histórico de scans e findings no dashboard.\n(O repositório no GitHub não é afetado.)`,
     'Remover', true);
   if (!ok) return;
@@ -2619,7 +2637,7 @@ function renderVulns() {
       <td style="text-align:center">${chip('m', s.medium||0)}</td>
       <td style="text-align:center">${chip('l', s.low||0)}</td>
       <td style="text-align:center;font-weight:600;color:var(--text2)">${total}</td>
-      <td style="text-align:right">${total > 0 ? `<button class="detail-btn" onclick="showScanFindings(${i}, '${esc(s.repo)}', this)">▼ Detalhes</button>` : ''}</td>
+      <td style="text-align:right">${total > 0 ? `<button class="detail-btn" onclick="showScanFindings(${i}, '${esc(s.repo)}', this)"><i data-lucide="chevron-down"></i> Detalhes</button>` : ''}</td>
     </tr>`;
   }).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
@@ -2635,11 +2653,11 @@ function exportVulnsCSV() {
 async function showScanFindings(idx, repo, btn) {
   const detailId = `vuln-detail-${idx}`;
   const existing = document.getElementById(detailId);
-  if (existing) { existing.remove(); btn.textContent = '▼ Detalhes'; return; }
+  if (existing) { existing.remove(); btnLabel(btn, 'chevron-down', 'Detalhes'); return; }
 
-  btn.textContent = '…'; btn.classList.add('loading'); btn.disabled = true;
+  btnLabel(btn, 'loader-circle', ''); btn.classList.add('loading'); btn.disabled = true;
   const data = await api('/api/findings?' + new URLSearchParams({repo, status:'open'}));
-  btn.textContent = '▼ Detalhes'; btn.classList.remove('loading'); btn.disabled = false;
+  btnLabel(btn, 'chevron-down', 'Detalhes'); btn.classList.remove('loading'); btn.disabled = false;
   if (!data) return;
 
   const shown = data.findings.slice(0, 15);
@@ -2663,7 +2681,7 @@ async function showScanFindings(idx, repo, btn) {
 
   const scanRow = document.getElementById(`vuln-row-${idx}`);
   if (scanRow) scanRow.after(row);
-  btn.textContent = '▲ Fechar';
+  btnLabel(btn, 'chevron-up', 'Fechar');
 }
 
 /* ── Settings / Policy ── */
@@ -2993,7 +3011,10 @@ function toggleDashEdit() {
   const wrap = $('dashCards');
   const on = wrap.classList.toggle('editing');
   $('dashAddBar').hidden = !on;
-  $('dashEditBtn').textContent = on ? '✓ Concluir' : '⚙ Personalizar';
+  $('dashEditBtn').innerHTML = on
+    ? '<i data-lucide="check" style="width:13px;height:13px"></i> Concluir'
+    : '<i data-lucide="sliders-horizontal" style="width:13px;height:13px"></i> Personalizar';
+  if (typeof lucide !== 'undefined') lucide.createIcons();
   wrap.querySelectorAll('[data-card]').forEach(el => el.setAttribute('draggable', on ? 'true' : 'false'));
 }
 
@@ -3009,8 +3030,8 @@ function initDashDnD() {
     const id = el.dataset.card;
     const tools = el.querySelector('.card-tools');
     if (tools) tools.insertAdjacentHTML('afterbegin',
-      `<button onclick="resizeCard('${id}',-1)" title="Diminuir largura">−</button>` +
-      `<button onclick="resizeCard('${id}',1)" title="Aumentar largura">+</button>`);
+      `<button onclick="resizeCard('${id}',-1)" title="Diminuir largura"><i data-lucide="minus"></i></button>` +
+      `<button onclick="resizeCard('${id}',1)" title="Aumentar largura"><i data-lucide="plus"></i></button>`);
     el.insertAdjacentHTML('beforeend',
       `<div class="resize-h" title="Arraste: largura"></div>` +
       `<div class="resize-v" title="Arraste: altura · duplo clique: altura automática"></div>` +

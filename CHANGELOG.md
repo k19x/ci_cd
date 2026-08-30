@@ -3,6 +3,18 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.2] - 2026-08-30
+
+### Changed — Lucide icons em toda a aplicação (sem emojis em controles)
+- Botões de IA: sparkles (sugerir/diagnosticar), wrench (aplicar PR), rotate-cw (verificar), loader-circle nos estados de progresso
+- Dashboard: sliders-horizontal (Personalizar), check (Concluir), chevron-left/right (mover card), minus/plus (largura), x (remover)
+- Tabelas: chevron-right no expand do Results, chevron-down/up no Detalhes do Findings e no Hide do Why?
+- CSV: ícone download nos 4 botões de exportação
+- Badges de visibilidade: lock/globe no lugar de 🔒/🌐
+- Títulos de card: bot (AI Engine), shield-check (2FA e passo TOTP do login)
+- Modais: wrench/rotate-cw/trash-2 nos títulos, com `createIcons()` ao abrir
+- Novo helper `btnLabel(btn, icon, label)` para mutar labels de botão preservando o ícone; `createIcons()` garantido após todos os renders dinâmicos (painel de finding incluído)
+
 ## [0.12.1] - 2026-08-30
 
 ### Added — verificação de correção com re-scan automático
