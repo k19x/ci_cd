@@ -597,7 +597,7 @@ canvas { max-height: 200px; }
 
 /* ── Sidebar user ── */
 .sidebar-user {
-  margin: 10px 10px 6px;
+  margin: auto 10px 6px;   /* auto no topo empurra o card para o rodapé da sidebar */
   padding: 10px 12px;
   background: rgba(0,200,255,.05);
   border: 1px solid rgba(0,200,255,.12);
@@ -815,6 +815,41 @@ pre.yaml {
 }
 .theme-btn:hover { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 .theme-btn svg { width: 15px; height: 15px; }
+.theme-btn svg[hidden] { display: none; }
+
+/* ── Dashboard customizável ── */
+.dash-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; align-items: start; }
+#dashAddBar:not([hidden]) { display: flex; }
+.dash-grid .span-3 { grid-column: span 3; }
+.dash-grid .span-2 { grid-column: span 2; }
+@media (max-width: 1100px) { .dash-grid .span-3, .dash-grid .span-2 { grid-column: span 6; } }
+.card-tools { display: none; align-items: center; gap: 4px; }
+.dash-grid.editing .card-tools { display: inline-flex; }
+.dash-grid.editing .card { border-color: var(--bd2); border-style: dashed; }
+.card-tools button {
+  background: var(--s2); border: 1px solid var(--bd); color: var(--t1);
+  border-radius: 6px; padding: 2px 7px; font-size: 10px; cursor: pointer;
+  transition: all .12s; line-height: 1.4;
+}
+.card-tools button:hover { border-color: var(--accent); color: var(--accent); }
+.card-tools button.ct-x:hover { border-color: var(--crit); color: var(--crit); background: rgba(255,51,85,.08); }
+#dashAddList button {
+  background: var(--accent-dim); border: 1px solid var(--bd2); color: var(--accent);
+  border-radius: 99px; padding: 3px 12px; font-size: 11px; font-weight: 600;
+  cursor: pointer; margin-left: 4px; transition: all .12s;
+}
+#dashAddList button:hover { background: var(--accent-glow); }
+
+/* ── Tema claro: superfícies que estavam escuras ── */
+:root[data-theme="light"] thead th { background: rgba(10,30,60,.045); }
+:root[data-theme="light"] .filter-bar { background: rgba(10,30,60,.03); }
+:root[data-theme="light"] .filter-bar select, :root[data-theme="light"] .filter-bar input,
+:root[data-theme="light"] .form-row input { background: var(--s3); }
+:root[data-theme="light"] .job-detail-wrap,
+:root[data-theme="light"] .find-detail-wrap { background: rgba(10,30,60,.035); }
+:root[data-theme="light"] pre.yaml { background: rgba(10,30,60,.05); }
+:root[data-theme="light"] .vis-tabs { background: rgba(10,30,60,.05); }
+:root[data-theme="light"] .card-tools button { background: var(--s2); }
 </style>
 
 <div class="sidebar">
@@ -934,9 +969,9 @@ pre.yaml {
     <div class="topbar-actions">
       <span id="topbarAge" hidden style="font-size:11px;color:var(--muted)"></span>
       <span class="topbar-badge" id="topbarBadge" hidden></span>
-      <button class="theme-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle theme">
-        <i data-lucide="sun" id="themeIconSun"></i>
-        <i data-lucide="moon" id="themeIconMoon" style="display:none"></i>
+      <button class="theme-btn" id="themeToggle" onclick="toggleTheme()" title="Alternar tema claro/escuro">
+        <svg id="themeIconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <svg id="themeIconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
       </button>
       <button class="refresh-btn" onclick="refreshCurrent()">
         <i data-lucide="refresh-cw" style="width:12px;height:12px"></i>
@@ -958,18 +993,37 @@ pre.yaml {
         <div class="stat-cell fixed" title="Ver findings corrigidos" onclick="goToFindings('','fixed')"><div class="stat-val" id="s-fixed">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--ok)"></span>Corrigidos</div></div>
       </div>
 
-      <div class="grid-2">
-        <div class="card">
+      <!-- customize bar -->
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:12px">
+        <div id="dashAddBar" hidden style="align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--muted)">Adicionar:</span>
+          <span id="dashAddList"></span>
+        </div>
+        <button class="refresh-btn" id="dashEditBtn" onclick="toggleDashEdit()">⚙ Personalizar</button>
+      </div>
+
+      <div class="dash-grid" id="dashCards">
+        <div class="card span-3" data-card="trend">
           <div class="card-head">
             <div class="card-title">Tendência de findings</div>
             <select id="trendRepo" onchange="loadTrend()"></select>
+            <span class="card-tools">
+              <button onclick="moveCard('trend',-1)" title="Mover para trás">◀</button>
+              <button onclick="moveCard('trend',1)" title="Mover para frente">▶</button>
+              <button class="ct-x" onclick="removeCard('trend')" title="Remover card">✕</button>
+            </span>
           </div>
           <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
         </div>
 
-        <div class="card">
+        <div class="card span-3" data-card="lastScans">
           <div class="card-head">
             <div class="card-title">Último scan por projeto</div>
+            <span class="card-tools">
+              <button onclick="moveCard('lastScans',-1)" title="Mover para trás">◀</button>
+              <button onclick="moveCard('lastScans',1)" title="Mover para frente">▶</button>
+              <button class="ct-x" onclick="removeCard('lastScans')" title="Remover card">✕</button>
+            </span>
           </div>
           <div class="card-body tbl-wrap tbl-scroll">
             <table>
@@ -983,26 +1037,43 @@ pre.yaml {
             </table>
           </div>
         </div>
-      </div>
 
-      <!-- Risk cards row -->
-      <div class="grid-3">
-        <div class="card">
-          <div class="card-head"><div class="card-title">Projetos mais arriscados</div></div>
+        <div class="card span-2" data-card="riskiest">
+          <div class="card-head"><div class="card-title">Projetos mais arriscados</div>
+            <span class="card-tools">
+              <button onclick="moveCard('riskiest',-1)" title="Mover para trás">◀</button>
+              <button onclick="moveCard('riskiest',1)" title="Mover para frente">▶</button>
+              <button class="ct-x" onclick="removeCard('riskiest')" title="Remover card">✕</button>
+            </span>
+          </div>
           <div class="card-body tbl-wrap">
             <table><thead><tr><th>Projeto</th><th style="text-align:right">C+H abertos</th></tr></thead>
             <tbody id="riskiestRows"></tbody></table>
           </div>
         </div>
-        <div class="card">
-          <div class="card-head"><div class="card-title">Projetos mais seguros</div></div>
+
+        <div class="card span-2" data-card="safest">
+          <div class="card-head"><div class="card-title">Projetos mais seguros</div>
+            <span class="card-tools">
+              <button onclick="moveCard('safest',-1)" title="Mover para trás">◀</button>
+              <button onclick="moveCard('safest',1)" title="Mover para frente">▶</button>
+              <button class="ct-x" onclick="removeCard('safest')" title="Remover card">✕</button>
+            </span>
+          </div>
           <div class="card-body tbl-wrap">
             <table><thead><tr><th>Projeto</th><th style="text-align:right">Abertos</th></tr></thead>
             <tbody id="safestRows"></tbody></table>
           </div>
         </div>
-        <div class="card">
-          <div class="card-head"><div class="card-title">Distribuição por engine</div></div>
+
+        <div class="card span-2" data-card="engines">
+          <div class="card-head"><div class="card-title">Distribuição por engine</div>
+            <span class="card-tools">
+              <button onclick="moveCard('engines',-1)" title="Mover para trás">◀</button>
+              <button onclick="moveCard('engines',1)" title="Mover para frente">▶</button>
+              <button class="ct-x" onclick="removeCard('engines')" title="Remover card">✕</button>
+            </span>
+          </div>
           <div style="padding:16px;display:flex;flex-direction:column;gap:8px" id="engineDist"></div>
         </div>
       </div>
@@ -2329,14 +2400,82 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   const sun  = $('themeIconSun');
   const moon = $('themeIconMoon');
-  if (sun)  sun.style.display  = theme === 'dark' ? 'none' : 'inline-flex';
-  if (moon) moon.style.display = theme === 'dark' ? 'inline-flex' : 'none';
+  if (sun)  sun.hidden  = theme === 'dark';
+  if (moon) moon.hidden = theme !== 'dark';
 }
 function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme') || 'light';
   const next = current === 'dark' ? 'light' : 'dark';
-  localStorage.setItem('secpipe-theme', next);
+  try { localStorage.setItem('secpipe-theme', next); } catch(e) {}
   applyTheme(next);
+}
+
+/* ── Dashboard customizável ── */
+const DASH_CARDS = {
+  trend: 'Tendência de findings',
+  lastScans: 'Último scan por projeto',
+  riskiest: 'Projetos mais arriscados',
+  safest: 'Projetos mais seguros',
+  engines: 'Distribuição por engine',
+};
+let _dashLayout = null;
+try { _dashLayout = JSON.parse(localStorage.getItem('secpipe-dash')); } catch(e) {}
+if (!_dashLayout || !Array.isArray(_dashLayout.order) || !Array.isArray(_dashLayout.hidden))
+  _dashLayout = {order: Object.keys(DASH_CARDS), hidden: []};
+Object.keys(DASH_CARDS).forEach(c => { if (!_dashLayout.order.includes(c)) _dashLayout.order.push(c); });
+
+function saveDashLayout() {
+  try { localStorage.setItem('secpipe-dash', JSON.stringify(_dashLayout)); } catch(e) {}
+}
+
+function applyDashLayout() {
+  const wrap = $('dashCards');
+  if (!wrap) return;
+  _dashLayout.order.forEach(id => {
+    const el = wrap.querySelector(`[data-card="${id}"]`);
+    if (el) wrap.appendChild(el);
+  });
+  Object.keys(DASH_CARDS).forEach(id => {
+    const el = wrap.querySelector(`[data-card="${id}"]`);
+    if (el) el.style.display = _dashLayout.hidden.includes(id) ? 'none' : '';
+  });
+  renderDashAddList();
+}
+
+function renderDashAddList() {
+  const list = $('dashAddList');
+  if (!list) return;
+  list.innerHTML = _dashLayout.hidden.length
+    ? _dashLayout.hidden.map(id => `<button onclick="addCard('${id}')">+ ${DASH_CARDS[id]}</button>`).join('')
+    : '<span style="font-size:11px;color:var(--muted)">todos os cards visíveis</span>';
+}
+
+function moveCard(id, dir) {
+  const o = _dashLayout.order;
+  const visible = o.filter(c => !_dashLayout.hidden.includes(c));
+  const vi = visible.indexOf(id);
+  const vj = vi + dir;
+  if (vi < 0 || vj < 0 || vj >= visible.length) return;
+  const i = o.indexOf(id), j = o.indexOf(visible[vj]);
+  [o[i], o[j]] = [o[j], o[i]];
+  saveDashLayout(); applyDashLayout();
+}
+
+function removeCard(id) {
+  if (!_dashLayout.hidden.includes(id)) _dashLayout.hidden.push(id);
+  saveDashLayout(); applyDashLayout();
+}
+
+function addCard(id) {
+  _dashLayout.hidden = _dashLayout.hidden.filter(x => x !== id);
+  saveDashLayout(); applyDashLayout();
+}
+
+function toggleDashEdit() {
+  const wrap = $('dashCards');
+  const on = wrap.classList.toggle('editing');
+  $('dashAddBar').hidden = !on;
+  $('dashEditBtn').textContent = on ? '✓ Concluir' : '⚙ Personalizar';
 }
 
 /* ── Boot ── */
@@ -2345,6 +2484,7 @@ function toggleTheme() {
     (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   applyTheme(saved);
 })();
+applyDashLayout();
 if(typeof lucide!=='undefined')lucide.createIcons();
 initApp();
 </script>

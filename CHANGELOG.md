@@ -3,6 +3,16 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.11] - 2026-08-30
+
+### Added
+- **Dashboard customizável**: botão "⚙ Personalizar" ativa modo de edição — cada card ganha controles ◀ ▶ (mover) e ✕ (remover); cards removidos podem ser re-adicionados pela barra "Adicionar"; layout persiste em `localStorage`
+
+### Fixed
+- **Botão de tema**: ícones sun/moon trocados de lucide para SVG inline fixo — o `lucide.createIcons()` re-processava os ícones a cada render e quebrava o toggle
+- **Tema claro**: superfícies que ficavam escuras no light mode corrigidas (thead, filter bar, inputs, painéis de detalhe, pre.yaml, vis-tabs)
+- **Card do usuário** voltou a ficar fixo no rodapé da sidebar (o `margin-top: auto` se perdeu no redesign)
+
 ## [0.8.10] - 2026-08-30
 
 ### Fixed
