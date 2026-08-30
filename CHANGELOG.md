@@ -3,6 +3,11 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.3] - 2026-08-30
+
+### Added
+- **Sugestão de correção em cascata pós-autofix**: após um autofix aplicado com sucesso, a aplicação busca automaticamente outros criticals abertos no mesmo repo e os lista abaixo do PR, cada um com botão "Corrigir" individual — permitindo corrigir todos os criticals bloqueadores em sequência sem sair da tela; ao corrigir um segundo critical, a lista é atualizada recursivamente; ao zerar os criticals, exibe confirmação "Nenhum outro critical aberto neste repo"
+
 ## [0.14.2] - 2026-08-30
 
 ### Fixed
