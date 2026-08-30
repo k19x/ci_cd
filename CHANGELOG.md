@@ -3,6 +3,21 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.4] - 2026-08-30
+
+### Changed
+- **Redesign UI — Void Tech**: tema dark-first com fundo void `#04060c`, dot-grid CSS, glassmorphism nos cards e topbar (backdrop-filter blur)
+- Accent trocado para ciano elétrico `#00b8ff` com glow nos elementos ativos
+- Stat strip: números em JetBrains Mono 28px, critical com text-shadow pulsante
+- Login: background com radiais cyan, card glassmorphism com scan-line animada
+- Severity badges com border sutil e dot::before com box-shadow glow no critical
+- Status badge `running` com pulso glow (`box-shadow: 0 0 6px currentColor`)
+- Nav active: border-left ciano + `box-shadow inset` para efeito de glow lateral
+- Brand icon: `linear-gradient(135deg, #00b8ff → #0070cc)` + box-shadow glow
+- Botão primary: gradiente + `box-shadow: 0 2px 12px rgba(0,184,255,.3)` com hover brilho
+- Topbar badge critical: animated `crit-glow` keyframe + font monospace
+- Tab pane transitions com `fade-in` keyframe
+
 ## [0.8.3] - 2026-08-30
 
 ### Added
