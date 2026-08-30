@@ -3,6 +3,12 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.6] - 2026-08-30
+
+### Added
+- **Aba Findings — expansão de detalhes**: botão **▼ Detalhes** em cada scan expande uma linha inline com os findings abertos do projeto (severidade, regra, arquivo:linha, engine, mensagem) — até 15 visíveis, com contagem do restante e link "Ver tudo em Results →" já filtrado pelo repo
+- Guard de sessão em `loadVulns()` (retorno null da API não quebra mais a aba)
+
 ## [0.8.5] - 2026-08-30
 
 ### Changed

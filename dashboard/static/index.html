@@ -675,6 +675,14 @@ pre.yaml {
 }
 .why-btn:hover { background: rgba(255,51,85,.12); box-shadow: 0 0 8px rgba(255,51,85,.25); }
 .why-btn.loading { opacity: .5; cursor: default; }
+.detail-btn {
+  background: none; border: 1px solid var(--bd2); color: var(--accent);
+  border-radius: var(--radius); padding: 2px 9px;
+  font-size: 10.5px; font-weight: 700; cursor: pointer; letter-spacing: .03em;
+  transition: background .12s, box-shadow .12s; white-space: nowrap;
+}
+.detail-btn:hover { background: var(--accent-dim); box-shadow: 0 0 8px var(--accent-glow); }
+.detail-btn.loading { opacity: .5; cursor: default; }
 
 /* ── Trend select ── */
 .card-head select {
@@ -979,7 +987,7 @@ pre.yaml {
           <table>
             <thead><tr>
               <th>Projeto</th><th>Branch</th><th>Commit</th>
-              <th>Data</th><th style="text-align:center">C</th><th style="text-align:center">H</th><th style="text-align:center">M</th><th style="text-align:center">L</th><th style="text-align:center">Total</th>
+              <th>Data</th><th style="text-align:center">C</th><th style="text-align:center">H</th><th style="text-align:center">M</th><th style="text-align:center">L</th><th style="text-align:center">Total</th><th></th>
             </tr></thead>
             <tbody id="vulnRows"></tbody>
           </table>
@@ -1680,6 +1688,7 @@ async function loadVulns() {
   const p = new URLSearchParams();
   if (repo) p.set('repo', repo);
   const data = await api('/api/scans?' + p);
+  if (!data) return;
   $('vulnCount').textContent = `${data.count} scan${data.count!==1?'s':''}`;
 
   // populate filter
@@ -1692,12 +1701,12 @@ async function loadVulns() {
   const chip = (cls, n) => `<span class="chip ${cls}${n===0?' zero':''}">${n}</span>`;
   const tbody = $('vulnRows');
   if (!data.scans.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><p>Nenhum scan registrado ainda.</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><p>Nenhum scan registrado ainda.</p></div></td></tr>`;
     return;
   }
-  tbody.innerHTML = data.scans.map(s => {
+  tbody.innerHTML = data.scans.map((s, i) => {
     const total = (s.critical||0)+(s.high||0)+(s.medium||0)+(s.low||0)+(s.info||0);
-    return `<tr>
+    return `<tr id="vuln-row-${i}">
       <td class="primary">${esc(s.repo)}</td>
       <td class="mono">${esc(s.branch||'—')}</td>
       <td class="mono">${s.commit_sha ? s.commit_sha.slice(0,7) : '—'}</td>
@@ -1707,9 +1716,44 @@ async function loadVulns() {
       <td style="text-align:center">${chip('m', s.medium||0)}</td>
       <td style="text-align:center">${chip('l', s.low||0)}</td>
       <td style="text-align:center;font-weight:600;color:var(--text2)">${total}</td>
+      <td style="text-align:right">${total > 0 ? `<button class="detail-btn" onclick="showScanFindings(${i}, '${esc(s.repo)}', this)">▼ Detalhes</button>` : ''}</td>
     </tr>`;
   }).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
+}
+
+async function showScanFindings(idx, repo, btn) {
+  const detailId = `vuln-detail-${idx}`;
+  const existing = document.getElementById(detailId);
+  if (existing) { existing.remove(); btn.textContent = '▼ Detalhes'; return; }
+
+  btn.textContent = '…'; btn.classList.add('loading'); btn.disabled = true;
+  const data = await api('/api/findings?' + new URLSearchParams({repo, status:'open'}));
+  btn.textContent = '▼ Detalhes'; btn.classList.remove('loading'); btn.disabled = false;
+  if (!data) return;
+
+  const shown = data.findings.slice(0, 15);
+  const rows = shown.map(f => `<div class="job-row">
+      <span class="sev ${sevClass(f.severity)}">${esc(f.severity)}</span>
+      <span class="mono" style="color:var(--text)">${esc(f.rule || f.fid || '')}</span>
+      <span class="mono" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.file)}${f.line ? ':'+f.line : ''}</span>
+      <span style="font-size:11px;color:var(--muted)">${esc(f.tool)}</span>
+      <span class="msg-cell" style="font-size:11px;color:var(--text2)">${esc(f.message)}</span>
+    </div>`).join('');
+
+  const more = data.count > shown.length
+    ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">… e mais ${data.count - shown.length} finding(s).</div>` : '';
+  const allLink = `<a onclick="goToFindings('','open','${esc(repo)}')" style="color:var(--orange);font-size:11px;cursor:pointer;margin-top:6px">Ver tudo em Results →</a>`;
+  const header = `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">${data.count} finding(s) abertos de <strong style="color:var(--text)">${esc(repo)}</strong></div>`;
+
+  const row = document.createElement('tr');
+  row.id = detailId;
+  row.className = 'job-detail-row';
+  row.innerHTML = `<td colspan="10"><div class="job-detail-wrap">${header}${rows || '<span style="color:var(--muted);font-size:12px">Nenhum finding aberto — tudo triado ou corrigido.</span>'}${more}${allLink}</div></td>`;
+
+  const scanRow = document.getElementById(`vuln-row-${idx}`);
+  if (scanRow) scanRow.after(row);
+  btn.textContent = '▲ Fechar';
 }
 
 /* ── Settings / Policy ── */
