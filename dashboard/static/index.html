@@ -356,8 +356,10 @@ body::after {
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .stat-cell { background: rgba(255,255,255,.85); } }
 
 /* ── Grid ── */
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-.grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 16px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; align-items: start; }
+.grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
+.tbl-scroll { max-height: 340px; overflow-y: auto; }
+.tbl-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--s2); }
 
 /* ── Card ── */
 .card {
@@ -969,7 +971,7 @@ pre.yaml {
           <div class="card-head">
             <div class="card-title">Último scan por projeto</div>
           </div>
-          <div class="card-body tbl-wrap">
+          <div class="card-body tbl-wrap tbl-scroll">
             <table>
               <thead><tr>
                 <th class="sortable" data-k="last" data-c="0" onclick="sortBy('last',0,renderLastScans)">Projeto<span class="arr"></span></th>

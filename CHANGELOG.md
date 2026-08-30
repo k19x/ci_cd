@@ -3,6 +3,12 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.10] - 2026-08-30
+
+### Fixed
+- Card "Tendência de findings" não estica mais para acompanhar a tabela ao lado (`align-items: start` nos grids) — cada card mantém a altura natural
+- Tabela "Último scan por projeto" ganhou scroll interno (max 340px) com cabeçalho sticky — o Dashboard ficou compacto
+
 ## [0.8.9] - 2026-08-30
 
 ### Added
