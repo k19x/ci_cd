@@ -2080,6 +2080,7 @@ function toggleFindDetail(gi, btn) {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="detail-btn" onclick="aiFix(${gi}, this)" data-min-role="analyst">✨ Sugerir correção com IA</button>
         <button class="detail-btn" onclick="aiAutofix(${gi}, this)" data-min-role="analyst" style="border-color:rgba(34,212,114,.4);color:var(--ok)">🔧 Aplicar correção (abre PR)</button>
+        <button class="detail-btn" onclick="aiVerify(${gi}, this)" data-min-role="analyst" style="border-color:rgba(240,185,11,.4);color:var(--med)">🔁 Verificar (novo scan)</button>
       </div>
       <div id="aiFixOut-${gi}" style="margin-top:8px"></div>
     </div>
@@ -2184,7 +2185,7 @@ function pollAiJob(jobId, out, onDone, onFail) {
   const t0 = Date.now();
   const tick = async () => {
     const s = Math.round((Date.now() - t0) / 1000);
-    if (s > 600) return onFail('Tempo esgotado (10 min).');
+    if (s > 1200) return onFail('Tempo esgotado (20 min).');
     try {
       const res = await fetch('/api/ai/jobs/' + jobId);
       if (res.ok) {
@@ -2274,6 +2275,42 @@ async function aiAutofix(gi, btn) {
     if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
     pollAiJob(body.job, out, done, fail);
   } catch (e) { fail('Falha de rede ao chamar a IA.'); }
+}
+
+async function aiVerify(gi, btn) {
+  const f = _findingsView[gi] || _findings[gi];
+  if (!f) return;
+  const ok = await uiConfirm('🔁 Verificar correção?',
+    `Um novo scan será disparado em <strong>${esc(f.repo)}</strong>. Quando o resultado chegar (2–10 min), o SecPipe confere se o finding <code>${esc(f.rule)}</code> sumiu — se sim, ele é marcado como <strong>Fixed</strong> automaticamente.`,
+    'Disparar scan e verificar');
+  if (!ok) return;
+  const out = $(`aiFixOut-${gi}`);
+  btn.disabled = true; btn.textContent = '🔁 Verificando…';
+  out.innerHTML = '<div class="fd-text ai-progress" style="color:var(--muted)">⏳ Scan disparado — aguardando o pipeline rodar e o resultado ser ingerido…</div>';
+  const done = async r => {
+    btn.disabled = false; btn.textContent = '🔁 Verificar (novo scan)';
+    if (r.verified && r.fixed) {
+      out.innerHTML = `<div class="fd-text" style="color:var(--ok)">✅ Correção efetiva! O finding não apareceu no novo scan (${esc((r.scan_at||'').slice(0,16).replace('T',' '))}) e foi marcado como <strong>Fixed</strong>.</div>`;
+      await Promise.all([loadDashboard(), loadFindings(false)]);
+    } else if (r.verified) {
+      out.innerHTML = `<div class="fd-text" style="color:var(--crit)">❌ O finding ainda apareceu no novo scan (status: ${esc(r.status)}). A correção não foi efetiva — foi mergeado o PR? O fix cobre todos os pontos?</div>`;
+    } else {
+      out.innerHTML = `<div class="fd-text" style="color:var(--med)">${esc(r.detail || 'Não foi possível verificar.')}</div>`;
+    }
+  };
+  const fail = m => {
+    btn.disabled = false; btn.textContent = '🔁 Verificar (novo scan)';
+    out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(m)}</div>`;
+  };
+  try {
+    const res = await fetch('/api/ai/verify', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({repo: f.repo, fid: f.fid}),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
+    pollAiJob(body.job, out, done, fail);
+  } catch (e) { fail('Falha de rede.'); }
 }
 
 async function aiDiagnose(repo, runId, btn) {

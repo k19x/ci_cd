@@ -3,6 +3,16 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.1] - 2026-08-30
+
+### Added — verificação de correção com re-scan automático
+- **"🔁 Verificar (novo scan)"** no painel do finding: dispara o `security.yml` no repo, aguarda o pipeline rodar e o resultado ser ingerido (até 15 min, polling a cada 20s) e confere o desfecho:
+  - Finding sumiu do novo scan → já foi **marcado como Fixed** pelo ingest automático → mensagem verde ✅ e tabelas atualizadas
+  - Finding ainda presente → aviso vermelho ❌ (correção não foi efetiva / PR não mergeado)
+- Endpoint `POST /api/ai/verify` (job assíncrono como as demais operações de IA)
+- Dispatch do workflow extraído para helper `_dispatch_security_scan()` reutilizado pelo botão ▶ Scan e pela verificação
+- Timeout do polling de jobs de IA: 10 → 20 min
+
 ## [0.12.0] - 2026-08-30
 
 ### Added

@@ -520,8 +520,8 @@ def triage(repo: str, fid: str, update: TriageUpdate, user=Depends(require_role(
     return {"ok": True}
 
 
-@app.post("/api/repos/{repo:path}/dispatch")
-def dispatch_scan(repo: str, user=Depends(require_role("analyst"))):
+def _dispatch_security_scan(repo: str) -> None:
+    """Dispara o workflow security.yml (workflow_dispatch) — main com fallback para master."""
     token = os.environ.get("GITHUB_TOKEN", "")
     if not token:
         raise HTTPException(status_code=400, detail="GITHUB_TOKEN não configurado")
@@ -531,26 +531,18 @@ def dispatch_scan(repo: str, user=Depends(require_role("analyst"))):
         "X-GitHub-Api-Version": "2022-11-28",
         "Content-Type": "application/json",
     }
-    payload = _json.dumps({"ref": "main"}).encode()
+    url = f"https://api.github.com/repos/{repo}/actions/workflows/security.yml/dispatches"
     try:
-        req = urllib.request.Request(
-            f"https://api.github.com/repos/{repo}/actions/workflows/security.yml/dispatches",
-            data=payload,
-            headers=hdrs,
-            method="POST",
-        )
+        req = urllib.request.Request(url, data=_json.dumps({"ref": "main"}).encode(),
+                                     headers=hdrs, method="POST")
         with urllib.request.urlopen(req, timeout=10):
             pass
     except urllib.error.HTTPError as e:
         body = e.read().decode(errors="replace")
         if e.code == 422:
-            # tenta branch master
             try:
-                payload2 = _json.dumps({"ref": "master"}).encode()
-                req2 = urllib.request.Request(
-                    f"https://api.github.com/repos/{repo}/actions/workflows/security.yml/dispatches",
-                    data=payload2, headers=hdrs, method="POST",
-                )
+                req2 = urllib.request.Request(url, data=_json.dumps({"ref": "master"}).encode(),
+                                              headers=hdrs, method="POST")
                 with urllib.request.urlopen(req2, timeout=10):
                     pass
             except urllib.error.HTTPError as e2:
@@ -559,6 +551,11 @@ def dispatch_scan(repo: str, user=Depends(require_role("analyst"))):
             raise HTTPException(status_code=e.code, detail=body)
     except urllib.error.URLError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/repos/{repo:path}/dispatch")
+def dispatch_scan(repo: str, user=Depends(require_role("analyst"))):
+    _dispatch_security_scan(repo)
     return {"ok": True, "repo": repo}
 
 
@@ -1398,6 +1395,50 @@ def _do_diagnose(r: AIDiagnoseRequest):
     analysis = _claude(system, prompt)
     _ai_cache[ck] = analysis
     return {"analysis": analysis, "cached": False}
+
+
+class AIVerifyRequest(BaseModel):
+    repo: str
+    fid: str
+
+
+def _do_verify(r: AIVerifyRequest):
+    """Dispara novo scan, espera o resultado ser ingerido e confere se o finding sumiu.
+
+    O ingest já marca como 'fixed' automaticamente todo finding aberto que não
+    aparece no novo upload — aqui só orquestramos e reportamos o desfecho.
+    """
+    start_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _dispatch_security_scan(r.repo)
+
+    deadline = time.time() + 900   # 15 min
+    while time.time() < deadline:
+        time.sleep(20)
+        with db() as conn:
+            scan = conn.execute(
+                "SELECT created_at FROM scans WHERE repo=? AND created_at>? "
+                "ORDER BY created_at DESC LIMIT 1",
+                (r.repo, start_iso),
+            ).fetchone()
+        if not scan:
+            continue
+        with db() as conn:
+            f = conn.execute(
+                "SELECT status FROM findings WHERE repo=? AND fid=?",
+                (r.repo, r.fid),
+            ).fetchone()
+        status = f["status"] if f else "removed"
+        fixed = (f is None) or (f["status"] == "fixed")
+        return {"verified": True, "fixed": fixed, "status": status,
+                "scan_at": scan["created_at"]}
+    return {"verified": False,
+            "detail": "O novo scan não foi ingerido em 15 min — confira a aba Scans "
+                      "(o run pode ter falhado ou ainda estar em execução)."}
+
+
+@app.post("/api/ai/verify")
+def ai_verify(r: AIVerifyRequest, user=Depends(require_role("analyst"))):
+    return _start_ai_job(_do_verify, r)
 
 
 @app.post("/api/ai/fix")
