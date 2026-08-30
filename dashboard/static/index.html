@@ -1718,7 +1718,7 @@ td { padding: 11px 16px; }
 
     <!-- ═══ JOBS / ATIVIDADE ═══ -->
     <div id="tab-activity" class="tab-pane">
-      <div style="display:flex;flex-direction:column;gap:20px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
 
         <!-- Scans GitHub -->
         <div class="card">
@@ -1729,7 +1729,7 @@ td { padding: 11px 16px; }
             </div>
             <div class="card-sub">Runs em andamento e recentes (últimas 2h)</div>
           </div>
-          <div id="actScans" style="padding:0 18px 14px">
+          <div id="actScans" style="padding:0 18px 14px;max-height:70vh;overflow-y:auto">
             <div style="color:var(--muted);font-size:13px;padding:24px 0;text-align:center">
               <i data-lucide="loader-circle" style="width:16px;height:16px;animation:spin 1s linear infinite"></i>
               Carregando...
@@ -1746,7 +1746,7 @@ td { padding: 11px 16px; }
             </div>
             <div class="card-sub">Correções, diagnósticos e sugestões</div>
           </div>
-          <div id="actAiJobs" style="padding:0 18px 14px">
+          <div id="actAiJobs" style="padding:0 18px 14px;max-height:70vh;overflow-y:auto">
             <div style="color:var(--muted);font-size:13px;padding:24px 0;text-align:center">Nenhum job de IA recente.</div>
           </div>
         </div>
