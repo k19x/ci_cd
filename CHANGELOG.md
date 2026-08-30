@@ -3,6 +3,15 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.1] - 2026-08-30
+
+### Changed
+- **AI Engine via Claude Code**: agora funciona com a autenticação da conta Claude (Pro/Max) sem precisar de API key — gere o token com `claude setup-token` e coloque `CLAUDE_CODE_OAUTH_TOKEN` no `.env`
+- Backend roteia automaticamente: `ANTHROPIC_API_KEY` → API direta; senão `CLAUDE_CODE_OAUTH_TOKEN` → Claude Code CLI headless (`claude -p`) dentro do container
+- Dockerfile instala Node.js + `@anthropic-ai/claude-code`; CLI roda com `HOME=/tmp` (tmpfs) por causa do filesystem read-only
+- Compose: tmpfs 64m→256m (sem `noexec`), mem_limit 256m→768m, cpus 1.0 — folga para o CLI Node
+- `GET /api/ai/status` agora informa `via`: `api` ou `claude-code`
+
 ## [0.10.0] - 2026-08-30
 
 ### Added — AI Engine (Claude no backend)

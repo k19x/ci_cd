@@ -11,6 +11,7 @@ Auth:   se a env SECPIPE_TOKEN estiver definida, o /api/ingest exige o
 
 import base64
 import concurrent.futures
+import subprocess
 import contextlib
 import json as _json
 import os
@@ -1025,9 +1026,39 @@ _ai_cache: dict = {}   # (kind, repo, key) -> analysis text
 
 
 def _claude(system: str, prompt: str, max_tokens: int = 1600) -> str:
+    """Roteia para API direta (ANTHROPIC_API_KEY) ou Claude Code CLI (CLAUDE_CODE_OAUTH_TOKEN)."""
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return _claude_api(system, prompt, max_tokens)
+    if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
+        return _claude_cli(system, prompt)
+    raise HTTPException(400, "Configure ANTHROPIC_API_KEY ou CLAUDE_CODE_OAUTH_TOKEN no .env "
+                             "(gere o token com: claude setup-token)")
+
+
+def _claude_cli(system: str, prompt: str) -> str:
+    """Usa o Claude Code CLI em modo headless (-p), autenticado pela conta do usuário."""
+    env = dict(os.environ)
+    env["HOME"] = "/tmp"          # CLI precisa de home gravável (container é read-only + tmpfs)
+    try:
+        proc = subprocess.run(
+            ["claude", "-p", "--output-format", "text", "--model", AI_MODEL],
+            input=f"{system}\n\n{prompt}",
+            capture_output=True, text=True, timeout=180, env=env, cwd="/tmp",
+        )
+    except FileNotFoundError:
+        raise HTTPException(500, "Claude Code CLI não está na imagem — rode: docker compose up --build -d")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "Claude Code excedeu o tempo limite (180s)")
+    if proc.returncode != 0:
+        raise HTTPException(502, f"Claude Code: {(proc.stderr or proc.stdout or 'erro desconhecido')[:300]}")
+    out = proc.stdout.strip()
+    if not out:
+        raise HTTPException(502, "Claude Code retornou resposta vazia")
+    return out
+
+
+def _claude_api(system: str, prompt: str, max_tokens: int = 1600) -> str:
     key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not key:
-        raise HTTPException(400, "ANTHROPIC_API_KEY não configurada no .env")
     body = _json.dumps({
         "model": AI_MODEL,
         "max_tokens": max_tokens,
@@ -1056,7 +1087,9 @@ def _claude(system: str, prompt: str, max_tokens: int = 1600) -> str:
 
 @app.get("/api/ai/status")
 def ai_status(user=Depends(require_role("viewer"))):
-    return {"enabled": bool(os.environ.get("ANTHROPIC_API_KEY")), "model": AI_MODEL}
+    via = ("api" if os.environ.get("ANTHROPIC_API_KEY")
+           else "claude-code" if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") else None)
+    return {"enabled": via is not None, "via": via, "model": AI_MODEL}
 
 
 class AIFixRequest(BaseModel):
