@@ -3,6 +3,11 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.13] - 2026-08-30
+
+### Changed
+- **Developer tab — padding**: `card-body` dos cards API Keys e Referência da API recebeu `padding: 0 18px 18px` para respiração lateral do conteúdo
+
 ## [0.14.12] - 2026-08-30
 
 ### Changed
