@@ -3,6 +3,11 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.13] - 2026-08-30
+
+### Added
+- **Redimensionamento dos cards do Dashboard**: no modo "⚙ Personalizar", cada card tem uma alça na borda direita — arraste para mudar a largura (2 a 6 colunas do grid, com snap por coluna e preview ao vivo); botões − / + no cabeçalho do card como alternativa; larguras persistem em `localStorage` junto com ordem e visibilidade
+
 ## [0.8.12] - 2026-08-30
 
 ### Added
