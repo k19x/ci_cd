@@ -3,6 +3,23 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.9] - 2026-08-30
+
+### Changed
+- **Sidebar icons atualizados**: ícones Lucide revisados para melhor semântica (scan, briefcase, list, search, folder, settings)
+- **KPI cards com ícones**: cada card da stat-strip agora exibe um ícone Lucide à esquerda do label (package-open, shield-alert, triangle-alert, circle-alert, info, check-circle, clock-alert)
+- **Jobs tab — painel "Scans GitHub Actions"**: ícone do header substituído por `github` para melhor identificação
+- **Botão "Why?" em Scans**: substituído pelo ícone `help-circle` mais discreto; sem fundo vermelho
+- **Coluna Vulnerability em Results**: truncamento com ellipsis + tooltip e badge do repositório abaixo do nome da regra
+- **OWASP Top 10**: "Sem categoria" removido do gráfico de barras; exibido como aviso textual abaixo
+- **Tendência de findings**: exibe mensagem de estado vazio quando há menos de 2 pontos de dados
+- **Projects — ações em kebab menu**: os 3 botões de ação (Scan, Atualizar, Remover) foram consolidados em um dropdown `⋮` por linha
+- **Projects — "Add project" como modal**: formulário inline substituído por um `<dialog>` nativo acessível; botão "Adicionar" na barra da aba abre o modal
+- **Audit Log**: hashes longos (>20 chars hex) truncados a 7 chars com full hash no `title`; eventos consecutivos com mesma ação/minuto/usuário agrupados com badge `×N`
+- **Settings — botões de salvar com ícones**: "Salvar policy.yml" → ícone `save`; "Commit & Push" → ícone `git-commit-horizontal`
+- **Settings — sub-tab ativo**: borda inferior `2px solid var(--accent)` no tab ativo
+- **Findings C/H/M/L**: headers com `title` e cor de severidade
+
 ## [0.14.8] - 2026-08-30
 
 ### Changed

@@ -1051,6 +1051,81 @@ td { padding: 11px 16px; }
 /* ── Better filter bar ── */
 .filter-bar { padding: 12px 18px; gap: 10px; }
 .filter-bar select, .filter-bar input { height: 32px; font-size: 12.5px; padding: 5px 12px; }
+
+/* ══════════════════════════════════════
+   v0.14.9 — UI IMPROVEMENTS
+   ══════════════════════════════════════ */
+
+/* Sidebar footer higher contrast */
+.sidebar-footer a { color: #888 !important; }
+
+/* KPI icon sizing */
+.stat-icon { display: inline-flex; align-items: center; opacity: .65; }
+.stat-icon i[data-lucide], .stat-icon svg { width: 14px; height: 14px; }
+.stat-label { display: flex; align-items: center; gap: 5px; }
+
+/* Settings sub-tabs active border */
+#tab-settings > .vis-tabs .vis-tab.active {
+  border-bottom: 2px solid var(--accent);
+  color: var(--accent);
+}
+
+/* Badge classes for job status */
+.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px;
+         font-size: 10.5px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+.badge-red    { background: var(--crit-bg); color: var(--crit); border: 1px solid rgba(255,51,85,.25); }
+.badge-green  { background: var(--ok-bg);   color: var(--ok);   border: 1px solid rgba(34,197,94,.2); }
+.badge-yellow { background: var(--med-bg);  color: var(--med);  border: 1px solid rgba(240,185,11,.2); }
+.badge-blue   { background: var(--low-bg);  color: var(--low);  border: 1px solid rgba(59,130,246,.2); }
+
+/* Why? icon button */
+.why-icon-btn {
+  background: none; border: none; color: var(--crit); cursor: pointer;
+  padding: 3px 5px; display: inline-flex; align-items: center;
+  border-radius: var(--radius); transition: background .12s, color .12s;
+}
+.why-icon-btn:hover { background: rgba(255,51,85,.1); }
+.why-icon-btn i[data-lucide] { width: 16px; height: 16px; }
+
+/* Project kebab dropdown */
+.kebab-wrap { position: relative; display: inline-block; }
+.kebab-btn { background: none; border: 1px solid var(--bd); color: var(--t1); cursor: pointer;
+             padding: 4px 7px; border-radius: var(--radius); display: flex; align-items: center;
+             transition: all .12s; }
+.kebab-btn:hover { border-color: var(--accent); color: var(--accent); }
+.kebab-menu { position: absolute; right: 0; top: calc(100% + 4px); min-width: 150px;
+              background: var(--s1); border: 1px solid var(--bd2); border-radius: var(--radius);
+              box-shadow: 0 4px 20px rgba(0,0,0,.4); z-index: 100; padding: 4px 0; display: none; }
+.kebab-menu.open { display: block; }
+.kebab-menu button { display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 12px;
+                     background: none; border: none; color: var(--t0); cursor: pointer; font-size: 12.5px;
+                     text-align: left; transition: background .1s; white-space: nowrap; }
+.kebab-menu button:hover { background: var(--accent-dim); color: var(--accent); }
+.kebab-menu button.danger:hover { background: rgba(255,51,85,.1); color: var(--crit); }
+.kebab-menu .menu-sep { height: 1px; background: var(--bd); margin: 3px 0; }
+
+/* Result vulnerability cell */
+.vuln-name-cell { max-width: 280px; }
+.vuln-name-cell .vname { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vuln-repo-tag { font-size: 10.5px; color: var(--t2); font-family: 'JetBrains Mono', monospace; margin-top: 1px; display: block; opacity: .8; }
+
+/* Trend empty state */
+.trend-empty { display: flex; align-items: center; justify-content: center;
+               flex-direction: column; gap: 8px; padding: 48px 24px; }
+.trend-empty p { color: var(--t2); font-size: 13px; text-align: center; }
+
+/* Add project modal */
+#addRepoDialog { border: 1px solid var(--bd2); border-radius: 14px; background: var(--s1);
+                 padding: 0; max-width: 480px; width: 92vw; box-shadow: 0 24px 60px rgba(0,0,0,.7); }
+#addRepoDialog::backdrop { background: rgba(2,6,14,.72); backdrop-filter: blur(5px); }
+.dialog-head { padding: 18px 22px 14px; border-bottom: 1px solid var(--bd);
+               display: flex; align-items: center; justify-content: space-between; }
+.dialog-head-title { font-size: 14px; font-weight: 700; color: var(--t0); display: flex; align-items: center; gap: 8px; }
+.dialog-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; }
+.dialog-body label { font-size: 10.5px; font-weight: 700; color: var(--t2); text-transform: uppercase; letter-spacing: .07em; display: block; margin-bottom: 5px; }
+.dialog-body input { width: 100%; font-size: 13px; padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--bd); background: var(--s3); color: var(--t0); outline: none; box-sizing: border-box; transition: border-color .15s; }
+.dialog-body input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+.dialog-foot { padding: 0 22px 18px; display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
 </style>
 
 <div class="sidebar">
@@ -1074,31 +1149,31 @@ td { padding: 11px 16px; }
         Dashboard
       </a>
       <a class="nav-item" onclick="showTab('jobs',this)">
-        <i data-lucide="clock"></i>
+        <i data-lucide="scan"></i>
         Scans
       </a>
       <a class="nav-item" id="navActivity" onclick="showTab('activity',this)">
-        <i data-lucide="activity"></i>
+        <i data-lucide="briefcase"></i>
         Jobs
         <span id="navActivityBadge" hidden style="margin-left:auto;background:var(--crit);color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;line-height:1.6"></span>
       </a>
       <a class="nav-item" onclick="showTab('findings',this)">
-        <i data-lucide="table-2"></i>
+        <i data-lucide="list"></i>
         Results
       </a>
       <a class="nav-item" onclick="showTab('vulns',this)">
-        <i data-lucide="shield-alert"></i>
+        <i data-lucide="search"></i>
         Findings
       </a>
     </div>
     <div class="nav-section">
       <span class="nav-label">Management</span>
       <a class="nav-item" onclick="showTab('repos',this)">
-        <i data-lucide="folder-git-2"></i>
+        <i data-lucide="folder"></i>
         Projects
       </a>
       <a class="nav-item" onclick="showTab('settings',this)">
-        <i data-lucide="settings-2"></i>
+        <i data-lucide="settings"></i>
         Settings
       </a>
       <a class="nav-item" onclick="showTab('audit',this)" data-min-role="admin">
@@ -1209,13 +1284,13 @@ td { padding: 11px 16px; }
     <!-- ═══ DASHBOARD ═══ -->
     <div id="tab-dashboard" class="tab-pane active">
       <div class="stat-strip" id="statStrip">
-        <div class="stat-cell total" title="Ver todos os findings abertos" onclick="goToFindings('','open')"><div class="stat-val" id="s-total">—</div><div class="stat-label">Total abertos</div></div>
-        <div class="stat-cell crit"  title="Filtrar por Critical" onclick="goToFindings('critical','open')"><div class="stat-val" id="s-critical">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--crit)"></span>Critical</div></div>
-        <div class="stat-cell high"  title="Filtrar por High" onclick="goToFindings('high','open')"><div class="stat-val" id="s-high">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--high)"></span>High</div></div>
-        <div class="stat-cell med"   title="Filtrar por Medium" onclick="goToFindings('medium','open')"><div class="stat-val" id="s-medium">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--med)"></span>Medium</div></div>
-        <div class="stat-cell low"   title="Filtrar por Low" onclick="goToFindings('low','open')"><div class="stat-val" id="s-low">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--low)"></span>Low</div></div>
-        <div class="stat-cell fixed" title="Ver findings corrigidos" onclick="goToFindings('','fixed')"><div class="stat-val" id="s-fixed">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--ok)"></span>Corrigidos</div></div>
-        <div class="stat-cell crit" title="Findings abertos além do prazo de SLA" onclick="if($('fSlaOnly'))$('fSlaOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-sla">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--crit)"></span>SLA estourado</div></div>
+        <div class="stat-cell total" title="Ver todos os findings abertos" onclick="goToFindings('','open')"><div class="stat-val" id="s-total">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="package-open"></i></span>Total abertos</div></div>
+        <div class="stat-cell crit"  title="Filtrar por Critical" onclick="goToFindings('critical','open')"><div class="stat-val" id="s-critical">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="shield-alert"></i></span>Critical</div></div>
+        <div class="stat-cell high"  title="Filtrar por High" onclick="goToFindings('high','open')"><div class="stat-val" id="s-high">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="triangle-alert"></i></span>High</div></div>
+        <div class="stat-cell med"   title="Filtrar por Medium" onclick="goToFindings('medium','open')"><div class="stat-val" id="s-medium">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="circle-alert"></i></span>Medium</div></div>
+        <div class="stat-cell low"   title="Filtrar por Low" onclick="goToFindings('low','open')"><div class="stat-val" id="s-low">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="info"></i></span>Low</div></div>
+        <div class="stat-cell fixed" title="Ver findings corrigidos" onclick="goToFindings('','fixed')"><div class="stat-val" id="s-fixed">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="check-circle"></i></span>Corrigidos</div></div>
+        <div class="stat-cell crit" title="Findings abertos além do prazo de SLA" onclick="if($('fSlaOnly'))$('fSlaOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-sla">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="clock-alert"></i></span>SLA estourado</div></div>
       </div>
 
       <!-- customize bar -->
@@ -1428,10 +1503,10 @@ td { padding: 11px 16px; }
               <th class="sortable" data-k="vul" data-c="1" onclick="sortBy('vul',1,renderVulns)">Branch<span class="arr"></span></th>
               <th>Commit</th>
               <th class="sortable" data-k="vul" data-c="3" onclick="sortBy('vul',3,renderVulns)">Data<span class="arr"></span></th>
-              <th class="sortable" data-k="vul" data-c="4" onclick="sortBy('vul',4,renderVulns)" style="text-align:center">C<span class="arr"></span></th>
-              <th class="sortable" data-k="vul" data-c="5" onclick="sortBy('vul',5,renderVulns)" style="text-align:center">H<span class="arr"></span></th>
-              <th class="sortable" data-k="vul" data-c="6" onclick="sortBy('vul',6,renderVulns)" style="text-align:center">M<span class="arr"></span></th>
-              <th class="sortable" data-k="vul" data-c="7" onclick="sortBy('vul',7,renderVulns)" style="text-align:center">L<span class="arr"></span></th>
+              <th class="sortable" data-k="vul" data-c="4" onclick="sortBy('vul',4,renderVulns)" style="text-align:center;color:var(--crit)" title="Critical">C<span class="arr"></span></th>
+              <th class="sortable" data-k="vul" data-c="5" onclick="sortBy('vul',5,renderVulns)" style="text-align:center;color:var(--high)" title="High">H<span class="arr"></span></th>
+              <th class="sortable" data-k="vul" data-c="6" onclick="sortBy('vul',6,renderVulns)" style="text-align:center;color:var(--med)" title="Medium">M<span class="arr"></span></th>
+              <th class="sortable" data-k="vul" data-c="7" onclick="sortBy('vul',7,renderVulns)" style="text-align:center;color:var(--low)" title="Low">L<span class="arr"></span></th>
               <th class="sortable" data-k="vul" data-c="8" onclick="sortBy('vul',8,renderVulns)" style="text-align:center">Total<span class="arr"></span></th><th></th>
             </tr></thead>
             <tbody id="vulnRows"></tbody>
@@ -1442,17 +1517,29 @@ td { padding: 11px 16px; }
 
     <!-- ═══ REPOS / PROJECTS ═══ -->
     <div id="tab-repos" class="tab-pane">
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-head">
-          <div class="card-title">Add project</div>
+
+      <!-- Add Project Dialog -->
+      <dialog id="addRepoDialog">
+        <div class="dialog-head">
+          <div class="dialog-head-title"><i data-lucide="folder-plus" style="width:16px;height:16px;color:var(--accent)"></i> Adicionar Projeto</div>
+          <button onclick="$('addRepoDialog').close()" style="background:none;border:none;color:var(--t2);cursor:pointer;padding:4px"><i data-lucide="x" style="width:16px;height:16px"></i></button>
         </div>
-        <div class="form-row">
-          <input type="text" id="repoName" placeholder="Name  (e.g. k19x/my-api)" onkeydown="if(event.key==='Enter')addRepo()">
-          <input type="text" id="repoUrl"  placeholder="URL (optional)">
-          <button class="btn-primary" onclick="addRepo()">Add project</button>
+        <div class="dialog-body">
+          <div>
+            <label>Nome do repositório *</label>
+            <input type="text" id="repoName" placeholder="ex: k19x/my-api" onkeydown="if(event.key==='Enter')addRepo()">
+          </div>
+          <div>
+            <label>URL (opcional)</label>
+            <input type="text" id="repoUrl" placeholder="https://github.com/...">
+          </div>
           <span class="form-msg" id="repoMsg"></span>
         </div>
-      </div>
+        <div class="dialog-foot">
+          <button class="btn-ghost" onclick="$('addRepoDialog').close()">Cancelar</button>
+          <button class="btn-primary" onclick="addRepo()"><i data-lucide="plus" style="width:13px;height:13px"></i> Adicionar</button>
+        </div>
+      </dialog>
 
       <div class="card">
         <div class="card-head">
@@ -1460,6 +1547,10 @@ td { padding: 11px 16px; }
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <input id="rSearch" placeholder="Buscar projeto..." oninput="renderRepos()"
                    style="font-size:12px;padding:4px 10px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);height:28px;width:170px">
+            <button class="btn-primary" onclick="$('addRepoDialog').showModal();if(typeof lucide!=='undefined')lucide.createIcons();" data-min-role="analyst"
+                    style="padding:4px 12px;font-size:12px;height:28px;display:flex;align-items:center;gap:5px">
+              <i data-lucide="plus" style="width:13px;height:13px"></i> Adicionar
+            </button>
             <button id="scanAllBtn" class="btn-ghost" onclick="dispatchAllScans(this)" data-min-role="analyst"
                     style="display:flex;align-items:center;gap:5px;font-size:12px;height:28px;padding:0 10px">
               <i data-lucide="play-circle" style="width:13px;height:13px"></i> Scan all
@@ -1578,11 +1669,11 @@ td { padding: 11px 16px; }
 
       <!-- Save bar -->
       <div style="display:flex;gap:10px;align-items:center">
-        <button class="btn-primary" style="padding:9px 22px;font-size:14px" onclick="savePolicy()">
-          Salvar policy.yml
+        <button class="btn-primary" style="padding:9px 22px;font-size:14px;display:inline-flex;align-items:center;gap:6px" onclick="savePolicy()">
+          <i data-lucide="save" style="width:14px;height:14px"></i> Salvar policy.yml
         </button>
-        <button class="refresh-btn" style="padding:9px 16px" onclick="pushPolicy()">
-          Commit &amp; Push →  GitHub
+        <button class="refresh-btn" style="padding:9px 16px;display:inline-flex;align-items:center;gap:6px" onclick="pushPolicy()">
+          <i data-lucide="git-commit-horizontal" style="width:14px;height:14px"></i> Commit &amp; Push →  GitHub
         </button>
         <span id="policyMsg" class="form-msg"></span>
       </div>
@@ -1724,7 +1815,7 @@ td { padding: 11px 16px; }
         <div class="card">
           <div class="card-head" style="padding-bottom:0">
             <div class="card-title" style="display:flex;align-items:center;gap:7px">
-              <i data-lucide="radar" style="width:15px;height:15px;color:var(--accent)"></i>
+              <i data-lucide="github" style="width:15px;height:15px;color:var(--accent)"></i>
               Scans GitHub Actions
             </div>
             <div class="card-sub">Runs em andamento e recentes (últimas 2h)</div>
@@ -2096,6 +2187,14 @@ const AUDIT_LABELS = {
   ai_autofix: 'AI Autofix', sla_change: 'SLA alterado', notify_change: 'Notificações alteradas',
 };
 
+function _auditTruncTarget(t) {
+  if (!t) return '—';
+  if (t.length > 20 && /^[0-9a-f]+$/i.test(t)) {
+    return `<span title="${esc(t)}" style="cursor:default">${esc(t.slice(0,7))}…</span>`;
+  }
+  return `<span title="${esc(t)}">${esc(t)}</span>`;
+}
+
 function renderAudit() {
   let list = _auditEntries;
   const q = ($('audSearch')?.value || '').toLowerCase();
@@ -2105,15 +2204,31 @@ function renderAudit() {
   const sorted = applySort('aud', list, {
     0: e => e.ts, 1: e => e.username, 2: e => e.action, 3: e => e.repo || '',
   });
-  $('auditRows').innerHTML = sorted.length ? sorted.map(e => `
-    <tr>
+
+  // Group consecutive repeated events (same action + same minute)
+  const grouped = [];
+  for (const e of sorted) {
+    const tsMin = (e.ts||'').slice(0,16);
+    const last = grouped[grouped.length - 1];
+    if (last && last._action === e.action && last._tsMin === tsMin && last._user === e.username) {
+      last._count++;
+    } else {
+      grouped.push({...e, _action: e.action, _tsMin: tsMin, _user: e.username, _count: 1, _orig: [e]});
+    }
+  }
+
+  $('auditRows').innerHTML = grouped.length ? grouped.map((e, gi) => {
+    const label = AUDIT_LABELS[e.action] || e.action;
+    const countBadge = e._count > 1 ? ` <span style="background:var(--accent-dim);color:var(--accent);font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px">&times;${e._count}</span>` : '';
+    return `<tr>
       <td class="mono" style="font-size:12px;white-space:nowrap">${esc((e.ts||'').slice(0,19).replace('T',' '))}</td>
       <td class="primary">${esc(e.username)}</td>
-      <td><span class="state-chip">${esc(AUDIT_LABELS[e.action] || e.action)}</span></td>
+      <td><span class="state-chip">${esc(label)}</span>${countBadge}</td>
       <td class="mono">${esc(e.repo || '—')}</td>
-      <td class="mono file-cell" title="${esc(e.target||'')}">${esc(e.target || '—')}</td>
+      <td class="mono file-cell">${_auditTruncTarget(e.target)}</td>
       <td class="msg-cell" style="font-size:12px" title="${esc(e.detail||'')}">${esc(e.detail || '')}</td>
-    </tr>`).join('')
+    </tr>`;
+  }).join('')
     : `<tr><td colspan="6"><div class="empty-state"><p>Nenhum evento registrado ainda.</p></div></td></tr>`;
 }
 
@@ -2192,11 +2307,12 @@ async function loadDashboard() {
       <td style="text-align:right"><span class="${r.open === 0 ? 'sev' : ''}" style="${r.open === 0 ? 'background:var(--ok-bg);color:var(--ok)' : 'color:var(--text2)'}">${r.open}</span></td>
     </tr>`).join('');
 
-  // OWASP Top 10
+  // OWASP Top 10 — filter out "Sem categoria", show separately
   const ow = data.owasp || {};
-  const owTotal = Object.values(ow).reduce((a,b) => a+b, 0) || 1;
-  $('owaspDist').innerHTML = Object.entries(ow)
-    .sort((a,b) => b[1]-a[1]).slice(0, 8).map(([cat, n]) => `
+  const owUncategorized = ow['Sem categoria'] || 0;
+  const owCategorized = Object.fromEntries(Object.entries(ow).filter(([k]) => k !== 'Sem categoria'));
+  const owTotal = Object.values(owCategorized).reduce((a,b) => a+b, 0) || 1;
+  const owHtml = Object.entries(owCategorized).sort((a,b) => b[1]-a[1]).slice(0, 8).map(([cat, n]) => `
     <div>
       <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px;gap:8px">
         <span style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cat)}</span>
@@ -2204,6 +2320,12 @@ async function loadDashboard() {
       </div>
       <div class="sev-bar"><div class="sev-bar-fill" style="width:${Math.max(3, Math.round(n/owTotal*100))}%;background:${cat.startsWith('A0') || cat.startsWith('A1') ? 'var(--accent)' : 'var(--info)'}"></div></div>
     </div>`).join('') || '<span style="color:var(--muted);font-size:12px">Sem findings categorizados — rode um novo scan para popular CWE/OWASP.</span>';
+  const owUncatHtml = owUncategorized > 0
+    ? `<div style="margin-top:8px;font-size:11.5px;color:var(--med);display:flex;align-items:center;gap:5px">
+         <i data-lucide="alert-triangle" style="width:12px;height:12px"></i>
+         ${owUncategorized} finding(s) ainda sem categoria OWASP
+       </div>` : '';
+  $('owaspDist').innerHTML = owHtml + owUncatHtml;
 
   const engines = data.engines || {};
   const engTotal = Object.values(engines).reduce((a,b) => a+b, 0) || 1;
@@ -2238,6 +2360,20 @@ async function loadTrend() {
   const repo = $('trendRepo').value;
   if (!repo) return;
   const data = await api('/api/trend?repo=' + encodeURIComponent(repo));
+  const wrap = $('trendChart').parentElement;
+  if (!data.scans || data.scans.length < 2) {
+    if (chart) { chart.destroy(); chart = null; }
+    $('trendChart').style.display = 'none';
+    if (!wrap.querySelector('.trend-empty')) {
+      wrap.insertAdjacentHTML('beforeend',
+        `<div class="trend-empty"><i data-lucide="bar-chart-2" style="width:32px;height:32px;color:var(--bd2)"></i><p>Dados insuficientes — precisamos de ao menos 2 scans para mostrar tendência.</p></div>`);
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    return;
+  }
+  $('trendChart').style.display = '';
+  const emptyMsg = wrap.querySelector('.trend-empty');
+  if (emptyMsg) emptyMsg.remove();
   const labels = data.scans.map(s => s.created_at.slice(5,16).replace('T',' '));
   const c = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
   const ds = (key, col) => ({
@@ -2313,7 +2449,7 @@ function renderJobs() {
       <td>${jobStatusBadge(r)}</td>
       <td class="mono" style="font-size:12px">${r.created_at.slice(0,16).replace('T',' ')}</td>
       <td><a href="${esc(r.url)}" target="_blank" style="color:var(--orange);font-size:12px;text-decoration:none">View ↗</a></td>
-      <td>${isFailed ? `<button class="why-btn" id="why-${r.run_id}" onclick="showRunJobs('${repoKey}',${r.run_id},this)">Why?</button>` : ''}</td>
+      <td>${isFailed ? `<button class="why-icon-btn" id="why-${r.run_id}" onclick="showRunJobs('${repoKey}',${r.run_id},this)" title="Ver por que falhou"><i data-lucide="help-circle"></i></button>` : ''}</td>
     </tr>`;
   }).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
@@ -2329,12 +2465,12 @@ function exportJobsCSV() {
 async function showRunJobs(repo, runId, btn) {
   const detailId = `detail-${runId}`;
   const existing = document.getElementById(detailId);
-  if (existing) { existing.remove(); btn.textContent = 'Why?'; return; }
+  if (existing) { existing.remove(); btnLabel(btn, 'help-circle', ''); return; }
 
-  btn.textContent = '…'; btn.classList.add('loading'); btn.disabled = true;
+  btnLabel(btn, 'loader-circle', ''); btn.classList.add('loading'); btn.disabled = true;
   const data = await fetch(`/api/runs/${encodeURIComponent(repo)}/${runId}/jobs`)
     .then(r => r.ok ? r.json() : null).catch(() => null);
-  btn.textContent = 'Why?'; btn.classList.remove('loading'); btn.disabled = false;
+  btnLabel(btn, 'help-circle', ''); btn.classList.remove('loading'); btn.disabled = false;
   if (!data) return;
 
   const conclusionIcon = c => ({failure:'✗', timed_out:'⏱', success:'✓', skipped:'—', cancelled:'✗'}[c] || '?');
@@ -2380,7 +2516,7 @@ async function showRunJobs(repo, runId, btn) {
 
   const runRow = document.getElementById(`run-row-${runId}`);
   if (runRow) runRow.after(row);
-  btnLabel(btn, 'chevron-up', 'Hide');
+  btnLabel(btn, 'chevron-up', '');
 }
 
 /* ── Findings ── */
@@ -2454,7 +2590,10 @@ function renderFindPage() {
     <tr id="find-row-${gi}" class="${breach ? 'sla-row' : ''}">
       <td style="text-align:center"><input type="checkbox" class="selbox" data-key="${esc(key)}" ${_selKeys.has(key)?'checked':''} onchange="toggleSel(this)"></td>
       <td style="text-align:center"><button class="chev-btn" onclick="toggleFindDetail(${gi}, this)" title="Ver detalhes"><i data-lucide="chevron-right"></i></button></td>
-      <td class="primary msg-cell" title="${esc(f.message)}" style="cursor:pointer" onclick="toggleFindDetail(${gi}, this.parentElement.querySelector('.chev-btn'))">${esc(f.rule)}</td>
+      <td class="primary vuln-name-cell" style="cursor:pointer" onclick="toggleFindDetail(${gi}, this.parentElement.querySelector('.chev-btn'))">
+        <span class="vname" title="${esc(f.rule)}">${esc(f.rule)}</span>
+        <span class="vuln-repo-tag">${esc(f.repo)}</span>
+      </td>
       <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span>${breach ? `<i data-lucide="alarm-clock" style="width:12px;height:12px;color:var(--crit);vertical-align:-2px;margin-left:5px" title="SLA estourado — aberto há ${ageDays(f)} dias"></i>` : ''}</td>
       <td style="color:var(--muted);font-size:12px">${esc(f.tool)}</td>
       <td class="mono file-cell" title="${esc(f.file)}"><a class="fd-file-link" href="${fileLink(f)}" target="_blank" rel="noopener">${esc(f.file)}${f.line?':'+f.line:''}</a></td>
@@ -3120,6 +3259,21 @@ async function setTriage(repo, fid, status) {
   await Promise.all([loadDashboard(), loadFindings(false)]);
 }
 
+/* ── Kebab menus ── */
+function toggleKebab(btn) {
+  const menu = btn.nextElementSibling;
+  const isOpen = menu.classList.contains('open');
+  closeKebabs();
+  if (!isOpen) {
+    menu.classList.add('open');
+    const closeHandler = e => { if (!btn.closest('.kebab-wrap').contains(e.target)) { closeKebabs(); document.removeEventListener('click', closeHandler); } };
+    setTimeout(() => document.addEventListener('click', closeHandler), 10);
+  }
+}
+function closeKebabs() {
+  document.querySelectorAll('.kebab-menu.open').forEach(m => m.classList.remove('open'));
+}
+
 /* ── Repos ── */
 const PLATFORM = 'k19x/ci_cd';
 function workflowYaml(name) {
@@ -3212,10 +3366,18 @@ function renderRepos() {
           <pre class="yaml">${esc(workflowYaml(r.name))}</pre>
         </details>
       </td>
-      <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <button class="btn-primary" style="padding:4px 10px;font-size:12px" onclick="triggerScan('${nameKey}',this)">▶ Scan</button>
-        <button class="btn-ghost" style="padding:4px 8px;font-size:11px" onclick="refreshMeta('${nameKey}',this)" title="Refresh visibility & languages from GitHub">↻</button>
-        <button class="btn-ghost" onclick="delRepo('${nameKey}')">Remove</button>
+      <td>
+        <div class="kebab-wrap" id="kw-${esc(r.name.replace(/[^a-z0-9]/gi,'_'))}">
+          <button class="kebab-btn" onclick="toggleKebab(this)" title="Ações">
+            <i data-lucide="more-vertical" style="width:14px;height:14px"></i>
+          </button>
+          <div class="kebab-menu">
+            <button onclick="closeKebabs();triggerScan('${nameKey}',this)"><i data-lucide="play-circle" style="width:13px;height:13px"></i> Scan</button>
+            <button onclick="closeKebabs();refreshMeta('${nameKey}',this)"><i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Atualizar meta</button>
+            <div class="menu-sep"></div>
+            <button class="danger" onclick="closeKebabs();delRepo('${nameKey}')"><i data-lucide="trash-2" style="width:13px;height:13px"></i> Remover</button>
+          </div>
+        </div>
       </td>
     </tr>`;
   }).join('');
@@ -3278,6 +3440,7 @@ async function addRepo() {
     msg.className = 'form-msg ok'; msg.textContent = 'Project added';
     const addedName = name;
     $('repoName').value = ''; $('repoUrl').value = '';
+    setTimeout(() => { if ($('addRepoDialog')) { $('addRepoDialog').close(); msg.textContent = ''; } }, 800);
     await Promise.all([loadRepos(), loadDashboard()]);
     // fetch GitHub metadata in background
     fetch('/api/repos/' + encodeURIComponent(addedName) + '/refresh-meta', {method:'POST'})
