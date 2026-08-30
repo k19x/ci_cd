@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
 
 <style>
 /* ── Tokens ── */
@@ -1026,7 +1026,7 @@ async function loadJobs() {
       <td class="mono" style="font-size:12px">${r.created_at.slice(0,16).replace('T',' ')}</td>
       <td><a href="${esc(r.url)}" target="_blank" style="color:var(--orange);font-size:12px;text-decoration:none">View ↗</a></td>
     </tr>`).join('');
-  lucide.createIcons();
+  if(typeof lucide!=='undefined')lucide.createIcons();
 }
 
 /* ── Findings ── */
@@ -1086,7 +1086,7 @@ function renderFindPage() {
         </select>
       </td>
     </tr>`).join('');
-  lucide.createIcons();
+  if(typeof lucide!=='undefined')lucide.createIcons();
 
   const pager = $('findPager');
   pager.hidden = false;
@@ -1193,7 +1193,7 @@ function renderRepos() {
       </td>
     </tr>`;
   }).join('');
-  lucide.createIcons();
+  if(typeof lucide!=='undefined')lucide.createIcons();
 }
 
 async function loadRepos() {
@@ -1306,7 +1306,7 @@ async function loadVulns() {
       <td style="text-align:center;font-weight:600;color:var(--text2)">${total}</td>
     </tr>`;
   }).join('');
-  lucide.createIcons();
+  if(typeof lucide!=='undefined')lucide.createIcons();
 }
 
 /* ── Settings / Policy ── */
@@ -1559,6 +1559,6 @@ function toggleTheme() {
     (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   applyTheme(saved);
 })();
-lucide.createIcons();
+if(typeof lucide!=='undefined')lucide.createIcons();
 initApp();
 </script>
