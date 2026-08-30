@@ -1025,6 +1025,33 @@ def rerun_scan(repo: str, run_id: int, user=Depends(require_role("analyst"))):
 # ── AI Engine (Claude) ────────────────────────────────────────────────────
 AI_MODEL  = os.environ.get("SECPIPE_AI_MODEL", "claude-sonnet-5")
 _ai_cache: dict = {}   # (kind, repo, key) -> analysis text
+_ai_jobs:  dict = {}   # job_id -> {status: running|done|error, result?, error?, ts}
+
+
+def _start_ai_job(fn, arg) -> dict:
+    """Executa fn(arg) em background — evita o timeout (~100s) do tunnel Cloudflare."""
+    cutoff = time.time() - 3600
+    for k in [k for k, v in _ai_jobs.items() if v.get("ts", 0) < cutoff]:
+        _ai_jobs.pop(k, None)
+    job_id = secrets.token_hex(8)
+    _ai_jobs[job_id] = {"status": "running", "ts": time.time()}
+    def run():
+        try:
+            _ai_jobs[job_id] = {"status": "done", "result": fn(arg), "ts": time.time()}
+        except HTTPException as e:
+            _ai_jobs[job_id] = {"status": "error", "error": str(e.detail), "ts": time.time()}
+        except Exception as e:
+            _ai_jobs[job_id] = {"status": "error", "error": str(e)[:300], "ts": time.time()}
+    threading.Thread(target=run, daemon=True).start()
+    return {"job": job_id}
+
+
+@app.get("/api/ai/jobs/{job_id}")
+def ai_job_status(job_id: str, user=Depends(require_role("viewer"))):
+    job = _ai_jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job não encontrado (expirou ou o serviço reiniciou)")
+    return job
 
 
 def _claude(system: str, prompt: str, max_tokens: int = 1600) -> str:
@@ -1105,8 +1132,7 @@ class AIFixRequest(BaseModel):
     tool: str = ""
 
 
-@app.post("/api/ai/fix")
-def ai_fix(r: AIFixRequest, user=Depends(require_role("analyst"))):
+def _do_fix(r: AIFixRequest):
     """Gera sugestão de correção para um finding, com o código real como contexto."""
     ck = ("fix", r.repo, r.fid or f"{r.file}:{r.line}:{r.rule}")
     if ck in _ai_cache:
@@ -1169,8 +1195,7 @@ def _run_git(args: list, cwd: str, timeout: int = 60) -> str:
     return proc.stdout
 
 
-@app.post("/api/ai/autofix")
-def ai_autofix(r: AIFixRequest, user=Depends(require_role("analyst"))):
+def _do_autofix(r: AIFixRequest):
     """Clona o repo, deixa o Claude Code corrigir o finding e abre um Pull Request."""
     gh_token = os.environ.get("GITHUB_TOKEN", "")
     if not gh_token:
@@ -1267,8 +1292,7 @@ class AIDiagnoseRequest(BaseModel):
     run_id: int
 
 
-@app.post("/api/ai/diagnose")
-def ai_diagnose(r: AIDiagnoseRequest, user=Depends(require_role("analyst"))):
+def _do_diagnose(r: AIDiagnoseRequest):
     """Diagnostica a causa de um scan que falhou, lendo jobs + logs do GitHub Actions."""
     ck = ("diag", r.repo, str(r.run_id))
     if ck in _ai_cache:
@@ -1329,6 +1353,21 @@ def ai_diagnose(r: AIDiagnoseRequest, user=Depends(require_role("analyst"))):
     analysis = _claude(system, prompt)
     _ai_cache[ck] = analysis
     return {"analysis": analysis, "cached": False}
+
+
+@app.post("/api/ai/fix")
+def ai_fix(r: AIFixRequest, user=Depends(require_role("analyst"))):
+    return _start_ai_job(_do_fix, r)
+
+
+@app.post("/api/ai/autofix")
+def ai_autofix(r: AIFixRequest, user=Depends(require_role("analyst"))):
+    return _start_ai_job(_do_autofix, r)
+
+
+@app.post("/api/ai/diagnose")
+def ai_diagnose(r: AIDiagnoseRequest, user=Depends(require_role("analyst"))):
+    return _start_ai_job(_do_diagnose, r)
 
 
 @app.get("/health")

@@ -820,6 +820,31 @@ pre.yaml {
 /* ── Dashboard customizável ── */
 .dash-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; align-items: start; }
 #dashAddBar:not([hidden]) { display: flex; }
+
+/* ── Modais ── */
+.modal-back {
+  position: fixed; inset: 0; z-index: 10000;
+  background: rgba(2,6,14,.72); backdrop-filter: blur(5px);
+  display: flex; align-items: center; justify-content: center;
+  animation: fade-in .15s ease;
+}
+.modal {
+  background: var(--s1); border: 1px solid var(--bd2); border-radius: 14px;
+  padding: 22px 24px; width: min(460px, 92vw);
+  box-shadow: 0 0 60px rgba(0,200,255,.12), 0 24px 60px rgba(0,0,0,.7);
+}
+.modal-title { font-size: 14px; font-weight: 700; color: var(--text);
+               margin-bottom: 10px; display: flex; gap: 8px; align-items: center; }
+.modal-body  { font-size: 13px; color: var(--text2); line-height: 1.65;
+               margin-bottom: 18px; white-space: pre-line; word-break: break-word; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.modal .btn-danger {
+  background: linear-gradient(135deg, var(--crit) 0%, #b01030 100%);
+  color: #fff; border: 0; border-radius: var(--radius);
+  padding: 7px 18px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 2px 12px rgba(255,51,85,.3);
+}
+.modal .btn-danger:hover { filter: brightness(1.1); }
 #bulkBar:not([hidden]) { display: inline-flex; gap: 6px; align-items: center;
                          padding-left: 10px; border-left: 1px solid var(--bd); }
 .selbox { accent-color: var(--accent); cursor: pointer; }
@@ -2028,6 +2053,57 @@ function toggleFindDetail(gi, btn) {
   if (btn) btn.classList.add('open');
 }
 
+/* ── Modais (substituem alert/confirm nativos) ── */
+function uiModal({title, message, confirmLabel, danger, alertOnly}) {
+  return new Promise(resolve => {
+    const back = document.createElement('div');
+    back.className = 'modal-back';
+    back.innerHTML = `<div class="modal">
+      <div class="modal-title">${title}</div>
+      <div class="modal-body">${message}</div>
+      <div class="modal-actions">
+        ${alertOnly ? '' : '<button class="btn-ghost" data-act="no">Cancelar</button>'}
+        <button class="${danger ? 'btn-danger' : 'btn-primary'}" data-act="yes">${confirmLabel || 'OK'}</button>
+      </div></div>`;
+    const close = v => { document.removeEventListener('keydown', onKey); back.remove(); resolve(v); };
+    const onKey = e => { if (e.key === 'Escape') close(false); if (e.key === 'Enter') close(true); };
+    back.addEventListener('click', e => {
+      if (e.target === back) return close(false);
+      const act = e.target.closest('[data-act]');
+      if (act) close(act.dataset.act === 'yes');
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(back);
+    back.querySelector('[data-act="yes"]').focus();
+  });
+}
+const uiConfirm = (title, message, confirmLabel, danger) =>
+  uiModal({title, message, confirmLabel, danger});
+const uiAlert = (title, message) => uiModal({title, message, alertOnly: true});
+
+/* ── Polling de jobs de IA (evita timeout do tunnel) ── */
+function pollAiJob(jobId, out, onDone, onFail) {
+  const t0 = Date.now();
+  const tick = async () => {
+    const s = Math.round((Date.now() - t0) / 1000);
+    if (s > 600) return onFail('Tempo esgotado (10 min).');
+    try {
+      const res = await fetch('/api/ai/jobs/' + jobId);
+      if (res.ok) {
+        const j = await res.json();
+        if (j.status === 'done')  return onDone(j.result);
+        if (j.status === 'error') return onFail(j.error || 'Erro no processamento de IA');
+      } else if (res.status === 404) {
+        return onFail('Job perdido (o serviço reiniciou?). Tente novamente.');
+      }
+    } catch (e) { /* rede oscilou — tenta de novo */ }
+    const p = out.querySelector('.ai-progress');
+    if (p) p.textContent = `⏳ ${s}s — Claude está trabalhando…`;
+    setTimeout(tick, 4000);
+  };
+  setTimeout(tick, 3000);
+}
+
 /* ── AI Engine ── */
 function renderMd(t) {
   return (t || '').split('```').map((p, i) => {
@@ -2047,7 +2123,9 @@ async function aiFix(gi, btn) {
   if (!f) return;
   const out = $(`aiFixOut-${gi}`);
   btn.disabled = true; btn.textContent = '✨ Analisando…';
-  out.innerHTML = '<div class="fd-text" style="color:var(--muted)">Claude está analisando o código…</div>';
+  out.innerHTML = '<div class="fd-text ai-progress" style="color:var(--muted)">⏳ Claude está analisando o código…</div>';
+  const done = r => { out.innerHTML = renderMd(r.analysis); btn.textContent = '✨ Reanalisar'; btn.disabled = false; };
+  const fail = m => { out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(m)}</div>`; btn.textContent = '✨ Sugerir correção com IA'; btn.disabled = false; };
   try {
     const res = await fetch('/api/ai/fix', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -2055,27 +2133,39 @@ async function aiFix(gi, btn) {
                             file: f.file, line: f.line, message: f.message, tool: f.tool}),
     });
     const body = await res.json().catch(() => ({}));
-    if (res.ok) {
-      out.innerHTML = renderMd(body.analysis);
-      btn.textContent = '✨ Reanalisar';
-    } else {
-      out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(body.detail || 'Erro ' + res.status)}</div>`;
-      btn.textContent = '✨ Sugerir correção com IA';
-    }
-  } catch (e) {
-    out.innerHTML = '<div class="fd-text" style="color:var(--crit)">Falha de rede ao chamar a IA.</div>';
-    btn.textContent = '✨ Sugerir correção com IA';
-  }
-  btn.disabled = false;
+    if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
+    pollAiJob(body.job, out, done, fail);
+  } catch (e) { fail('Falha de rede ao chamar a IA.'); }
 }
 
 async function aiAutofix(gi, btn) {
   const f = _findingsView[gi] || _findings[gi];
   if (!f) return;
-  if (!confirm(`Aplicar correção automática?\n\nRepo: ${f.repo}\nArquivo: ${f.file}:${f.line}\n\nA IA vai editar o código num branch novo e abrir um Pull Request — nada vai direto para a ${'main'}. Você revisa antes do merge.`)) return;
+  const ok = await uiConfirm('🔧 Aplicar correção automática?',
+    `<strong>Repo:</strong> ${esc(f.repo)}\n<strong>Arquivo:</strong> <code>${esc(f.file)}:${f.line||''}</code>\n\nA IA vai editar o código num branch novo e abrir um <strong>Pull Request</strong> — nada vai direto para a main. Você revisa antes do merge.`,
+    'Aplicar e abrir PR');
+  if (!ok) return;
   const out = $(`aiFixOut-${gi}`);
   btn.disabled = true; btn.textContent = '🔧 Aplicando…';
-  out.innerHTML = '<div class="fd-text" style="color:var(--muted)">Clonando o repo, corrigindo o código e abrindo o PR… (1–3 min)</div>';
+  out.innerHTML = '<div class="fd-text ai-progress" style="color:var(--muted)">⏳ Clonando o repo, corrigindo o código e abrindo o PR… (1–3 min)</div>';
+  const done = body => {
+    btn.disabled = false; btn.textContent = '🔧 Aplicar correção (abre PR)';
+    if (body.applied) {
+      out.innerHTML = `
+        <div class="fd-text" style="color:var(--ok)">✅ Correção aplicada no branch <code>${esc(body.branch)}</code></div>
+        <div style="margin:8px 0"><a class="fd-ref" href="${esc(body.pr_url)}" target="_blank" rel="noopener">Abrir Pull Request ↗</a></div>
+        ${body.summary ? renderMd(body.summary) : ''}
+        <details style="margin-top:6px"><summary style="cursor:pointer;color:var(--accent);font-size:11px">Ver diff</summary>
+          <pre class="yaml">${esc(body.diff || '')}</pre></details>`;
+    } else {
+      out.innerHTML = `<div class="fd-text" style="color:var(--med)">${esc(body.detail || 'A IA não fez alterações.')}</div>`
+        + (body.analysis ? renderMd(body.analysis) : '');
+    }
+  };
+  const fail = m => {
+    btn.disabled = false; btn.textContent = '🔧 Aplicar correção (abre PR)';
+    out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(m)}</div>`;
+  };
   try {
     const res = await fetch('/api/ai/autofix', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -2083,47 +2173,26 @@ async function aiAutofix(gi, btn) {
                             file: f.file, line: f.line, message: f.message, tool: f.tool}),
     });
     const body = await res.json().catch(() => ({}));
-    if (res.ok && body.applied) {
-      out.innerHTML = `
-        <div class="fd-text" style="color:var(--ok)">✅ Correção aplicada no branch <code>${esc(body.branch)}</code></div>
-        <div style="margin:8px 0"><a class="fd-ref" href="${esc(body.pr_url)}" target="_blank" rel="noopener">Abrir Pull Request ↗</a></div>
-        ${body.summary ? renderMd(body.summary) : ''}
-        <details style="margin-top:6px"><summary style="cursor:pointer;color:var(--accent);font-size:11px">Ver diff</summary>
-          <pre class="yaml">${esc(body.diff || '')}</pre></details>`;
-    } else if (res.ok) {
-      out.innerHTML = `<div class="fd-text" style="color:var(--med)">${esc(body.detail || 'A IA não fez alterações.')}</div>`
-        + (body.analysis ? renderMd(body.analysis) : '');
-    } else {
-      out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(body.detail || 'Erro ' + res.status)}</div>`;
-    }
-  } catch (e) {
-    out.innerHTML = '<div class="fd-text" style="color:var(--crit)">Falha de rede ao chamar a IA.</div>';
-  }
-  btn.disabled = false; btn.textContent = '🔧 Aplicar correção (abre PR)';
+    if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
+    pollAiJob(body.job, out, done, fail);
+  } catch (e) { fail('Falha de rede ao chamar a IA.'); }
 }
 
 async function aiDiagnose(repo, runId, btn) {
   const out = $(`aiDiag-${runId}`);
   btn.disabled = true; btn.textContent = '✨ Diagnosticando…';
-  out.innerHTML = '<div class="fd-text" style="color:var(--muted)">Claude está lendo os logs do run…</div>';
+  out.innerHTML = '<div class="fd-text ai-progress" style="color:var(--muted)">⏳ Claude está lendo os logs do run…</div>';
+  const done = r => { out.innerHTML = renderMd(r.analysis); btn.textContent = '✨ Rediagnosticar'; btn.disabled = false; };
+  const fail = m => { out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(m)}</div>`; btn.textContent = '✨ Diagnosticar com IA'; btn.disabled = false; };
   try {
     const res = await fetch('/api/ai/diagnose', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({repo, run_id: runId}),
     });
     const body = await res.json().catch(() => ({}));
-    if (res.ok) {
-      out.innerHTML = renderMd(body.analysis);
-      btn.textContent = '✨ Rediagnosticar';
-    } else {
-      out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(body.detail || 'Erro ' + res.status)}</div>`;
-      btn.textContent = '✨ Diagnosticar com IA';
-    }
-  } catch (e) {
-    out.innerHTML = '<div class="fd-text" style="color:var(--crit)">Falha de rede ao chamar a IA.</div>';
-    btn.textContent = '✨ Diagnosticar com IA';
-  }
-  btn.disabled = false;
+    if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
+    pollAiJob(body.job, out, done, fail);
+  } catch (e) { fail('Falha de rede ao chamar a IA.'); }
 }
 
 /* ── Seleção múltipla + triagem em massa ── */
@@ -2335,6 +2404,10 @@ async function addRepo() {
 }
 
 async function delRepo(name) {
+  const ok = await uiConfirm('Remover projeto?',
+    `<strong>${esc(name)}</strong> será removido do SecPipe junto com o histórico de scans e findings no dashboard.\n(O repositório no GitHub não é afetado.)`,
+    'Remover', true);
+  if (!ok) return;
   await fetch('/api/repos/' + encodeURIComponent(name), {method:'DELETE'});
   await Promise.all([loadRepos(), loadDashboard()]);
 }

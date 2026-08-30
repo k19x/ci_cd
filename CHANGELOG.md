@@ -3,6 +3,17 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.1] - 2026-08-30
+
+### Fixed
+- **502 no autofix**: o quick tunnel do Cloudflare derruba requests após ~100s e o autofix leva 1–3 min. As três operações de IA agora são **assíncronas**: o POST retorna um job id na hora e o front faz polling em `GET /api/ai/jobs/{id}` a cada 4s, com contador de tempo ao vivo ("⏳ 45s — Claude está trabalhando…") e timeout de 10 min
+- Jobs guardados em memória com expiração de 1h
+
+### Changed
+- **Modais próprios no lugar de alert()/confirm() nativos**: `uiConfirm`/`uiAlert` com glassmorphism, Esc/Enter/clique-fora, botão vermelho para ações destrutivas
+- Confirmação do autofix virou modal com repo/arquivo formatados
+- `delRepo` agora pede confirmação (antes deletava o projeto sem perguntar nada)
+
 ## [0.11.0] - 2026-08-30
 
 ### Added — Autofix: a IA aplica a correção e abre PR
