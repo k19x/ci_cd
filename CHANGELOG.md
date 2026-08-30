@@ -3,6 +3,15 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.11] - 2026-08-30
+
+### Added
+- **API Keys — gerenciamento completo**: nova sub-aba "Developer" em Settings com criação, listagem e revogação de API keys; token `secpipe_...` exibido uma única vez após criação com botão de cópia
+- **API Keys — autenticação dual**: endpoints protegidos aceitam `X-API-Key: <token>` além do cookie de sessão; escopos `read`, `ingest` e `admin` com mapeamento para roles existentes
+- **API Keys — documentação inline**: seção "Documentação da API" com exemplos de endpoints e links para `/docs` (Swagger) e `/redoc`
+- **`/api/keys` CRUD**: `GET` lista keys, `POST` cria (retorna plaintext uma vez), `DELETE /{id}` revoga; todas requerem role `admin`
+- **Audit log para keys**: eventos `api_key_created` e `api_key_revoked` registrados automaticamente
+
 ## [0.14.10] - 2026-08-30
 
 ### Changed

@@ -210,6 +210,10 @@ _migrations = [
     " id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL,"
     " username TEXT NOT NULL, action TEXT NOT NULL,"
     " repo TEXT DEFAULT '', target TEXT DEFAULT '', detail TEXT DEFAULT '')",
+    "CREATE TABLE IF NOT EXISTS api_keys("
+    " id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,"
+    " key_hash TEXT UNIQUE NOT NULL, scopes TEXT NOT NULL DEFAULT 'read',"
+    " created_at TEXT NOT NULL, last_used TEXT DEFAULT NULL)",
 ]
 for _mig in _migrations:
     try:
@@ -237,7 +241,28 @@ seed_admin()
 
 
 # ── Auth dependencies ──────────────────────────────
+def _hash_api_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
 async def get_current_user(request: Request):
+    # API key auth (X-API-Key header)
+    x_api_key = request.headers.get("x-api-key")
+    if x_api_key:
+        key_hash = _hash_api_key(x_api_key)
+        with db() as conn:
+            row = conn.execute(
+                "SELECT id,name,scopes FROM api_keys WHERE key_hash=?", (key_hash,)
+            ).fetchone()
+        if not row:
+            raise HTTPException(401, "X-API-Key inválido")
+        today = datetime.now(timezone.utc).date().isoformat()
+        with db() as conn:
+            conn.execute("UPDATE api_keys SET last_used=? WHERE id=?", (today, row["id"]))
+        _role = {"read": "viewer", "ingest": "viewer", "admin": "admin"}.get(row["scopes"], "viewer")
+        return {"id": 0, "username": f"api:{row['name']}", "role": _role, "scopes": row["scopes"]}
+
+    # Session cookie auth
     token = request.cookies.get(SESSION_COOKIE)
     if not token:
         raise HTTPException(401, "Não autenticado")
@@ -282,9 +307,62 @@ class IngestPayload(BaseModel):
 
 
 def check_token(x_api_key: str | None) -> None:
-    token = os.environ.get("SECPIPE_TOKEN")
-    if token and x_api_key != token:
+    legacy = os.environ.get("SECPIPE_TOKEN")
+    if legacy and x_api_key == legacy:
+        return
+    if x_api_key:
+        key_hash = _hash_api_key(x_api_key)
+        with db() as conn:
+            row = conn.execute(
+                "SELECT scopes FROM api_keys WHERE key_hash=?", (key_hash,)
+            ).fetchone()
+        if row and row["scopes"] in ("ingest", "admin"):
+            return
+    if legacy:
         raise HTTPException(status_code=401, detail="X-API-Key inválido")
+
+
+# ── API Keys CRUD ──────────────────────────────────
+@app.get("/api/keys")
+def list_api_keys(user=Depends(require_role("admin"))):
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT id,name,scopes,created_at,last_used FROM api_keys ORDER BY created_at DESC"
+        ).fetchall()
+    return {"keys": [dict(r) for r in rows]}
+
+
+@app.post("/api/keys", status_code=201)
+async def create_api_key(request: Request, user=Depends(require_role("admin"))):
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    scopes = body.get("scopes", "read")
+    if not name:
+        raise HTTPException(400, "name é obrigatório")
+    if scopes not in ("read", "ingest", "admin"):
+        raise HTTPException(400, "scopes inválido: use read, ingest ou admin")
+    raw = "secpipe_" + secrets.token_urlsafe(32)
+    key_hash = _hash_api_key(raw)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO api_keys(name,key_hash,scopes,created_at) VALUES(?,?,?,?)",
+            (name, key_hash, scopes, now),
+        )
+        kid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    _audit(user["username"], "api_key_created", detail=f"name={name} scopes={scopes}")
+    return {"id": kid, "name": name, "scopes": scopes, "created_at": now, "key": raw}
+
+
+@app.delete("/api/keys/{key_id}")
+def revoke_api_key(key_id: int, user=Depends(require_role("admin"))):
+    with db() as conn:
+        row = conn.execute("SELECT name FROM api_keys WHERE id=?", (key_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Key não encontrada")
+        conn.execute("DELETE FROM api_keys WHERE id=?", (key_id,))
+    _audit(user["username"], "api_key_revoked", detail=f"name={row['name']}")
+    return {"ok": True}
 
 
 @app.post("/api/ingest")

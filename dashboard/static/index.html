@@ -1590,6 +1590,7 @@ td { padding: 11px 16px; }
         <button class="vis-tab active" onclick="showSettingsTab('policy',this)">Policy</button>
         <button class="vis-tab" onclick="showSettingsTab('ai',this)">AI</button>
         <button class="vis-tab" onclick="showSettingsTab('notify',this)">Notificações</button>
+        <button class="vis-tab" onclick="showSettingsTab('developer',this)">Developer</button>
       </div>
 
       <div id="settingsPane-policy">
@@ -1805,6 +1806,90 @@ td { padding: 11px 16px; }
         </div>
       </div>
     </div>
+
+    <!-- ── Sub-aba Developer ── -->
+    <div id="settingsPane-developer" style="display:none">
+      <div class="card" style="max-width:720px;margin-bottom:20px">
+        <div class="card-head">
+          <div class="card-title"><i data-lucide="key"></i> API Keys</div>
+          <div class="card-sub">Autentique chamadas à API com <span class="mono">X-API-Key: &lt;token&gt;</span></div>
+        </div>
+        <div class="card-body">
+          <!-- Create form -->
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:18px">
+            <div style="flex:1;min-width:160px">
+              <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Nome</label>
+              <input id="newKeyName" placeholder="ci-github-actions, monitoring..." style="width:100%;font-size:13px;padding:8px 10px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);box-sizing:border-box">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Escopo</label>
+              <select id="newKeyScope" style="font-size:13px;padding:8px 10px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text)">
+                <option value="read">read — leitura (findings, scans, overview)</option>
+                <option value="ingest">ingest — envio de scans (/api/ingest)</option>
+                <option value="admin">admin — acesso total</option>
+              </select>
+            </div>
+            <button class="btn-primary" onclick="createApiKey()" style="white-space:nowrap"><i data-lucide="plus"></i> Gerar key</button>
+          </div>
+
+          <!-- Generated key alert -->
+          <div id="newKeyAlert" hidden style="background:var(--ok-bg);border:1px solid var(--ok);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px">
+            <div style="font-size:12px;font-weight:700;color:var(--ok);margin-bottom:6px">Copie agora — não será exibido novamente</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <code id="newKeyValue" style="flex:1;font-size:12px;word-break:break-all;background:var(--s2);padding:6px 10px;border-radius:4px;color:var(--text)"></code>
+              <button class="btn-ghost" onclick="copyApiKey()" title="Copiar"><i data-lucide="copy"></i></button>
+            </div>
+          </div>
+
+          <!-- Keys table -->
+          <table style="width:100%">
+            <thead><tr>
+              <th>Nome</th>
+              <th>Escopo</th>
+              <th>Criado em</th>
+              <th>Último uso</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="apiKeyRows"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Nenhuma key criada</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Docs quick-ref -->
+      <div class="card" style="max-width:720px">
+        <div class="card-head">
+          <div class="card-title"><i data-lucide="book-open"></i> Documentação da API</div>
+        </div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--text2);margin:0 0 12px">Autentique qualquer endpoint passando o header <span class="mono">X-API-Key: secpipe_...</span></p>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:var(--radius);background:var(--s2);font-size:12.5px">
+              <span style="background:var(--ok-bg);color:var(--ok);padding:2px 7px;border-radius:4px;font-weight:700;font-size:11px">GET</span>
+              <span class="mono" style="flex:1">/api/findings?severity=critical&status=open</span>
+              <span style="color:var(--muted)">escopo: read</span>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:var(--radius);background:var(--s2);font-size:12.5px">
+              <span style="background:var(--ok-bg);color:var(--ok);padding:2px 7px;border-radius:4px;font-weight:700;font-size:11px">GET</span>
+              <span class="mono" style="flex:1">/api/overview</span>
+              <span style="color:var(--muted)">escopo: read</span>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:var(--radius);background:var(--s2);font-size:12.5px">
+              <span style="background:var(--ok-bg);color:var(--ok);padding:2px 7px;border-radius:4px;font-weight:700;font-size:11px">GET</span>
+              <span class="mono" style="flex:1">/api/scans</span>
+              <span style="color:var(--muted)">escopo: read</span>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:var(--radius);background:var(--s2);font-size:12.5px">
+              <span style="background:var(--accent);color:#fff;padding:2px 7px;border-radius:4px;font-weight:700;font-size:11px">POST</span>
+              <span class="mono" style="flex:1">/api/ingest</span>
+              <span style="color:var(--muted)">escopo: ingest</span>
+            </div>
+          </div>
+          <p style="font-size:12px;color:var(--muted);margin:12px 0 0">
+            Documentação completa: <a href="/docs" target="_blank" rel="noopener" style="color:var(--accent)">/docs</a> (Swagger UI) · <a href="/redoc" target="_blank" rel="noopener" style="color:var(--accent)">/redoc</a>
+          </p>
+        </div>
+      </div>
+    </div><!-- /settingsPane-developer -->
 
     </div><!-- /tab-settings -->
 
@@ -2748,11 +2833,61 @@ function toggleFindDetail(gi, btn) {
 function showSettingsTab(k, btn) {
   document.querySelectorAll('#tab-settings > .vis-tabs .vis-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  $('settingsPane-policy').style.display = k === 'policy' ? '' : 'none';
-  $('settingsPane-ai').style.display     = k === 'ai'     ? '' : 'none';
-  $('settingsPane-notify').style.display = k === 'notify' ? '' : 'none';
+  $('settingsPane-policy').style.display    = k === 'policy'    ? '' : 'none';
+  $('settingsPane-ai').style.display        = k === 'ai'        ? '' : 'none';
+  $('settingsPane-notify').style.display    = k === 'notify'    ? '' : 'none';
+  $('settingsPane-developer').style.display = k === 'developer' ? '' : 'none';
   if (k === 'ai') loadAIConfig();
   if (k === 'notify') loadNotifyConfig();
+  if (k === 'developer') loadApiKeys();
+}
+
+/* ── API Keys ── */
+async function loadApiKeys() {
+  const data = await api('/api/keys');
+  if (!data) return;
+  const tbody = $('apiKeyRows');
+  if (!data.keys.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Nenhuma key criada</td></tr>';
+    return;
+  }
+  const scopeColor = {read:'var(--ok)',ingest:'var(--orange)',admin:'var(--crit)'};
+  tbody.innerHTML = data.keys.map(k => `
+    <tr>
+      <td class="primary">${esc(k.name)}</td>
+      <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:var(--s2);color:${scopeColor[k.scopes]||'var(--text2)'}">${esc(k.scopes)}</span></td>
+      <td style="font-size:12px;color:var(--text2)">${k.created_at.slice(0,10)}</td>
+      <td style="font-size:12px;color:var(--muted)">${k.last_used || '—'}</td>
+      <td style="text-align:right"><button class="btn-ghost" style="color:var(--crit)" onclick="revokeApiKey(${k.id},'${esc(k.name)}')"><i data-lucide="trash-2"></i> Revogar</button></td>
+    </tr>`).join('');
+  if(typeof lucide!=='undefined')lucide.createIcons();
+}
+
+async function createApiKey() {
+  const name   = ($('newKeyName').value || '').trim();
+  const scopes = $('newKeyScope').value;
+  if (!name) { $('newKeyName').focus(); return; }
+  const data = await api('/api/keys', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, scopes})});
+  if (!data) return;
+  $('newKeyValue').textContent = data.key;
+  $('newKeyAlert').hidden = false;
+  $('newKeyName').value = '';
+  loadApiKeys();
+}
+
+function copyApiKey() {
+  const val = $('newKeyValue').textContent;
+  navigator.clipboard.writeText(val).then(() => {
+    const btn = $('newKeyAlert').querySelector('button');
+    btnLabel(btn, 'check', 'Copiado!');
+    setTimeout(() => { btnLabel(btn, 'copy', ''); lucide.createIcons(); }, 2000);
+  });
+}
+
+async function revokeApiKey(id, name) {
+  if (!confirm(`Revogar key "${name}"? Esta ação não pode ser desfeita.`)) return;
+  const data = await api(`/api/keys/${id}`, {method:'DELETE'});
+  if (data) { $('newKeyAlert').hidden = true; loadApiKeys(); }
 }
 
 /* ── SLA ── */
