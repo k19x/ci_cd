@@ -956,6 +956,101 @@ tr.sla-row td:first-child { background: rgba(255,51,85,.04); }
 :root[data-theme="light"] pre.yaml { background: rgba(10,30,60,.05); }
 :root[data-theme="light"] .vis-tabs { background: rgba(10,30,60,.05); }
 :root[data-theme="light"] .card-tools button { background: var(--s2); }
+
+/* ═══════════════════════════════════════════
+   VISUAL IMPROVEMENTS — polish & hierarchy
+   ═══════════════════════════════════════════ */
+
+/* Spin animation for loader icons */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Activity rows — pill-card style ── */
+#actScans > div, #actAiJobs > div {
+  background: rgba(0,180,255,.022);
+  border: 1px solid var(--bd) !important;
+  border-radius: 10px;
+  margin: 5px 0;
+  padding: 12px 14px !important;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+}
+#actScans > div:hover, #actAiJobs > div:hover {
+  background: rgba(0,180,255,.05);
+  border-color: var(--bd2) !important;
+  box-shadow: 0 2px 12px rgba(0,180,255,.06);
+}
+/* Status color tints on activity rows */
+#actScans > div:has(span[style*="var(--crit)"]) { border-color: rgba(255,51,85,.18) !important; }
+#actScans > div:has(span[style*="var(--ok)"]) { border-color: rgba(34,197,94,.14) !important; }
+
+/* ── Stat cells — severity gradient tints ── */
+.stat-cell.crit  { background: linear-gradient(145deg, rgba(255,51,85,.09) 0%, rgba(8,21,42,.7) 60%) !important; }
+.stat-cell.high  { background: linear-gradient(145deg, rgba(255,119,51,.08) 0%, rgba(8,21,42,.7) 60%) !important; }
+.stat-cell.med   { background: linear-gradient(145deg, rgba(240,185,11,.07) 0%, rgba(8,21,42,.7) 60%) !important; }
+.stat-cell.low   { background: linear-gradient(145deg, rgba(59,130,246,.07) 0%, rgba(8,21,42,.7) 60%) !important; }
+.stat-cell.fixed { background: linear-gradient(145deg, rgba(34,197,94,.08) 0%, rgba(8,21,42,.7) 60%) !important; }
+.stat-cell.total { background: linear-gradient(145deg, rgba(0,184,255,.06) 0%, rgba(8,21,42,.7) 60%) !important; }
+:root[data-theme="light"] .stat-cell { background: rgba(255,255,255,.92) !important; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .stat-cell { background: rgba(255,255,255,.92) !important; }
+}
+
+/* ── Larger stat numbers ── */
+.stat-val { font-size: 42px; }
+
+/* ── Card header — subtle gradient ── */
+.card-head {
+  background: linear-gradient(90deg, rgba(0,184,255,.05) 0%, transparent 70%);
+  padding: 14px 20px 12px;
+}
+.card-title { font-size: 12px; }
+
+/* ── Card body sections ── */
+#actScans, #actAiJobs { padding: 10px 14px 14px !important; }
+
+/* ── Font rendering ── */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 13.5px;
+}
+
+/* ── Table row hover slightly more visible ── */
+tbody tr:hover { background: rgba(0,184,255,.06); }
+thead th { padding: 9px 16px; }
+td { padding: 11px 16px; }
+
+/* ── Nav section spacing ── */
+.nav-section + .nav-section { padding-top: 6px; border-top: 1px solid rgba(0,180,255,.07); margin-top: 4px; }
+.nav-label { color: rgba(0,180,255,.4); font-size: 9.5px; }
+
+/* ── More visible empty states ── */
+.empty-state { padding: 60px 24px; }
+.empty-state i[data-lucide] svg { width: 40px; height: 40px; color: rgba(0,184,255,.2); }
+
+/* ── Pager controls alignment ── */
+.pager { padding: 12px 18px; }
+
+/* ── Badge style improvements ── */
+.topbar-badge { padding: 4px 12px; font-size: 11.5px; border-radius: 99px; }
+
+/* ── Severity chip contrast boost ── */
+.sev.critical { border: 1px solid rgba(255,51,85,.3); box-shadow: 0 0 6px rgba(255,51,85,.12); }
+
+/* ── Card hover glow ── */
+.card { transition: border-color .2s, box-shadow .2s; }
+.card:hover { border-color: rgba(0,180,255,.16); }
+
+/* ── Btn ghost default hover — accent (not red) for non-delete context ── */
+.card-head .btn-ghost:hover, .topbar .btn-ghost:hover, .form-row .btn-ghost:hover {
+  color: var(--accent); border-color: var(--accent); background: var(--accent-dim);
+}
+
+/* ── Content padding ── */
+.content { padding: 24px 28px; }
+
+/* ── Better filter bar ── */
+.filter-bar { padding: 12px 18px; gap: 10px; }
+.filter-bar select, .filter-bar input { height: 32px; font-size: 12.5px; padding: 5px 12px; }
 </style>
 
 <div class="sidebar">
@@ -2716,7 +2811,7 @@ async function aiAutofixFromPending(fid, btn) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
-    pollAiJobTracked(body.job, `Autofix: ${f.repo} / ${f.rule||f.fid}`, out, done, fail);
+    pollAiJobTracked(body.job, `Autofix: ${f.repo} / ${f.rule||f.fid}`, out, done, fail, _fmtAutofix);
   } catch (e) { fail('Falha de rede.'); }
 }
 
@@ -2781,14 +2876,18 @@ function _ajRender() {
   drawer.innerHTML = entries.map(([id,x]) => {
     const age = x.done ? `${Math.round((Date.now()-x.done)/60000)}min atrás`
                        : `${Math.round((Date.now()-x.started)/1000)}s`;
-    const icon = x.status==='running'?'<i data-lucide="loader-circle" style="width:13px;height:13px;animation:spin 1s linear infinite"></i>' : x.status==='done'?'✅':'❌';
-    return `<div style="padding:8px 0;border-bottom:1px solid var(--bd);font-size:12px">
-      <div style="display:flex;align-items:center;gap:6px">
-        ${icon}<span style="flex:1;font-weight:500;word-break:break-word">${esc(x.label)}</span>
-        <span style="color:var(--muted);font-size:10px;white-space:nowrap">${age}</span>
+    const icon = x.status==='running'
+      ? '<i data-lucide="loader-circle" style="width:13px;height:13px;animation:spin 1s linear infinite;color:var(--low)"></i>'
+      : x.status==='done'
+        ? '<i data-lucide="circle-check" style="width:13px;height:13px;color:var(--ok)"></i>'
+        : '<i data-lucide="circle-x" style="width:13px;height:13px;color:var(--crit)"></i>';
+    return `<div style="padding:9px 10px;margin:4px 0;border-radius:8px;border:1px solid var(--bd);background:rgba(0,180,255,.02);font-size:12px">
+      <div style="display:flex;align-items:center;gap:7px">
+        ${icon}<span style="flex:1;font-weight:500;word-break:break-word;color:var(--t0)">${esc(x.label)}</span>
+        <span style="color:var(--t2);font-size:10px;white-space:nowrap;font-family:'JetBrains Mono',monospace">${age}</span>
       </div>
-      ${x.result ? `<div style="margin-top:4px;color:var(--ok)">${x.result}</div>` : ''}
-      ${x.error  ? `<div style="margin-top:4px;color:var(--crit)">${esc(x.error)}</div>` : ''}
+      ${x.result ? `<div style="margin-top:5px;color:var(--ok);font-size:11px;padding-left:20px">${x.result}</div>` : ''}
+      ${x.error  ? `<div style="margin-top:5px;color:var(--crit);font-size:11px;padding-left:20px">${esc(x.error)}</div>` : ''}
     </div>`;
   }).join('');
   if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -2817,13 +2916,22 @@ function aiJobsResumeAll() {
 }
 
 // Wrapper que rastreia + faz polling
-function pollAiJobTracked(jobId, label, out, onDone, onFail) {
+// resultFmt(r): converte o resultado bruto em HTML para o Jobs tracker (opcional)
+function pollAiJobTracked(jobId, label, out, onDone, onFail, resultFmt) {
   aiJobTrack(jobId, label);
   pollAiJob(jobId, out,
-    r => { aiJobDone(jobId, ''); onDone(r); },
+    r => { aiJobDone(jobId, resultFmt ? resultFmt(r) : ''); onDone(r); },
     e => { aiJobFail(jobId, e); onFail(e); }
   );
 }
+
+const _fmtAutofix = r => r?.pr_url
+  ? `PR: <a href="${esc(r.pr_url)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(r.branch||'ver PR')}</a>`
+  : r?.applied===false ? (r.detail||'IA não fez alterações.') : 'Concluído.';
+
+const _fmtVerify = r => r?.verified && r?.fixed ? 'Corrigido — marcado como Fixed'
+  : r?.verified ? 'Finding ainda presente'
+  : (r?.detail || 'Verificação inconclusiva');
 
 /* ── AI Engine ── */
 function btnLabel(btn, icon, label) {
@@ -2901,7 +3009,7 @@ async function aiAutofix(gi, btn) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
-    pollAiJobTracked(body.job, `Autofix: ${f.repo} / ${f.rule||f.fid}`, out, done, fail);
+    pollAiJobTracked(body.job, `Autofix: ${f.repo} / ${f.rule||f.fid}`, out, done, fail, _fmtAutofix);
   } catch (e) { fail('Falha de rede ao chamar a IA.'); }
 }
 
@@ -2937,7 +3045,7 @@ async function aiVerify(gi, btn) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return fail(body.detail || 'Erro ' + res.status);
-    pollAiJobTracked(body.job, `Verificação: ${f.repo} / ${f.rule||f.fid}`, out, done, fail);
+    pollAiJobTracked(body.job, `Verificação: ${f.repo} / ${f.rule||f.fid}`, out, done, fail, _fmtVerify);
   } catch (e) { fail('Falha de rede.'); }
 }
 

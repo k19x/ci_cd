@@ -3,6 +3,14 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.7] - 2026-08-30
+
+### Fixed
+- **Jobs tracker sempre mostrava "Concluído." para autofixes e verificações**: `pollAiJobTracked` passava string vazia para `aiJobDone`, que pelo fallback `|| 'Concluído.'` descartava o resultado real (link do PR ou "IA não fez alterações."); corrigido adicionando parâmetro `resultFmt` opcional à função e definindo `_fmtAutofix` e `_fmtVerify` para formatar corretamente o resultado nos jobs de autofix e verificação
+
+### Added
+- **Frontend redesign**: melhorias visuais nos KPI cards (gradient de severidade nas bordas, números 42px), sidebar com separadores entre seções, tabelas com mais padding, hover glow nos cards, font-rendering antialiased, `@keyframes spin` adicionado; IA Engine drawer usa Lucide icons ao invés de emojis
+
 ## [0.14.6] - 2026-08-30
 
 ### Added
