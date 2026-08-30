@@ -859,6 +859,14 @@ pre.yaml {
 #bulkBar:not([hidden]) { display: inline-flex; gap: 6px; align-items: center;
                          padding-left: 10px; border-left: 1px solid var(--bd); }
 .selbox { accent-color: var(--accent); cursor: pointer; }
+tr.sla-row { box-shadow: inset 3px 0 0 var(--crit); }
+tr.sla-row td:first-child { background: rgba(255,51,85,.04); }
+.risk-badge { display: inline-flex; padding: 2px 9px; border-radius: 99px; font-size: 10.5px;
+              font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+.risk-badge.r-crit { background: var(--crit-bg); color: var(--crit); border: 1px solid rgba(255,51,85,.25); }
+.risk-badge.r-high { background: var(--high-bg); color: var(--high); }
+.risk-badge.r-med  { background: var(--med-bg);  color: var(--med); }
+.risk-badge.r-low  { background: var(--ok-bg);   color: var(--ok); }
 .dash-grid .span-3 { grid-column: span 3; }
 .dash-grid .span-2 { grid-column: span 2; }
 @media (max-width: 1100px) { .dash-grid .span-3, .dash-grid .span-2 { grid-column: span 6; } }
@@ -977,6 +985,10 @@ pre.yaml {
         <i data-lucide="settings-2"></i>
         Settings
       </a>
+      <a class="nav-item" onclick="showTab('audit',this)" data-min-role="admin">
+        <i data-lucide="scroll-text"></i>
+        Audit Log
+      </a>
     </div>
   </nav>
 
@@ -1073,6 +1085,7 @@ pre.yaml {
         <div class="stat-cell med"   title="Filtrar por Medium" onclick="goToFindings('medium','open')"><div class="stat-val" id="s-medium">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--med)"></span>Medium</div></div>
         <div class="stat-cell low"   title="Filtrar por Low" onclick="goToFindings('low','open')"><div class="stat-val" id="s-low">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--low)"></span>Low</div></div>
         <div class="stat-cell fixed" title="Ver findings corrigidos" onclick="goToFindings('','fixed')"><div class="stat-val" id="s-fixed">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--ok)"></span>Corrigidos</div></div>
+        <div class="stat-cell crit" title="Findings abertos além do prazo de SLA" onclick="if($('fSlaOnly'))$('fSlaOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-sla">—</div><div class="stat-label"><span class="stat-dot" style="background:var(--crit)"></span>SLA estourado</div></div>
       </div>
 
       <!-- customize bar -->
@@ -1081,6 +1094,7 @@ pre.yaml {
           <span style="font-size:11px;color:var(--muted)">Adicionar:</span>
           <span id="dashAddList"></span>
         </div>
+        <button class="refresh-btn" onclick="window.open('/report','_blank')" title="Relatório executivo (HTML/PDF)"><i data-lucide="file-text" style="width:13px;height:13px"></i> Relatório</button>
         <button class="refresh-btn" id="dashEditBtn" onclick="toggleDashEdit()"><i data-lucide="sliders-horizontal" style="width:13px;height:13px"></i> Personalizar</button>
       </div>
 
@@ -1129,7 +1143,7 @@ pre.yaml {
             </span>
           </div>
           <div class="card-body tbl-wrap">
-            <table><thead><tr><th>Projeto</th><th style="text-align:right">C+H abertos</th></tr></thead>
+            <table><thead><tr><th>Projeto</th><th style="text-align:right">Risk Score</th></tr></thead>
             <tbody id="riskiestRows"></tbody></table>
           </div>
         </div>
@@ -1233,6 +1247,9 @@ pre.yaml {
           <select id="fTool"><option value="">All engines</option>
             <option>Semgrep</option><option>Trivy</option><option>gitleaks</option>
           </select>
+          <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer">
+            <input type="checkbox" id="fSlaOnly" class="selbox" onchange="_findPage=0;renderFindPage()"> SLA estourado
+          </label>
           <button class="btn-ghost" onclick="exportFindingsCSV()" title="Exportar CSV"><i data-lucide="download"></i> CSV</button>
           <span id="bulkBar" hidden>
             <select id="bulkStatus">
@@ -1331,6 +1348,7 @@ pre.yaml {
               <th class="sortable" data-k="rep" data-c="3" onclick="sortBy('rep',3,renderRepos)">Scans<span class="arr"></span></th>
               <th class="sortable" data-k="rep" data-c="4" onclick="sortBy('rep',4,renderRepos)">Open<span class="arr"></span></th>
               <th class="sortable" data-k="rep" data-c="5" onclick="sortBy('rep',5,renderRepos)">Crit / High<span class="arr"></span></th>
+              <th class="sortable" data-k="rep" data-c="6" onclick="sortBy('rep',6,renderRepos)">Risk<span class="arr"></span></th>
               <th>Integration</th><th></th>
             </tr></thead>
             <tbody id="repoRows"></tbody>
@@ -1344,6 +1362,7 @@ pre.yaml {
       <div class="vis-tabs" style="display:inline-flex;margin-bottom:16px">
         <button class="vis-tab active" onclick="showSettingsTab('policy',this)">Policy</button>
         <button class="vis-tab" onclick="showSettingsTab('ai',this)">AI</button>
+        <button class="vis-tab" onclick="showSettingsTab('notify',this)">Notificações</button>
       </div>
 
       <div id="settingsPane-policy">
@@ -1482,6 +1501,23 @@ pre.yaml {
         </div>
       </div>
     </div>
+      <!-- SLA -->
+      <div class="card" style="margin-top:16px;max-width:640px">
+        <div class="card-head">
+          <div class="card-title">SLA de correção</div>
+          <div class="card-sub">Dias máximos com finding aberto antes de estourar</div>
+        </div>
+        <div style="padding:18px;display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
+          <div><label class="sev critical" style="margin-bottom:6px;display:inline-flex">Critical</label><br><input type="number" id="slaCritical" min="1" class="sev-num"></div>
+          <div><label class="sev high" style="margin-bottom:6px;display:inline-flex">High</label><br><input type="number" id="slaHigh" min="1" class="sev-num"></div>
+          <div><label class="sev medium" style="margin-bottom:6px;display:inline-flex">Medium</label><br><input type="number" id="slaMedium" min="1" class="sev-num"></div>
+          <div><label class="sev low" style="margin-bottom:6px;display:inline-flex">Low</label><br><input type="number" id="slaLow" min="1" class="sev-num"></div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn-primary" onclick="saveSLA()" data-min-role="admin">Salvar SLA</button>
+            <span class="form-msg" id="slaMsg"></span>
+          </div>
+        </div>
+      </div>
     </div><!-- /settingsPane-policy -->
 
     <!-- ── Sub-aba AI ── -->
@@ -1513,7 +1549,63 @@ pre.yaml {
       </div>
     </div>
 
+    <!-- ── Sub-aba Notificações ── -->
+    <div id="settingsPane-notify" style="display:none">
+      <div class="card" style="max-width:640px">
+        <div class="card-head">
+          <div class="card-title"><i data-lucide="bell"></i>Notificações de Critical</div>
+          <div class="card-sub">Enviadas quando um finding critical NOVO chega no ingest</div>
+        </div>
+        <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+          <div>
+            <label style="display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Slack — Incoming Webhook URL</label>
+            <input id="ntfSlack" placeholder="https://hooks.slack.com/services/..." style="width:100%;font-size:13px;padding:9px 11px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);box-sizing:border-box">
+          </div>
+          <div>
+            <label style="display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Discord — Webhook URL</label>
+            <input id="ntfDiscord" placeholder="https://discord.com/api/webhooks/..." style="width:100%;font-size:13px;padding:9px 11px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);box-sizing:border-box">
+          </div>
+          <div>
+            <label style="display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">WhatsApp — URL CallMeBot</label>
+            <input id="ntfWhatsapp" placeholder="https://api.callmebot.com/whatsapp.php?phone=+55...&apikey=..." style="width:100%;font-size:13px;padding:9px 11px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);box-sizing:border-box">
+            <div style="font-size:11px;color:var(--muted);margin-top:5px">Ative o CallMeBot enviando "I allow callmebot to send me messages" para +34 621 331 709 no WhatsApp; a mensagem é anexada como <span class="mono">&text=</span></div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn-primary" onclick="saveNotify()" data-min-role="admin">Salvar</button>
+            <button class="btn-ghost" onclick="testNotify()"><i data-lucide="send"></i> Testar canais</button>
+            <span class="form-msg" id="ntfMsg"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     </div><!-- /tab-settings -->
+
+    <!-- ═══ AUDIT LOG ═══ -->
+    <div id="tab-audit" class="tab-pane">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">Audit Log</div>
+          <div class="card-sub" id="auditCount"></div>
+        </div>
+        <div class="filter-bar">
+          <input id="audSearch" placeholder="Buscar usuário, ação, projeto..." oninput="renderAudit()">
+          <button class="btn-ghost" onclick="exportAuditCSV()" title="Exportar CSV"><i data-lucide="download"></i> CSV</button>
+        </div>
+        <div class="card-body tbl-wrap">
+          <table>
+            <thead><tr>
+              <th class="sortable" data-k="aud" data-c="0" onclick="sortBy('aud',0,renderAudit)">Data<span class="arr"></span></th>
+              <th class="sortable" data-k="aud" data-c="1" onclick="sortBy('aud',1,renderAudit)">Usuário<span class="arr"></span></th>
+              <th class="sortable" data-k="aud" data-c="2" onclick="sortBy('aud',2,renderAudit)">Ação<span class="arr"></span></th>
+              <th class="sortable" data-k="aud" data-c="3" onclick="sortBy('aud',3,renderAudit)">Projeto<span class="arr"></span></th>
+              <th>Alvo</th><th>Detalhe</th>
+            </tr></thead>
+            <tbody id="auditRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
   </div><!-- /content -->
 </div><!-- /main -->
@@ -1667,7 +1759,7 @@ function showTab(tab, el) {
   $(`tab-${tab}`).classList.add('active');
   if (el) el.classList.add('active');
   currentTab = tab;
-  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Results', vulns:'Findings', repos:'Projects', settings:'Settings'};
+  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Results', vulns:'Findings', repos:'Projects', settings:'Settings', audit:'Audit Log'};
   $('topbarTitle').textContent = titles[tab] || tab;
   clearInterval(jobTimer);
   clearInterval(dashTimer);
@@ -1681,6 +1773,47 @@ function showTab(tab, el) {
   if (tab === 'vulns')    loadVulns();
   if (tab === 'repos')    loadRepos();
   if (tab === 'settings') loadSettings();
+  if (tab === 'audit')    loadAudit();
+}
+
+/* ── Audit Log ── */
+let _auditEntries = [];
+async function loadAudit() {
+  const d = await api('/api/audit');
+  if (!d) return;
+  _auditEntries = d.entries;
+  renderAudit();
+}
+
+const AUDIT_LABELS = {
+  login: 'Login', triage: 'Triagem', repo_add: 'Projeto adicionado', repo_del: 'Projeto removido',
+  scan_dispatch: 'Scan disparado', policy_push: 'Policy push', ai_model_change: 'Modelo IA alterado',
+  ai_autofix: 'AI Autofix', sla_change: 'SLA alterado', notify_change: 'Notificações alteradas',
+};
+
+function renderAudit() {
+  let list = _auditEntries;
+  const q = ($('audSearch')?.value || '').toLowerCase();
+  if (q) list = list.filter(e =>
+    (e.username + ' ' + e.action + ' ' + (e.repo||'') + ' ' + (e.target||'')).toLowerCase().includes(q));
+  $('auditCount').textContent = `${list.length} evento(s)`;
+  const sorted = applySort('aud', list, {
+    0: e => e.ts, 1: e => e.username, 2: e => e.action, 3: e => e.repo || '',
+  });
+  $('auditRows').innerHTML = sorted.length ? sorted.map(e => `
+    <tr>
+      <td class="mono" style="font-size:12px;white-space:nowrap">${esc((e.ts||'').slice(0,19).replace('T',' '))}</td>
+      <td class="primary">${esc(e.username)}</td>
+      <td><span class="state-chip">${esc(AUDIT_LABELS[e.action] || e.action)}</span></td>
+      <td class="mono">${esc(e.repo || '—')}</td>
+      <td class="mono file-cell" title="${esc(e.target||'')}">${esc(e.target || '—')}</td>
+      <td class="msg-cell" style="font-size:12px" title="${esc(e.detail||'')}">${esc(e.detail || '')}</td>
+    </tr>`).join('')
+    : `<tr><td colspan="6"><div class="empty-state"><p>Nenhum evento registrado ainda.</p></div></td></tr>`;
+}
+
+function exportAuditCSV() {
+  exportCSV('secpipe-audit.csv', _auditEntries);
 }
 
 function updateDashAge() {
@@ -1692,6 +1825,13 @@ function updateDashAge() {
 function refreshCurrent() { showTab(currentTab, document.querySelector('.nav-item.active')); }
 
 /* ── Dashboard ── */
+let _riskMap = {};
+function riskBadge(score) {
+  if (score == null) return '<span style="color:var(--muted)">—</span>';
+  const cls = score >= 80 ? 'r-crit' : score >= 40 ? 'r-high' : score >= 15 ? 'r-med' : 'r-low';
+  return `<span class="risk-badge ${cls}">${Math.round(score)}</span>`;
+}
+
 async function loadDashboard() {
   const data = await api('/api/overview');
   if (!data) return;
@@ -1703,6 +1843,9 @@ async function loadDashboard() {
   $('s-medium').textContent  = sev.medium || 0;
   $('s-low').textContent     = sev.low || 0;
   $('s-fixed').textContent   = data.by_status.fixed || 0;
+  $('s-sla').textContent     = data.sla_breached ?? '—';
+  _slaCfg = data.sla || _slaCfg;
+  _riskMap = Object.fromEntries((data.risk_scores || []).map(r => [r.repo, r.score]));
 
   // populate repo selects
   ['trendRepo','fRepo'].forEach(id => {
@@ -1727,14 +1870,13 @@ async function loadDashboard() {
   // risk cards + engine distribution
   const riskMap = Object.fromEntries((data.risk || []).map(r => [r.repo, r]));
   const allRepos = data.repos || [];
-  const riskiest = (data.risk || []).filter(r => r.crit_high > 0)
-    .sort((a,b) => b.crit_high - a.crit_high || b.open_total - a.open_total).slice(0, 6);
+  const riskiest = (data.risk_scores || []).slice(0, 6);
   $('riskiestRows').innerHTML = riskiest.length ? riskiest.map(r => `
     <tr style="cursor:pointer" onclick="goToFindings('','open','${esc(r.repo)}')">
       <td class="primary">${esc(r.repo)}</td>
-      <td style="text-align:right"><span class="sev critical">${r.crit_high}</span></td>
+      <td style="text-align:right">${riskBadge(r.score)}</td>
     </tr>`).join('')
-    : `<tr><td colspan="2"><div class="empty-state" style="padding:20px"><p>Nenhum projeto com critical/high abertos 🎉</p></div></td></tr>`;
+    : `<tr><td colspan="2"><div class="empty-state" style="padding:20px"><p>Nenhum projeto com findings abertos 🎉</p></div></td></tr>`;
 
   const safest = allRepos
     .map(name => ({repo: name, open: riskMap[name]?.open_total || 0}))
@@ -1934,6 +2076,7 @@ function goToFindings(severity, status, repo) {
 
 async function loadFindings(resetPage = true) {
   if (resetPage) _findPage = 0;
+  if (!_slaCfg) api('/api/sla').then(c => { if (c) { _slaCfg = c; renderFindPage(); } });
   const p = new URLSearchParams();
   if ($('fRepo').value)   p.set('repo',     $('fRepo').value);
   if ($('fSev').value)    p.set('severity', $('fSev').value);
@@ -1946,11 +2089,22 @@ async function loadFindings(resetPage = true) {
 }
 
 let _findingsView = [];
+let _slaCfg = null;
+function slaBreach(f) {
+  if (!_slaCfg || f.status !== 'open' || !f.first_seen) return false;
+  const days = _slaCfg[f.severity];
+  if (!days) return false;
+  return (Date.now() - Date.parse(f.first_seen)) > days * 864e5;
+}
+function ageDays(f) {
+  return f.first_seen ? Math.floor((Date.now() - Date.parse(f.first_seen)) / 864e5) : 0;
+}
 function renderFindPage() {
   let base = _findings;
   const q = ($('fSearch')?.value || '').toLowerCase();
   if (q) base = base.filter(f =>
     ((f.rule||'') + ' ' + (f.file||'') + ' ' + (f.message||'') + ' ' + (f.repo||'')).toLowerCase().includes(q));
+  if ($('fSlaOnly')?.checked) base = base.filter(slaBreach);
   _findingsView = applySort('res', base, {
     1: f => f.rule || '', 2: f => SEV_ORD[f.severity] ?? 9, 3: f => f.tool || '',
     4: f => (f.file || '') + ':' + (f.line || 0), 5: f => f.status || '',
@@ -1973,12 +2127,13 @@ function renderFindPage() {
   tbody.innerHTML = slice.map((f, i) => {
     const gi = start + i;
     const key = f.repo + '||' + f.fid;
+    const breach = slaBreach(f);
     return `
-    <tr id="find-row-${gi}">
+    <tr id="find-row-${gi}" class="${breach ? 'sla-row' : ''}">
       <td style="text-align:center"><input type="checkbox" class="selbox" data-key="${esc(key)}" ${_selKeys.has(key)?'checked':''} onchange="toggleSel(this)"></td>
       <td style="text-align:center"><button class="chev-btn" onclick="toggleFindDetail(${gi}, this)" title="Ver detalhes"><i data-lucide="chevron-right"></i></button></td>
       <td class="primary msg-cell" title="${esc(f.message)}" style="cursor:pointer" onclick="toggleFindDetail(${gi}, this.parentElement.querySelector('.chev-btn'))">${esc(f.rule)}</td>
-      <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span></td>
+      <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span>${breach ? `<i data-lucide="alarm-clock" style="width:12px;height:12px;color:var(--crit);vertical-align:-2px;margin-left:5px" title="SLA estourado — aberto há ${ageDays(f)} dias"></i>` : ''}</td>
       <td style="color:var(--muted);font-size:12px">${esc(f.tool)}</td>
       <td class="mono file-cell" title="${esc(f.file)}"><a class="fd-file-link" href="${fileLink(f)}" target="_blank" rel="noopener">${esc(f.file)}${f.line?':'+f.line:''}</a></td>
       <td>
@@ -2133,7 +2288,52 @@ function showSettingsTab(k, btn) {
   btn.classList.add('active');
   $('settingsPane-policy').style.display = k === 'policy' ? '' : 'none';
   $('settingsPane-ai').style.display     = k === 'ai'     ? '' : 'none';
+  $('settingsPane-notify').style.display = k === 'notify' ? '' : 'none';
   if (k === 'ai') loadAIConfig();
+  if (k === 'notify') loadNotifyConfig();
+}
+
+/* ── SLA ── */
+async function loadSLAConfig() {
+  const c = await api('/api/sla');
+  if (!c) return;
+  _slaCfg = c;
+  $('slaCritical').value = c.critical; $('slaHigh').value = c.high;
+  $('slaMedium').value = c.medium;     $('slaLow').value = c.low;
+}
+async function saveSLA() {
+  const msg = $('slaMsg'); msg.className = 'form-msg';
+  const body = {critical: +$('slaCritical').value || 7, high: +$('slaHigh').value || 30,
+                medium: +$('slaMedium').value || 90, low: +$('slaLow').value || 180};
+  const res = await fetch('/api/sla', {method: 'PUT',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (res.ok) { _slaCfg = body; msg.className = 'form-msg ok'; msg.textContent = 'SLA salvo'; }
+  else { msg.className = 'form-msg err'; msg.textContent = 'Erro ' + res.status; }
+}
+
+/* ── Notificações ── */
+async function loadNotifyConfig() {
+  const c = await api('/api/notify/config');
+  if (!c) return;
+  $('ntfSlack').value = c.slack || '';
+  $('ntfDiscord').value = c.discord || '';
+  $('ntfWhatsapp').value = c.whatsapp || '';
+}
+async function saveNotify() {
+  const msg = $('ntfMsg'); msg.className = 'form-msg';
+  const res = await fetch('/api/notify/config', {method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({slack: $('ntfSlack').value, discord: $('ntfDiscord').value,
+                          whatsapp: $('ntfWhatsapp').value})});
+  if (res.ok) { msg.className = 'form-msg ok'; msg.textContent = 'Canais salvos'; }
+  else { msg.className = 'form-msg err'; msg.textContent = 'Erro ' + res.status; }
+}
+async function testNotify() {
+  const msg = $('ntfMsg'); msg.className = 'form-msg';
+  msg.textContent = 'Enviando teste…';
+  const res = await fetch('/api/notify/test', {method: 'POST'});
+  if (res.ok) { msg.className = 'form-msg ok'; msg.textContent = 'Teste enviado — confira os canais'; }
+  else { msg.className = 'form-msg err'; msg.textContent = 'Erro ' + res.status; }
 }
 
 const AI_MODEL_LABELS = {
@@ -2473,12 +2673,13 @@ function renderRepos() {
   $('repoCount').textContent = `${list.length} project${list.length!==1?'s':''}`;
   if (!list.length) {
     const msg = _visFilter !== 'all' ? `No ${_visFilter} projects.` : 'No projects yet. Add one above.';
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><p>${msg}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><p>${msg}</p></div></td></tr>`;
     return;
   }
   list = applySort('rep', list, {
     0: r => r.name, 2: r => r.last_scan || '', 3: r => +(r.scan_count||0),
     4: r => +(r.open_findings||0), 5: r => +(r.open_critical_high||0),
+    6: r => +(_riskMap[r.name] || 0),
   });
   tbody.innerHTML = list.map(r => {
     const visBadge = r.visibility
@@ -2510,6 +2711,7 @@ function renderRepos() {
       <td>${r.open_critical_high > 0
           ? `<span class="sev critical">${r.open_critical_high}</span>`
           : '<span style="color:var(--muted)">0</span>'}</td>
+      <td>${riskBadge(_riskMap[r.name])}</td>
       <td>
         <details class="snippet">
           <summary>security.yml</summary>
@@ -2527,7 +2729,9 @@ function renderRepos() {
 }
 
 async function loadRepos() {
-  const data = await api('/api/repos');
+  const [data, ov] = await Promise.all([api('/api/repos'), api('/api/overview')]);
+  if (!data) return;
+  if (ov) _riskMap = Object.fromEntries((ov.risk_scores || []).map(r => [r.repo, r.score]));
   _allRepos = data.repos;
   renderRepos();
 }
@@ -2727,6 +2931,7 @@ async function loadSettings() {
   _allowlist = [...(p.allowlist || [])];
   renderAllowlist();
   loadTOTPStatus();
+  loadSLAConfig();
 }
 
 function renderAllowlist() {

@@ -23,6 +23,7 @@ import threading
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -30,7 +31,7 @@ import hashlib
 import pyotp
 
 from fastapi import FastAPI, Header, HTTPException, Depends, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 DB_PATH     = Path(os.environ.get("SECPIPE_DB",     Path(__file__).parent / "secpipe.db"))
@@ -183,6 +184,10 @@ _migrations = [
     "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')",
     "ALTER TABLE findings ADD COLUMN cwe TEXT DEFAULT ''",
     "ALTER TABLE findings ADD COLUMN owasp TEXT DEFAULT ''",
+    "CREATE TABLE IF NOT EXISTS audit_log("
+    " id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL,"
+    " username TEXT NOT NULL, action TEXT NOT NULL,"
+    " repo TEXT DEFAULT '', target TEXT DEFAULT '', detail TEXT DEFAULT '')",
 ]
 for _mig in _migrations:
     try:
@@ -276,6 +281,7 @@ def ingest(payload: IngestPayload, x_api_key: str | None = Header(default=None))
             (payload.repo, payload.branch, payload.commit, now, *[counts[s] for s in SEVERITIES]),
         )
         seen_ids = set()
+        new_crits = []
         for f in payload.findings:
             seen_ids.add(f.id)
             existing = conn.execute(
@@ -298,6 +304,8 @@ def ingest(payload: IngestPayload, x_api_key: str | None = Header(default=None))
                     (payload.repo, f.id, f.tool, f.rule, f.severity, f.file, f.line, f.message,
                      f.cwe, f.owasp, now, now),
                 )
+                if f.severity == "critical":
+                    new_crits.append(f)
         # o que estava aberto e não veio neste scan foi corrigido
         open_rows = conn.execute(
             "SELECT fid FROM findings WHERE repo=? AND status='open'", (payload.repo,)
@@ -309,6 +317,7 @@ def ingest(payload: IngestPayload, x_api_key: str | None = Header(default=None))
                 (now, payload.repo, fid),
             )
 
+    _send_notifications(payload.repo, new_crits)
     return {"ok": True, "ingested": len(payload.findings), "auto_fixed": len(fixed)}
 
 
@@ -356,6 +365,41 @@ def overview(user=Depends(require_role("viewer"))):
                 " COUNT(*) FROM findings WHERE status='open' GROUP BY 1"
             ).fetchall()
         )
+
+        # SLA: findings abertos há mais tempo que o limite da severidade
+        sla = _sla_config()
+        now_dt = datetime.now(timezone.utc)
+        sla_breached = 0
+        for sev_name, days in sla.items():
+            cutoff = (now_dt - timedelta(days=days)).isoformat(timespec="seconds")
+            sla_breached += conn.execute(
+                "SELECT COUNT(*) FROM findings WHERE status='open' AND severity=?"
+                " AND first_seen<? AND first_seen!=''",
+                (sev_name, cutoff),
+            ).fetchone()[0]
+
+        # Risk score por projeto: peso da severidade × fator de idade × exposição
+        weights = {"critical": 10.0, "high": 5.0, "medium": 2.0, "low": 0.5, "info": 0.0}
+        vis_map = dict(conn.execute("SELECT name, COALESCE(visibility,'') FROM repos").fetchall())
+        scores: dict = {}
+        for row in conn.execute(
+            "SELECT repo, severity, first_seen FROM findings WHERE status='open'"
+        ):
+            age_factor = 1.0
+            try:
+                age_days = (now_dt - datetime.fromisoformat(row["first_seen"])).days
+                age_factor = 1.0 + min(age_days / 30.0, 2.0)   # até 3× para findings velhos
+            except Exception:
+                pass
+            scores[row["repo"]] = scores.get(row["repo"], 0.0) + \
+                weights.get(row["severity"], 0.0) * age_factor
+        risk_scores = []
+        for name, raw in scores.items():
+            if vis_map.get(name) == "public":
+                raw *= 1.5   # exposição pública pesa mais
+            risk_scores.append({"repo": name, "score": round(raw, 1)})
+        risk_scores.sort(key=lambda x: -x["score"])
+
     return {
         "repos": repos,
         "open_by_severity": {sev: totals.get(sev, 0) for sev in SEVERITIES},
@@ -364,6 +408,9 @@ def overview(user=Depends(require_role("viewer"))):
         "risk": risk,
         "engines": engines,
         "owasp": owasp,
+        "sla": sla,
+        "sla_breached": sla_breached,
+        "risk_scores": risk_scores,
     }
 
 
@@ -413,6 +460,7 @@ def create_repo(repo: RepoCreate, user=Depends(require_role("analyst"))):
             )
         except sqlite3.IntegrityError:
             raise HTTPException(status_code=409, detail="repositório já cadastrado")
+    _audit(user["username"], "repo_add", name)
     return {"ok": True, "name": name}
 
 
@@ -457,6 +505,7 @@ def delete_repo(name: str, user=Depends(require_role("admin"))):
         cur = conn.execute("DELETE FROM repos WHERE name=?", (name,))
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="repositório não encontrado")
+    _audit(user["username"], "repo_del", name)
     return {"ok": True}
 
 
@@ -530,6 +579,7 @@ def triage(repo: str, fid: str, update: TriageUpdate, user=Depends(require_role(
         )
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="finding não encontrado")
+    _audit(user["username"], "triage", repo, fid, update.status)
     return {"ok": True}
 
 
@@ -569,6 +619,7 @@ def _dispatch_security_scan(repo: str) -> None:
 @app.post("/api/repos/{repo:path}/dispatch")
 def dispatch_scan(repo: str, user=Depends(require_role("analyst"))):
     _dispatch_security_scan(repo)
+    _audit(user["username"], "scan_dispatch", repo)
     return {"ok": True, "repo": repo}
 
 
@@ -738,6 +789,7 @@ class LoginPayload(BaseModel):
 
 
 def _create_session(user_id: int, username: str, role: str) -> JSONResponse:
+    _audit(username, "login")
     token = secrets.token_urlsafe(32)
     expires = (datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_H)).isoformat()
     with db() as conn:
@@ -1059,6 +1111,122 @@ def _set_setting(key: str, value: str) -> None:
 
 def _ai_model() -> str:
     return _get_setting("ai_model") or os.environ.get("SECPIPE_AI_MODEL", "claude-sonnet-5")
+
+
+# ── Audit log ─────────────────────────────────────────────────────────────
+def _audit(username: str, action: str, repo: str = "", target: str = "", detail: str = "") -> None:
+    try:
+        with db() as conn:
+            conn.execute(
+                "INSERT INTO audit_log(ts, username, action, repo, target, detail)"
+                " VALUES (?,?,?,?,?,?)",
+                (datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                 username, action, repo, target, str(detail)[:300]),
+            )
+    except Exception:
+        pass
+
+
+@app.get("/api/audit")
+def audit_list(limit: int = 300, user=Depends(require_role("admin"))):
+    with db() as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT ts, username, action, repo, target, detail FROM audit_log"
+            " ORDER BY id DESC LIMIT ?", (min(limit, 1000),))]
+    return {"count": len(rows), "entries": rows}
+
+
+# ── SLA ───────────────────────────────────────────────────────────────────
+def _sla_config() -> dict:
+    base = {"critical": 7, "high": 30, "medium": 90, "low": 180}
+    try:
+        cfg = _json.loads(_get_setting("sla") or "{}")
+        base.update({k: int(v) for k, v in cfg.items() if k in base and int(v) > 0})
+    except Exception:
+        pass
+    return base
+
+
+class SLAConfig(BaseModel):
+    critical: int = 7
+    high: int = 30
+    medium: int = 90
+    low: int = 180
+
+
+@app.get("/api/sla")
+def sla_get(user=Depends(require_role("viewer"))):
+    return _sla_config()
+
+
+@app.put("/api/sla")
+def sla_put(cfg: SLAConfig, user=Depends(require_role("admin"))):
+    _set_setting("sla", _json.dumps(cfg.model_dump()))
+    _audit(user["username"], "sla_change", detail=str(cfg.model_dump()))
+    return {"ok": True}
+
+
+# ── Notificações (Slack / Discord / WhatsApp via CallMeBot) ───────────────
+def _send_notifications(repo: str, new_crits: list) -> None:
+    if not new_crits:
+        return
+    rules = sorted({getattr(f, "rule", "") or "?" for f in new_crits})[:5]
+    msg = (f"🔴 SecPipe: {len(new_crits)} novo(s) finding(s) CRITICAL em {repo} — "
+           + ", ".join(rules))
+
+    def send():
+        slack = _get_setting("notify_slack")
+        discord = _get_setting("notify_discord")
+        wa = _get_setting("notify_whatsapp")
+        for url, payload in ((slack, {"text": msg}), (discord, {"content": msg})):
+            if url:
+                try:
+                    req = urllib.request.Request(
+                        url, data=_json.dumps(payload).encode(),
+                        headers={"Content-Type": "application/json"}, method="POST")
+                    with urllib.request.urlopen(req, timeout=10):
+                        pass
+                except Exception:
+                    pass
+        if wa:
+            try:
+                sep = "&" if "?" in wa else "?"
+                with urllib.request.urlopen(wa + sep + "text=" + urllib.parse.quote(msg), timeout=10):
+                    pass
+            except Exception:
+                pass
+
+    threading.Thread(target=send, daemon=True).start()
+
+
+class NotifyConfig(BaseModel):
+    slack: str = ""
+    discord: str = ""
+    whatsapp: str = ""
+
+
+@app.get("/api/notify/config")
+def notify_get(user=Depends(require_role("admin"))):
+    return {"slack": _get_setting("notify_slack"),
+            "discord": _get_setting("notify_discord"),
+            "whatsapp": _get_setting("notify_whatsapp")}
+
+
+@app.put("/api/notify/config")
+def notify_put(cfg: NotifyConfig, user=Depends(require_role("admin"))):
+    for key, val in (("notify_slack", cfg.slack), ("notify_discord", cfg.discord),
+                     ("notify_whatsapp", cfg.whatsapp)):
+        _set_setting(key, val.strip())
+    _audit(user["username"], "notify_change")
+    return {"ok": True}
+
+
+@app.post("/api/notify/test")
+def notify_test(user=Depends(require_role("admin"))):
+    class _F:
+        rule = "mensagem-de-teste"
+    _send_notifications("secpipe/teste", [_F()])
+    return {"ok": True, "detail": "Teste enviado aos canais configurados (verifique lá)"}
 _ai_jobs:  dict = {}   # job_id -> {status: running|done|error, result?, error?, ts}
 
 
@@ -1173,6 +1341,7 @@ def ai_config_put(cfg: AIConfig, user=Depends(require_role("admin"))):
     if not m or len(m) > 80 or any(c not in allowed for c in m):
         raise HTTPException(400, "ID de modelo inválido")
     _set_setting("ai_model", m)
+    _audit(user["username"], "ai_model_change", detail=m)
     return {"ok": True, "model": m}
 
 
@@ -1461,12 +1630,74 @@ def ai_fix(r: AIFixRequest, user=Depends(require_role("analyst"))):
 
 @app.post("/api/ai/autofix")
 def ai_autofix(r: AIFixRequest, user=Depends(require_role("analyst"))):
+    _audit(user["username"], "ai_autofix", r.repo, r.fid or r.file, r.rule)
     return _start_ai_job(_do_autofix, r)
 
 
 @app.post("/api/ai/diagnose")
 def ai_diagnose(r: AIDiagnoseRequest, user=Depends(require_role("analyst"))):
     return _start_ai_job(_do_diagnose, r)
+
+
+# ── Relatório executivo ───────────────────────────────────────────────────
+@app.get("/report")
+def executive_report(user=Depends(require_role("viewer"))):
+    ov = overview(user)   # reaproveita toda a agregação
+    now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
+    sev = ov["open_by_severity"]
+    total_open = sum(sev.values())
+    fixed = ov["by_status"].get("fixed", 0)
+
+    def rows_html(items, cols):
+        return "".join("<tr>" + "".join(f"<td>{c}</td>" for c in cols(i)) + "</tr>" for i in items)
+
+    owasp_rows = rows_html(
+        sorted(ov["owasp"].items(), key=lambda x: -x[1]),
+        lambda kv: (kv[0], kv[1]))
+    risk_rows = rows_html(ov["risk_scores"][:10],
+                          lambda r: (r["repo"], r["score"]))
+    scan_rows = rows_html(ov["last_scans"],
+                          lambda s: (s["repo"], (s.get("last_scan") or "—")[:16].replace("T", " "),
+                                     s.get("critical", 0), s.get("high", 0)))
+
+    html = f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>SecPipe — Relatório Executivo</title>
+<style>
+  body {{ font-family: 'Segoe UI', system-ui, sans-serif; color: #1a2433; margin: 40px auto; max-width: 900px; padding: 0 24px; }}
+  h1 {{ font-size: 26px; margin-bottom: 2px; }} .sub {{ color: #64748b; font-size: 13px; margin-bottom: 28px; }}
+  h2 {{ font-size: 16px; border-bottom: 2px solid #0077cc; padding-bottom: 6px; margin-top: 34px; }}
+  .cards {{ display: flex; gap: 14px; margin: 20px 0; flex-wrap: wrap; }}
+  .kpi {{ flex: 1; min-width: 110px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; text-align: center; }}
+  .kpi b {{ display: block; font-size: 30px; }} .kpi span {{ font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .06em; }}
+  .crit b {{ color: #d80f38; }} .high b {{ color: #d06020; }} .med b {{ color: #b98b00; }} .ok b {{ color: #169955; }} .sla b {{ color: #d80f38; }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }}
+  th {{ text-align: left; font-size: 11px; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #cbd5e1; padding: 6px 8px; }}
+  td {{ padding: 6px 8px; border-bottom: 1px solid #eef2f7; }}
+  .noprint {{ margin: 24px 0; }} .noprint button {{ background: #0077cc; color: #fff; border: 0; border-radius: 8px; padding: 10px 22px; font-size: 14px; cursor: pointer; }}
+  @media print {{ .noprint {{ display: none; }} body {{ margin: 0; }} }}
+  footer {{ margin-top: 40px; font-size: 11px; color: #94a3b8; }}
+</style></head><body>
+<h1>🛡️ SecPipe — Relatório Executivo de Segurança</h1>
+<div class="sub">Gerado em {now_str} · {len(ov["repos"])} projetos monitorados</div>
+<div class="noprint"><button onclick="window.print()">🖨 Imprimir / Salvar PDF</button></div>
+<div class="cards">
+  <div class="kpi"><b>{total_open}</b><span>Abertos</span></div>
+  <div class="kpi crit"><b>{sev.get("critical", 0)}</b><span>Critical</span></div>
+  <div class="kpi high"><b>{sev.get("high", 0)}</b><span>High</span></div>
+  <div class="kpi med"><b>{sev.get("medium", 0)}</b><span>Medium</span></div>
+  <div class="kpi ok"><b>{fixed}</b><span>Corrigidos</span></div>
+  <div class="kpi sla"><b>{ov["sla_breached"]}</b><span>SLA estourado</span></div>
+</div>
+<h2>Compliance — OWASP Top 10 (findings abertos)</h2>
+<table><tr><th>Categoria</th><th>Findings</th></tr>{owasp_rows or '<tr><td colspan="2">Sem dados — rode novos scans para categorizar</td></tr>'}</table>
+<h2>Top 10 projetos por Risk Score</h2>
+<p style="font-size:12px;color:#64748b">Score = Σ peso da severidade × fator de idade (até 3× aos 60+ dias) × 1.5 se o repo é público. SLA: critical {ov["sla"]["critical"]}d · high {ov["sla"]["high"]}d · medium {ov["sla"]["medium"]}d · low {ov["sla"]["low"]}d.</p>
+<table><tr><th>Projeto</th><th>Risk Score</th></tr>{risk_rows or '<tr><td colspan="2">Nenhum finding aberto 🎉</td></tr>'}</table>
+<h2>Último scan por projeto</h2>
+<table><tr><th>Projeto</th><th>Último scan</th><th>Critical</th><th>High</th></tr>{scan_rows}</table>
+<footer>SecPipe Security Platform — relatório automático. Dados do banco no momento da geração.</footer>
+</body></html>"""
+    return HTMLResponse(html)
 
 
 @app.get("/health")

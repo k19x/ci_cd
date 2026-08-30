@@ -3,6 +3,16 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.0] - 2026-08-30
+
+### Added — 6 features enterprise
+- **Audit Log**: nova aba (admin) com todos os eventos — login, triagem, projetos add/del, scan disparado, policy push, mudança de modelo IA, autofix, SLA e notificações alteradas; busca, ordenação e CSV; tabela `audit_log` no SQLite
+- **SLA de findings**: limites configuráveis por severidade (padrão: critical 7d, high 30d, medium 90d, low 180d) em Settings→Policy; card "SLA estourado" na stat strip do Dashboard; filtro "SLA estourado" e destaque vermelho + ícone alarm-clock (com idade em dias) nas linhas do Results; contagem via `/api/overview`, config via `GET/PUT /api/sla`
+- **Relatório executivo** (`GET /report`): HTML standalone printável (→ PDF pelo browser) com KPIs, OWASP Top 10, top 10 risk scores, SLA e último scan por projeto; botão "Relatório" no Dashboard
+- **Risk score por projeto**: Σ peso da severidade (critical 10, high 5, medium 2, low 0.5) × fator de idade (até 3× aos 60+ dias) × 1.5 se repo público; badge colorido na aba Projects (coluna nova, ordenável) e card "Projetos mais arriscados" agora rankeia por score
+- **Scan diff-only em PR**: Semgrep roda com `--baseline-commit` (base do PR) — reporta só findings novos; fallback para scan completo se o baseline falhar; `fetch-depth: 0`
+- **Notificações Slack / Discord / WhatsApp (CallMeBot)**: disparadas em background quando findings critical NOVOS chegam no ingest; sub-aba Settings→Notificações com as 3 URLs + botão "Testar canais"; endpoints `GET/PUT /api/notify/config`, `POST /api/notify/test`
+
 ## [0.13.1] - 2026-08-30
 
 ### Fixed

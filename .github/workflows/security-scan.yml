@@ -33,8 +33,19 @@ jobs:
       image: semgrep/semgrep
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Rodar Semgrep
-        run: semgrep scan --config auto --sarif --output semgrep.sarif || true
+        # Em PR: diff-aware — reporta apenas findings NOVOS vs a branch base (mais rápido, menos ruído)
+        run: |
+          git config --global --add safe.directory "$PWD" || true
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            semgrep scan --config auto --sarif --output semgrep.sarif \
+              --baseline-commit "${{ github.event.pull_request.base.sha }}" || \
+            semgrep scan --config auto --sarif --output semgrep.sarif || true
+          else
+            semgrep scan --config auto --sarif --output semgrep.sarif || true
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: sarif-semgrep
