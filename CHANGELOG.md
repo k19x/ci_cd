@@ -3,6 +3,12 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.3] - 2026-08-30
+
+### Added
+- **Auto-registro do tunnel URL**: ao subir, o dashboard detecta a URL do quick tunnel via `http://cloudflared:20241/quicktunnel` e atualiza automaticamente a variável `SECPIPE_DASHBOARD_URL` no GitHub via API — sem precisar copiar a URL manualmente a cada restart
+- `--metrics 0.0.0.0:20241` adicionado ao comando cloudflared para expor o endpoint `/quicktunnel` na rede interna Docker
+
 ## [0.8.2] - 2026-08-30
 
 ### Fixed

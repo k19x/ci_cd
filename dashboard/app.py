@@ -11,10 +11,12 @@ Auth:   se a env SECPIPE_TOKEN estiver definida, o /api/ingest exige o
 
 import base64
 import concurrent.futures
+import contextlib
 import json as _json
 import os
 import secrets
 import sqlite3
+import threading
 import time
 import urllib.request
 import urllib.error
@@ -63,7 +65,57 @@ def _verify_password(password: str, stored: str) -> bool:
     except Exception:
         return False
 
-app = FastAPI(title="SecPipe Dashboard")
+def _auto_register_tunnel():
+    """Background: polls cloudflared /quicktunnel and updates GitHub variable SECPIPE_DASHBOARD_URL."""
+    gh_token = os.environ.get("GITHUB_TOKEN", "")
+    gh_repo  = os.environ.get("SECPIPE_GITHUB_REPO", "k19x/ci_cd")
+    if not gh_token:
+        return
+    headers = {
+        "Authorization": f"token {gh_token}",
+        "Accept": "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    for _ in range(24):  # retry for up to 2 minutes
+        time.sleep(5)
+        try:
+            with urllib.request.urlopen("http://cloudflared:20241/quicktunnel", timeout=3) as r:
+                url = _json.loads(r.read()).get("url", "")
+            if not url:
+                continue
+            payload = _json.dumps({"name": "SECPIPE_DASHBOARD_URL", "value": url}).encode()
+            try:
+                req = urllib.request.Request(
+                    f"https://api.github.com/repos/{gh_repo}/actions/variables/SECPIPE_DASHBOARD_URL",
+                    data=payload, method="PATCH", headers=headers,
+                )
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    r.read()
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    req = urllib.request.Request(
+                        f"https://api.github.com/repos/{gh_repo}/actions/variables",
+                        data=_json.dumps({"name": "SECPIPE_DASHBOARD_URL", "value": url}).encode(),
+                        method="POST", headers=headers,
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        r.read()
+                else:
+                    raise
+            print(f"[secpipe] SECPIPE_DASHBOARD_URL → {url}", flush=True)
+            return
+        except Exception:
+            pass
+
+
+@contextlib.asynccontextmanager
+async def _lifespan(app):
+    threading.Thread(target=_auto_register_tunnel, daemon=True).start()
+    yield
+
+
+app = FastAPI(title="SecPipe Dashboard", lifespan=_lifespan)
 
 
 def db() -> sqlite3.Connection:
