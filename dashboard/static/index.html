@@ -1126,6 +1126,45 @@ td { padding: 11px 16px; }
 .dialog-body input { width: 100%; font-size: 13px; padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--bd); background: var(--s3); color: var(--t0); outline: none; box-sizing: border-box; transition: border-color .15s; }
 .dialog-body input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
 .dialog-foot { padding: 0 22px 18px; display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
+
+/* ── Developer / API Keys ── */
+.scope-radio { display:none; }
+.scope-card {
+  flex: 1; cursor: pointer; border: 1.5px solid var(--bd); border-radius: var(--radius);
+  padding: 10px 12px; transition: border-color .15s, background .15s; user-select: none;
+}
+.scope-card:has(.scope-radio:checked) { border-color: var(--accent); background: var(--accent-dim); }
+.scope-card:hover:not(:has(.scope-radio:checked)) { border-color: var(--muted); }
+.scope-card-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 3px; }
+.scope-card-desc { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.scope-card.read  .scope-card-label { color: var(--ok); }
+.scope-card.ingest .scope-card-label { color: var(--orange, #f0b90b); }
+.scope-card.admin  .scope-card-label { color: var(--crit); }
+.dev-section { background: var(--s2); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+.dev-section-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 10px; }
+.key-alert { border-radius: var(--radius); padding: 14px 16px; border: 1px solid var(--ok); background: var(--ok-bg); margin-bottom: 14px; }
+.key-alert-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.key-alert-title { font-size: 12.5px; font-weight: 700; color: var(--ok); flex: 1; }
+.key-code-row { display: flex; gap: 8px; align-items: center; }
+.key-code { flex:1; font-size:12px; word-break:break-all; background: var(--s2); padding: 7px 11px; border-radius: 6px; color: var(--text); font-family: monospace; border: 1px solid var(--bd); }
+.api-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:28px 16px; color:var(--muted); }
+.api-empty svg { opacity:.35; }
+.curl-block { position:relative; background: var(--s3); border-radius: var(--radius); border: 1px solid var(--bd); padding: 12px 14px; margin-bottom: 14px; }
+.curl-block pre { margin: 0; font-size: 11.5px; font-family: monospace; color: var(--text2); white-space: pre-wrap; word-break: break-all; line-height: 1.6; }
+.curl-copy-btn { position:absolute; top:8px; right:8px; }
+.ep-row { display:flex; gap:10px; align-items:flex-start; padding:9px 12px; border-radius: var(--radius); background:var(--s2); font-size:12.5px; border: 1px solid transparent; transition: border-color .12s; }
+.ep-row:hover { border-color: var(--bd); }
+.ep-method { flex-shrink:0; padding:2px 7px; border-radius:4px; font-weight:700; font-size:10.5px; letter-spacing:.04em; margin-top:1px; }
+.ep-method.get  { background: rgba(34,212,114,.15); color: var(--ok); }
+.ep-method.post { background: rgba(0,184,255,.15); color: var(--accent); }
+.ep-method.del  { background: rgba(255,68,68,.15); color: var(--crit); }
+.ep-path { flex:1; }
+.ep-path code { font-size: 12px; font-family: monospace; color: var(--text); }
+.ep-desc { font-size: 11px; color: var(--muted); margin-top:2px; }
+.ep-scope { flex-shrink:0; font-size:10.5px; padding:2px 7px; border-radius:4px; font-weight:600; }
+.ep-scope.read   { background:rgba(34,212,114,.12); color:var(--ok); }
+.ep-scope.ingest { background:rgba(240,185,11,.12); color:var(--orange, #f0b90b); }
+.ep-scope.admin  { background:rgba(255,68,68,.12); color:var(--crit); }
 </style>
 
 <div class="sidebar">
@@ -1811,33 +1850,50 @@ td { padding: 11px 16px; }
     <div id="settingsPane-developer" style="display:none">
       <div class="card" style="max-width:720px;margin-bottom:20px">
         <div class="card-head">
-          <div class="card-title"><i data-lucide="key"></i> API Keys</div>
-          <div class="card-sub">Autentique chamadas à API com <span class="mono">X-API-Key: &lt;token&gt;</span></div>
+          <div class="card-title"><i data-lucide="key-round"></i> API Keys</div>
+          <div class="card-sub">Use <span class="mono">X-API-Key: &lt;token&gt;</span> para autenticar chamadas programáticas</div>
         </div>
         <div class="card-body">
+
           <!-- Create form -->
-          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:18px">
-            <div style="flex:1;min-width:160px">
-              <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Nome</label>
-              <input id="newKeyName" placeholder="ci-github-actions, monitoring..." style="width:100%;font-size:13px;padding:8px 10px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);box-sizing:border-box">
+          <div class="dev-section">
+            <div class="dev-section-title">Nova chave</div>
+            <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Nome</label>
+            <input id="newKeyName" placeholder="ci-github-actions, grafana-monitor, deploy-bot…"
+              style="width:100%;font-size:13px;padding:8px 11px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);box-sizing:border-box;margin-bottom:14px"
+              onkeydown="if(event.key==='Enter')createApiKey()">
+
+            <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Escopo</label>
+            <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+              <label class="scope-card read" style="flex:1;min-width:120px">
+                <input class="scope-radio" type="radio" name="newKeyScope" value="read" checked>
+                <div class="scope-card-label">read</div>
+                <div class="scope-card-desc">Leitura — findings, scans, overview, projetos</div>
+              </label>
+              <label class="scope-card ingest" style="flex:1;min-width:120px">
+                <input class="scope-radio" type="radio" name="newKeyScope" value="ingest">
+                <div class="scope-card-label">ingest</div>
+                <div class="scope-card-desc">Envio de resultados via <span class="mono">/api/ingest</span></div>
+              </label>
+              <label class="scope-card admin" style="flex:1;min-width:120px">
+                <input class="scope-radio" type="radio" name="newKeyScope" value="admin">
+                <div class="scope-card-label">admin</div>
+                <div class="scope-card-desc">Acesso total — inclui gestão de usuários e keys</div>
+              </label>
             </div>
-            <div>
-              <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Escopo</label>
-              <select id="newKeyScope" style="font-size:13px;padding:8px 10px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text)">
-                <option value="read">read — leitura (findings, scans, overview)</option>
-                <option value="ingest">ingest — envio de scans (/api/ingest)</option>
-                <option value="admin">admin — acesso total</option>
-              </select>
-            </div>
-            <button class="btn-primary" onclick="createApiKey()" style="white-space:nowrap"><i data-lucide="plus"></i> Gerar key</button>
+            <button class="btn-primary" onclick="createApiKey()"><i data-lucide="plus-circle"></i> Gerar chave</button>
           </div>
 
           <!-- Generated key alert -->
-          <div id="newKeyAlert" hidden style="background:var(--ok-bg);border:1px solid var(--ok);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px">
-            <div style="font-size:12px;font-weight:700;color:var(--ok);margin-bottom:6px">Copie agora — não será exibido novamente</div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <code id="newKeyValue" style="flex:1;font-size:12px;word-break:break-all;background:var(--s2);padding:6px 10px;border-radius:4px;color:var(--text)"></code>
-              <button class="btn-ghost" onclick="copyApiKey()" title="Copiar"><i data-lucide="copy"></i></button>
+          <div id="newKeyAlert" hidden class="key-alert">
+            <div class="key-alert-head">
+              <i data-lucide="shield-check" style="color:var(--ok);width:15px;height:15px"></i>
+              <span class="key-alert-title">Chave gerada — copie agora, não será exibida novamente</span>
+              <button class="btn-ghost" onclick="$('newKeyAlert').hidden=true" title="Fechar" style="padding:2px 4px"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+            </div>
+            <div class="key-code-row">
+              <div id="newKeyValue" class="key-code"></div>
+              <button class="btn-ghost" id="copyKeyBtn" onclick="copyApiKey()" title="Copiar chave"><i data-lucide="copy"></i></button>
             </div>
           </div>
 
@@ -1850,42 +1906,101 @@ td { padding: 11px 16px; }
               <th>Último uso</th>
               <th></th>
             </tr></thead>
-            <tbody id="apiKeyRows"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Nenhuma key criada</td></tr></tbody>
+            <tbody id="apiKeyRows">
+              <tr><td colspan="5">
+                <div class="api-empty">
+                  <i data-lucide="key-round" style="width:32px;height:32px"></i>
+                  <span style="font-size:13px">Nenhuma chave criada</span>
+                </div>
+              </td></tr>
+            </tbody>
           </table>
         </div>
       </div>
 
-      <!-- Docs quick-ref -->
+      <!-- Docs -->
       <div class="card" style="max-width:720px">
         <div class="card-head">
-          <div class="card-title"><i data-lucide="book-open"></i> Documentação da API</div>
+          <div class="card-title"><i data-lucide="terminal"></i> Referência da API</div>
+          <div class="card-sub">Exemplos de uso e endpoints disponíveis</div>
         </div>
         <div class="card-body">
-          <p style="font-size:13px;color:var(--text2);margin:0 0 12px">Autentique qualquer endpoint passando o header <span class="mono">X-API-Key: secpipe_...</span></p>
-          <div style="display:flex;flex-direction:column;gap:8px">
-            <div style="display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:var(--radius);background:var(--s2);font-size:12.5px">
-              <span style="background:var(--ok-bg);color:var(--ok);padding:2px 7px;border-radius:4px;font-weight:700;font-size:11px">GET</span>
-              <span class="mono" style="flex:1">/api/findings?severity=critical&status=open</span>
-              <span style="color:var(--muted)">escopo: read</span>
+
+          <!-- Quick start -->
+          <div class="dev-section-title" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Quick start</div>
+          <div class="curl-block" style="margin-bottom:18px">
+            <button class="btn-ghost curl-copy-btn" id="curlCopyBtn" onclick="copyCurl()" title="Copiar"><i data-lucide="copy"></i></button>
+            <pre id="curlExample">curl -s https://&lt;tunnel&gt; \
+  -H "X-API-Key: secpipe_..." \
+  /api/overview | jq .</pre>
+          </div>
+
+          <!-- Endpoints -->
+          <div class="dev-section-title" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">Endpoints</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+            <div class="ep-row">
+              <span class="ep-method get">GET</span>
+              <div class="ep-path">
+                <code>/api/overview</code>
+                <div class="ep-desc">Contagem de findings ativos por severidade, risk score global</div>
+              </div>
+              <span class="ep-scope read">read</span>
             </div>
-            <div style="display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:var(--radius);background:var(--s2);font-size:12.5px">
-              <span style="background:var(--ok-bg);color:var(--ok);padding:2px 7px;border-radius:4px;font-weight:700;font-size:11px">GET</span>
-              <span class="mono" style="flex:1">/api/overview</span>
-              <span style="color:var(--muted)">escopo: read</span>
+            <div class="ep-row">
+              <span class="ep-method get">GET</span>
+              <div class="ep-path">
+                <code>/api/findings</code>
+                <div class="ep-desc">Lista de findings com filtros: <span class="mono">severity</span>, <span class="mono">status</span>, <span class="mono">repo</span>, <span class="mono">limit</span></div>
+              </div>
+              <span class="ep-scope read">read</span>
             </div>
-            <div style="display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:var(--radius);background:var(--s2);font-size:12.5px">
-              <span style="background:var(--ok-bg);color:var(--ok);padding:2px 7px;border-radius:4px;font-weight:700;font-size:11px">GET</span>
-              <span class="mono" style="flex:1">/api/scans</span>
-              <span style="color:var(--muted)">escopo: read</span>
+            <div class="ep-row">
+              <span class="ep-method get">GET</span>
+              <div class="ep-path">
+                <code>/api/scans</code>
+                <div class="ep-desc">Histórico de scans com totais C/H/M/L por repositório</div>
+              </div>
+              <span class="ep-scope read">read</span>
             </div>
-            <div style="display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:var(--radius);background:var(--s2);font-size:12.5px">
-              <span style="background:var(--accent);color:#fff;padding:2px 7px;border-radius:4px;font-weight:700;font-size:11px">POST</span>
-              <span class="mono" style="flex:1">/api/ingest</span>
-              <span style="color:var(--muted)">escopo: ingest</span>
+            <div class="ep-row">
+              <span class="ep-method get">GET</span>
+              <div class="ep-path">
+                <code>/api/repos</code>
+                <div class="ep-desc">Repositórios registrados e suas configurações</div>
+              </div>
+              <span class="ep-scope read">read</span>
+            </div>
+            <div class="ep-row">
+              <span class="ep-method get">GET</span>
+              <div class="ep-path">
+                <code>/api/projects</code>
+                <div class="ep-desc">Projetos e seus repositórios associados</div>
+              </div>
+              <span class="ep-scope read">read</span>
+            </div>
+            <div class="ep-row">
+              <span class="ep-method post">POST</span>
+              <div class="ep-path">
+                <code>/api/ingest</code>
+                <div class="ep-desc">Recebe resultado de scan (SARIF/JSON); atualiza findings e cria registros</div>
+              </div>
+              <span class="ep-scope ingest">ingest</span>
+            </div>
+            <div class="ep-row">
+              <span class="ep-method get">GET</span>
+              <div class="ep-path">
+                <code>/api/keys</code>
+                <div class="ep-desc">Lista, cria e revoga API keys (requer escopo admin)</div>
+              </div>
+              <span class="ep-scope admin">admin</span>
             </div>
           </div>
-          <p style="font-size:12px;color:var(--muted);margin:12px 0 0">
-            Documentação completa: <a href="/docs" target="_blank" rel="noopener" style="color:var(--accent)">/docs</a> (Swagger UI) · <a href="/redoc" target="_blank" rel="noopener" style="color:var(--accent)">/redoc</a>
+
+          <p style="font-size:12px;color:var(--muted);margin:0">
+            Documentação interativa:
+            <a href="/docs" target="_blank" rel="noopener" style="color:var(--accent)"><i data-lucide="external-link" style="width:11px;height:11px;vertical-align:-1px"></i> Swagger UI</a>
+            &nbsp;·&nbsp;
+            <a href="/redoc" target="_blank" rel="noopener" style="color:var(--accent)"><i data-lucide="external-link" style="width:11px;height:11px;vertical-align:-1px"></i> ReDoc</a>
           </p>
         </div>
       </div>
@@ -2848,16 +2963,19 @@ async function loadApiKeys() {
   if (!data) return;
   const tbody = $('apiKeyRows');
   if (!data.keys.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Nenhuma key criada</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="5"><div class="api-empty">
+      <i data-lucide="key-round" style="width:32px;height:32px"></i>
+      <span style="font-size:13px">Nenhuma chave criada</span>
+    </div></td></tr>`;
+    if(typeof lucide!=='undefined')lucide.createIcons();
     return;
   }
-  const scopeColor = {read:'var(--ok)',ingest:'var(--orange)',admin:'var(--crit)'};
   tbody.innerHTML = data.keys.map(k => `
     <tr>
       <td class="primary">${esc(k.name)}</td>
-      <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:var(--s2);color:${scopeColor[k.scopes]||'var(--text2)'}">${esc(k.scopes)}</span></td>
+      <td><span class="ep-scope ${esc(k.scopes)}">${esc(k.scopes)}</span></td>
       <td style="font-size:12px;color:var(--text2)">${k.created_at.slice(0,10)}</td>
-      <td style="font-size:12px;color:var(--muted)">${k.last_used || '—'}</td>
+      <td style="font-size:12px;color:var(--muted)">${k.last_used || 'Nunca'}</td>
       <td style="text-align:right"><button class="btn-ghost" style="color:var(--crit)" onclick="revokeApiKey(${k.id},'${esc(k.name)}')"><i data-lucide="trash-2"></i> Revogar</button></td>
     </tr>`).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
@@ -2865,22 +2983,32 @@ async function loadApiKeys() {
 
 async function createApiKey() {
   const name   = ($('newKeyName').value || '').trim();
-  const scopes = $('newKeyScope').value;
+  const scopes = (document.querySelector('input[name="newKeyScope"]:checked') || {value:'read'}).value;
   if (!name) { $('newKeyName').focus(); return; }
   const data = await api('/api/keys', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, scopes})});
   if (!data) return;
   $('newKeyValue').textContent = data.key;
   $('newKeyAlert').hidden = false;
   $('newKeyName').value = '';
+  if(typeof lucide!=='undefined')lucide.createIcons();
   loadApiKeys();
 }
 
 function copyApiKey() {
   const val = $('newKeyValue').textContent;
   navigator.clipboard.writeText(val).then(() => {
-    const btn = $('newKeyAlert').querySelector('button');
-    btnLabel(btn, 'check', 'Copiado!');
-    setTimeout(() => { btnLabel(btn, 'copy', ''); lucide.createIcons(); }, 2000);
+    const btn = $('copyKeyBtn');
+    btnLabel(btn, 'check', '');
+    setTimeout(() => { btnLabel(btn, 'copy', ''); if(typeof lucide!=='undefined')lucide.createIcons(); }, 2000);
+  });
+}
+
+function copyCurl() {
+  const val = $('curlExample').textContent;
+  navigator.clipboard.writeText(val).then(() => {
+    const btn = $('curlCopyBtn');
+    btnLabel(btn, 'check', '');
+    setTimeout(() => { btnLabel(btn, 'copy', ''); if(typeof lucide!=='undefined')lucide.createIcons(); }, 2000);
   });
 }
 

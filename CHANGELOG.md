@@ -3,6 +3,12 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.12] - 2026-08-30
+
+### Changed
+- **Developer tab — redesign completo**: scope selector substituído por radio cards visuais (read/ingest/admin com cor, label e descrição); empty state da tabela com ícone; "Nunca" em vez de "—" para último uso; badges de escopo coloridos (verde/amarelo/vermelho); botão de fechar no alerta da chave gerada
+- **Referência da API**: seção "Quick Start" com snippet curl copiável; endpoints expandidos de 4 para 7 (adicionados `/api/repos`, `/api/projects`, `/api/keys`), cada um com descrição inline e badge de escopo colorido; links para Swagger UI e ReDoc
+
 ## [0.14.11] - 2026-08-30
 
 ### Added
