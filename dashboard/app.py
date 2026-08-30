@@ -1019,6 +1019,179 @@ def rerun_scan(repo: str, run_id: int, user=Depends(require_role("analyst"))):
     return {"ok": True}
 
 
+# ── AI Engine (Claude) ────────────────────────────────────────────────────
+AI_MODEL  = os.environ.get("SECPIPE_AI_MODEL", "claude-sonnet-5")
+_ai_cache: dict = {}   # (kind, repo, key) -> analysis text
+
+
+def _claude(system: str, prompt: str, max_tokens: int = 1600) -> str:
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        raise HTTPException(400, "ANTHROPIC_API_KEY não configurada no .env")
+    body = _json.dumps({
+        "model": AI_MODEL,
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            data = _json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise HTTPException(502, f"Claude API {e.code}: {e.read().decode(errors='replace')[:300]}")
+    except urllib.error.URLError as e:
+        raise HTTPException(502, f"Claude API inacessível: {e}")
+    return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+
+
+@app.get("/api/ai/status")
+def ai_status(user=Depends(require_role("viewer"))):
+    return {"enabled": bool(os.environ.get("ANTHROPIC_API_KEY")), "model": AI_MODEL}
+
+
+class AIFixRequest(BaseModel):
+    repo: str
+    fid: str = ""
+    rule: str = ""
+    severity: str = ""
+    file: str = ""
+    line: int = 0
+    message: str = ""
+    tool: str = ""
+
+
+@app.post("/api/ai/fix")
+def ai_fix(r: AIFixRequest, user=Depends(require_role("analyst"))):
+    """Gera sugestão de correção para um finding, com o código real como contexto."""
+    ck = ("fix", r.repo, r.fid or f"{r.file}:{r.line}:{r.rule}")
+    if ck in _ai_cache:
+        return {"analysis": _ai_cache[ck], "cached": True}
+
+    # busca o trecho de código no GitHub (±25 linhas ao redor do finding)
+    snippet = ""
+    gh_token = os.environ.get("GITHUB_TOKEN", "")
+    if r.file and gh_token:
+        try:
+            req = urllib.request.Request(
+                f"https://api.github.com/repos/{r.repo}/contents/{r.file}?ref=main",
+                headers={
+                    "Authorization": f"Bearer {gh_token}",
+                    "Accept": "application/vnd.github.raw+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                content = resp.read().decode("utf-8", "replace")
+            lines = content.splitlines()
+            lo = max(0, (r.line or 1) - 26)
+            hi = min(len(lines), (r.line or 1) + 25)
+            snippet = "\n".join(f"{n}: {l}" for n, l in enumerate(lines[lo:hi], start=lo + 1))
+        except Exception:
+            pass
+
+    snippet_block = f"Trecho do código (linha: conteúdo):\n```\n{snippet}\n```" if snippet \
+        else "(código-fonte indisponível — analise pela regra e mensagem)"
+    prompt = (
+        f"Finding de segurança detectado pelo SecPipe:\n"
+        f"- Repositório: {r.repo}\n"
+        f"- Engine: {r.tool}\n"
+        f"- Regra: {r.rule}\n"
+        f"- Severidade: {r.severity}\n"
+        f"- Arquivo: {r.file} (linha {r.line})\n"
+        f"- Mensagem: {r.message}\n\n"
+        f"{snippet_block}\n\n"
+        "Responda em português, direto ao ponto:\n"
+        "1. **Causa** — por que isso é vulnerável (2-3 frases)\n"
+        "2. **Correção** — o código corrigido em um bloco ```\n"
+        "3. **Verificar também** — riscos relacionados no mesmo padrão\n"
+        "Seja específico ao código mostrado; não invente contexto que não existe."
+    )
+    system = ("Você é um engenheiro de segurança de aplicações sênior fazendo triagem "
+              "de findings de SAST/SCA/secrets. Responda em português brasileiro com markdown simples.")
+    analysis = _claude(system, prompt)
+    _ai_cache[ck] = analysis
+    return {"analysis": analysis, "cached": False}
+
+
+class AIDiagnoseRequest(BaseModel):
+    repo: str
+    run_id: int
+
+
+@app.post("/api/ai/diagnose")
+def ai_diagnose(r: AIDiagnoseRequest, user=Depends(require_role("analyst"))):
+    """Diagnostica a causa de um scan que falhou, lendo jobs + logs do GitHub Actions."""
+    ck = ("diag", r.repo, str(r.run_id))
+    if ck in _ai_cache:
+        return {"analysis": _ai_cache[ck], "cached": True}
+
+    gh_token = os.environ.get("GITHUB_TOKEN", "")
+    if not gh_token:
+        raise HTTPException(400, "GITHUB_TOKEN não configurado")
+    hdrs = {
+        "Authorization": f"Bearer {gh_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{r.repo}/actions/runs/{r.run_id}/jobs?per_page=50",
+            headers=hdrs,
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            jobs_data = _json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        raise HTTPException(e.code, e.read().decode(errors="replace")[:200])
+
+    summary, logs_excerpt = [], ""
+    for job in jobs_data.get("jobs", []):
+        concl = job.get("conclusion") or job.get("status")
+        summary.append(f"- Job '{job['name']}': {concl}")
+        for s in job.get("steps", []):
+            if s.get("conclusion") in ("failure", "timed_out"):
+                summary.append(f"    step FALHOU: '{s['name']}'")
+        # pega o log do primeiro job que falhou (últimas 150 linhas)
+        if concl in ("failure", "timed_out") and not logs_excerpt:
+            try:
+                lreq = urllib.request.Request(
+                    f"https://api.github.com/repos/{r.repo}/actions/jobs/{job['id']}/logs",
+                    headers=hdrs,
+                )
+                with urllib.request.urlopen(lreq, timeout=15) as lresp:
+                    text = lresp.read().decode("utf-8", "replace")
+                logs_excerpt = "\n".join(text.splitlines()[-150:])[-6000:]
+            except Exception:
+                pass
+
+    prompt = (
+        f"Scan de segurança (GitHub Actions) falhou no repositório {r.repo} (run {r.run_id}).\n\n"
+        f"Resumo dos jobs:\n" + "\n".join(summary) + "\n\n"
+        + (f"Últimas linhas do log do job que falhou:\n```\n{logs_excerpt}\n```\n\n" if logs_excerpt else "")
+        + "O pipeline tem 4 jobs: SAST (Semgrep), SCA+IaC+Secrets (Trivy), Secrets histórico (Gitleaks) "
+          "e Policy Gate (normaliza SARIFs, envia ao dashboard SecPipe e aplica gate de severidade — "
+          "exit 1 = findings acima do limite da política).\n\n"
+        "Responda em português:\n"
+        "1. **Causa provável** — o que quebrou (seja específico: erro de infra, gate reprovado, config, etc.)\n"
+        "2. **Como corrigir** — passos concretos\n"
+        "3. **É bloqueio do gate ou erro técnico?** — uma frase"
+    )
+    system = ("Você é um engenheiro de CI/CD e DevSecOps diagnosticando falhas de pipeline. "
+              "Responda em português brasileiro com markdown simples.")
+    analysis = _claude(system, prompt)
+    _ai_cache[ck] = analysis
+    return {"analysis": analysis, "cached": False}
+
+
 @app.get("/health")
 def health():
     return {"ok": True}

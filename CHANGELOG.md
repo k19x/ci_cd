@@ -3,6 +3,16 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.0] - 2026-08-30
+
+### Added — AI Engine (Claude no backend)
+- **"✨ Sugerir correção com IA"** no painel de detalhes de cada finding (Results): o backend busca o código real no GitHub (±25 linhas ao redor da linha do finding) e pede ao Claude causa, código corrigido e riscos relacionados — resposta em markdown renderizada inline
+- **"✨ Diagnosticar com IA"** no painel Why? dos scans que falharam (Scans): o backend lê os jobs do run + as últimas 150 linhas do log do job que falhou e o Claude explica a causa provável, como corrigir e se é bloqueio do gate ou erro técnico
+- Endpoints: `POST /api/ai/fix`, `POST /api/ai/diagnose`, `GET /api/ai/status` (requerem role analyst; viewer só consulta status)
+- Cache em memória por finding/run — reanalisar não gasta tokens repetidos
+- Config: `ANTHROPIC_API_KEY` no `.env` (novo no `.env.example`); modelo via `SECPIPE_AI_MODEL` (padrão `claude-sonnet-5`)
+- Chamada à API Anthropic via stdlib `urllib` (zero dependências novas)
+
 ## [0.9.0] - 2026-08-30
 
 ### Added — paridade de funções estilo Checkmarx em todas as abas

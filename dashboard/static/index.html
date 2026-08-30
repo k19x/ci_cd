@@ -1805,10 +1805,17 @@ async function showRunJobs(repo, runId, btn) {
     </div>`;
   }).join('');
 
+  const repoKey = repo.replace(/'/g, "\\'");
+  const aiSection = `
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">
+      <button class="detail-btn" onclick="aiDiagnose('${repoKey}', ${runId}, this)" data-min-role="analyst">✨ Diagnosticar com IA</button>
+      <div id="aiDiag-${runId}" style="margin-top:8px"></div>
+    </div>`;
+
   const row = document.createElement('tr');
   row.id = detailId;
   row.className = 'job-detail-row';
-  row.innerHTML = `<td colspan="7"><div class="job-detail-wrap">${jobsHtml || '<span style="color:var(--muted);font-size:12px">No job details available.</span>'}</div></td>`;
+  row.innerHTML = `<td colspan="7"><div class="job-detail-wrap">${jobsHtml || '<span style="color:var(--muted);font-size:12px">No job details available.</span>'}${aiSection}</div></td>`;
 
   const runRow = document.getElementById(`run-row-${runId}`);
   if (runRow) runRow.after(row);
@@ -2006,11 +2013,81 @@ function toggleFindDetail(gi, btn) {
       <div class="fd-label">Referências</div>
       <div class="fd-refs">${refs.map(r => `<a class="fd-ref" href="${r.url}" target="_blank" rel="noopener">${esc(r.label)}</a>`).join('')}</div>
     </div>
+    <div class="fd-section full">
+      <div class="fd-label">✨ AI Engine</div>
+      <button class="detail-btn" onclick="aiFix(${gi}, this)" data-min-role="analyst">✨ Sugerir correção com IA</button>
+      <div id="aiFixOut-${gi}" style="margin-top:8px"></div>
+    </div>
   </div></td>`;
 
   const findRow = document.getElementById(`find-row-${gi}`);
   if (findRow) findRow.after(row);
   if (btn) btn.classList.add('open');
+}
+
+/* ── AI Engine ── */
+function renderMd(t) {
+  return (t || '').split('```').map((p, i) => {
+    if (i % 2 === 1) {
+      const body = p.replace(/^[a-zA-Z0-9_-]*\n/, '');
+      return `<pre class="yaml" style="margin:6px 0">${esc(body)}</pre>`;
+    }
+    return `<div class="fd-text">${esc(p)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+?)`/g, '<code>$1</code>')
+      .replace(/\n/g, '<br>')}</div>`;
+  }).join('');
+}
+
+async function aiFix(gi, btn) {
+  const f = _findingsView[gi] || _findings[gi];
+  if (!f) return;
+  const out = $(`aiFixOut-${gi}`);
+  btn.disabled = true; btn.textContent = '✨ Analisando…';
+  out.innerHTML = '<div class="fd-text" style="color:var(--muted)">Claude está analisando o código…</div>';
+  try {
+    const res = await fetch('/api/ai/fix', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({repo: f.repo, fid: f.fid, rule: f.rule, severity: f.severity,
+                            file: f.file, line: f.line, message: f.message, tool: f.tool}),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) {
+      out.innerHTML = renderMd(body.analysis);
+      btn.textContent = '✨ Reanalisar';
+    } else {
+      out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(body.detail || 'Erro ' + res.status)}</div>`;
+      btn.textContent = '✨ Sugerir correção com IA';
+    }
+  } catch (e) {
+    out.innerHTML = '<div class="fd-text" style="color:var(--crit)">Falha de rede ao chamar a IA.</div>';
+    btn.textContent = '✨ Sugerir correção com IA';
+  }
+  btn.disabled = false;
+}
+
+async function aiDiagnose(repo, runId, btn) {
+  const out = $(`aiDiag-${runId}`);
+  btn.disabled = true; btn.textContent = '✨ Diagnosticando…';
+  out.innerHTML = '<div class="fd-text" style="color:var(--muted)">Claude está lendo os logs do run…</div>';
+  try {
+    const res = await fetch('/api/ai/diagnose', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({repo, run_id: runId}),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) {
+      out.innerHTML = renderMd(body.analysis);
+      btn.textContent = '✨ Rediagnosticar';
+    } else {
+      out.innerHTML = `<div class="fd-text" style="color:var(--crit)">${esc(body.detail || 'Erro ' + res.status)}</div>`;
+      btn.textContent = '✨ Diagnosticar com IA';
+    }
+  } catch (e) {
+    out.innerHTML = '<div class="fd-text" style="color:var(--crit)">Falha de rede ao chamar a IA.</div>';
+    btn.textContent = '✨ Diagnosticar com IA';
+  }
+  btn.disabled = false;
 }
 
 /* ── Seleção múltipla + triagem em massa ── */
