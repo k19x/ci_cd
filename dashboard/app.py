@@ -181,6 +181,8 @@ _migrations = [
     "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT ''",
     "ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0",
     "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')",
+    "ALTER TABLE findings ADD COLUMN cwe TEXT DEFAULT ''",
+    "ALTER TABLE findings ADD COLUMN owasp TEXT DEFAULT ''",
 ]
 for _mig in _migrations:
     try:
@@ -240,6 +242,8 @@ class Finding(BaseModel):
     file: str = ""
     line: int = 0
     message: str = ""
+    cwe: str = ""
+    owasp: str = ""
 
 
 class IngestPayload(BaseModel):
@@ -282,15 +286,17 @@ def ingest(payload: IngestPayload, x_api_key: str | None = Header(default=None))
                 new_status = "open" if existing["status"] == "fixed" else existing["status"]
                 conn.execute(
                     "UPDATE findings SET tool=?, rule=?, severity=?, file=?, line=?, message=?,"
-                    " status=?, last_seen=? WHERE repo=? AND fid=?",
+                    " cwe=?, owasp=?, status=?, last_seen=? WHERE repo=? AND fid=?",
                     (f.tool, f.rule, f.severity, f.file, f.line, f.message,
-                     new_status, now, payload.repo, f.id),
+                     f.cwe, f.owasp, new_status, now, payload.repo, f.id),
                 )
             else:
                 conn.execute(
                     "INSERT INTO findings(repo, fid, tool, rule, severity, file, line, message,"
-                    " status, first_seen, last_seen) VALUES (?,?,?,?,?,?,?,?,'open',?,?)",
-                    (payload.repo, f.id, f.tool, f.rule, f.severity, f.file, f.line, f.message, now, now),
+                    " cwe, owasp, status, first_seen, last_seen)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,'open',?,?)",
+                    (payload.repo, f.id, f.tool, f.rule, f.severity, f.file, f.line, f.message,
+                     f.cwe, f.owasp, now, now),
                 )
         # o que estava aberto e não veio neste scan foi corrigido
         open_rows = conn.execute(
@@ -344,6 +350,12 @@ def overview(user=Depends(require_role("viewer"))):
                 "SELECT tool, COUNT(*) FROM findings WHERE status='open' GROUP BY tool"
             ).fetchall()
         )
+        owasp = dict(
+            conn.execute(
+                "SELECT CASE WHEN owasp='' OR owasp IS NULL THEN 'Sem categoria' ELSE owasp END,"
+                " COUNT(*) FROM findings WHERE status='open' GROUP BY 1"
+            ).fetchall()
+        )
     return {
         "repos": repos,
         "open_by_severity": {sev: totals.get(sev, 0) for sev in SEVERITIES},
@@ -351,6 +363,7 @@ def overview(user=Depends(require_role("viewer"))):
         "last_scans": last_scans,
         "risk": risk,
         "engines": engines,
+        "owasp": owasp,
     }
 
 

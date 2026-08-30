@@ -6,11 +6,17 @@
 #   pull_request:
 #   push:
 #     branches: [main]
+# permissions:
+#   contents: read
+#   security-events: write
+#   actions: read
+#   pull-requests: write   # necessário para o PR decoration (comentário do SecPipe)
 # jobs:
 #   scan:
 #     uses: SUA_ORG/ci_cd/.github/workflows/security-scan.yml@main
 #     with:
-#       fail_on: high   # critical | high | medium | low
+#       fail_on: critical            # critical | high | medium | low
+#       # dast_url: https://app.exemplo.com   # liga o DAST (OWASP ZAP) contra a app rodando
 name: example-caller (desativado)
 on:
   workflow_dispatch:

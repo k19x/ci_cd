@@ -7,6 +7,10 @@ on:
         description: "Severidade mínima que bloqueia o merge (critical|high|medium|low)"
         type: string
         default: "critical"
+      dast_url:
+        description: "URL da aplicação rodando para o DAST (OWASP ZAP). Vazio = DAST desligado"
+        type: string
+        default: ""
   push:
     branches: [main]
   pull_request:
@@ -86,13 +90,103 @@ jobs:
           name: sarif-gitleaks
           path: gitleaks.sarif
 
+  dast-zap:
+    name: DAST (OWASP ZAP)
+    runs-on: ubuntu-latest
+    if: inputs.dast_url != ''
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: k19x/ci_cd
+      - name: ZAP baseline scan
+        run: |
+          docker run --rm -v "$PWD:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t "${{ inputs.dast_url }}" -J zap.json -I || true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Converter para SARIF
+        run: python scripts/zap2sarif.py zap.json --output zap.sarif
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sarif-zap
+          path: zap.sarif
+
+  api-security:
+    name: API Security (Spectral)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: k19x/ci_cd
+          path: __secpipe
+      - name: Detectar specs OpenAPI/Swagger
+        id: specs
+        run: |
+          grep -rlE '(openapi|swagger)["'"'"']?[[:space:]]*:' \
+            --include='*.json' --include='*.yaml' --include='*.yml' . 2>/dev/null \
+            | grep -v __secpipe | head -5 > specs.txt || true
+          if [ -s specs.txt ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "Specs encontradas:"; cat specs.txt
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "Nenhuma spec OpenAPI/Swagger — job neutro."
+          fi
+      - name: Lint com Spectral (regras OAS)
+        if: steps.specs.outputs.found == 'true'
+        run: |
+          echo 'extends: ["spectral:oas"]' > .spectral.yaml
+          xargs -a specs.txt npx --yes @stoplight/spectral-cli lint \
+            -f json -o spectral.json || true
+      - uses: actions/setup-python@v5
+        if: steps.specs.outputs.found == 'true'
+        with:
+          python-version: "3.12"
+      - name: Converter para SARIF
+        if: steps.specs.outputs.found == 'true'
+        run: python __secpipe/scripts/spectral2sarif.py spectral.json --output api.sarif
+      - uses: actions/upload-artifact@v4
+        if: steps.specs.outputs.found == 'true'
+        with:
+          name: sarif-api
+          path: api.sarif
+
+  supply-chain:
+    name: Supply Chain (OSSF Scorecard)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@v2.4.0
+        continue-on-error: true
+        with:
+          results_file: scorecard.sarif
+          results_format: sarif
+          publish_results: false
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: sarif-scorecard
+          path: scorecard.sarif
+
   gate:
     name: Policy Gate
     runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: read
-    needs: [sast-semgrep, sca-iac-trivy, secrets-gitleaks]
+    needs: [sast-semgrep, sca-iac-trivy, secrets-gitleaks, dast-zap, api-security, supply-chain]
+    if: ${{ !cancelled() }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -120,9 +214,30 @@ jobs:
             --commit "${{ github.sha }}" \
             --token "$SECPIPE_TOKEN"
       - name: Aplicar gate
-        run: python scripts/gate.py findings.json --policy policy/policy.yml --fail-on "${{ inputs.fail_on || 'critical' }}"
+        id: gate
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python scripts/gate.py findings.json --policy policy/policy.yml \
+            --fail-on "${{ inputs.fail_on || 'critical' }}" | tee gate-output.txt
+      - name: PR decoration
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/pr_comment.py findings.json \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --gate "${{ steps.gate.outcome }}" \
+            --gate-log gate-output.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: findings
           path: findings.json
+      - name: Enforce gate
+        if: steps.gate.outcome == 'failure'
+        run: |
+          echo "Gate reprovado — veja o passo 'Aplicar gate' acima."
+          exit 1

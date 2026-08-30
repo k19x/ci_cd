@@ -1148,6 +1148,17 @@ pre.yaml {
           </div>
         </div>
 
+        <div class="card span-2" data-card="owasp">
+          <div class="card-head"><div class="card-title">OWASP Top 10</div>
+            <span class="card-tools">
+              <button onclick="moveCard('owasp',-1)" title="Mover para trás"><i data-lucide="chevron-left"></i></button>
+              <button onclick="moveCard('owasp',1)" title="Mover para frente"><i data-lucide="chevron-right"></i></button>
+              <button class="ct-x" onclick="removeCard('owasp')" title="Remover card"><i data-lucide="x"></i></button>
+            </span>
+          </div>
+          <div style="padding:16px;display:flex;flex-direction:column;gap:8px" id="owaspDist"></div>
+        </div>
+
         <div class="card span-2" data-card="engines">
           <div class="card-head"><div class="card-title">Distribuição por engine</div>
             <span class="card-tools">
@@ -1734,6 +1745,19 @@ async function loadDashboard() {
       <td style="text-align:right"><span class="${r.open === 0 ? 'sev' : ''}" style="${r.open === 0 ? 'background:var(--ok-bg);color:var(--ok)' : 'color:var(--text2)'}">${r.open}</span></td>
     </tr>`).join('');
 
+  // OWASP Top 10
+  const ow = data.owasp || {};
+  const owTotal = Object.values(ow).reduce((a,b) => a+b, 0) || 1;
+  $('owaspDist').innerHTML = Object.entries(ow)
+    .sort((a,b) => b[1]-a[1]).slice(0, 8).map(([cat, n]) => `
+    <div>
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px;gap:8px">
+        <span style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cat)}</span>
+        <span class="mono" style="color:var(--text);flex-shrink:0">${n}</span>
+      </div>
+      <div class="sev-bar"><div class="sev-bar-fill" style="width:${Math.max(3, Math.round(n/owTotal*100))}%;background:${cat.startsWith('A0') || cat.startsWith('A1') ? 'var(--accent)' : 'var(--info)'}"></div></div>
+    </div>`).join('') || '<span style="color:var(--muted);font-size:12px">Sem findings categorizados — rode um novo scan para popular CWE/OWASP.</span>';
+
   const engines = data.engines || {};
   const engTotal = Object.values(engines).reduce((a,b) => a+b, 0) || 1;
   const engColors = {Semgrep:'var(--accent)', Trivy:'var(--high)', gitleaks:'var(--crit)'};
@@ -2067,7 +2091,7 @@ function toggleFindDetail(gi, btn) {
       <div class="fd-text">
         <a class="fd-file-link" href="${fileLink(f)}" target="_blank" rel="noopener">${esc(f.file)}${f.line ? ':' + f.line : ''}</a>
         <div style="font-size:11px;color:var(--muted);margin-top:5px">
-          ${f.line ? `Linha ${f.line} · ` : ''}${esc(f.repo)} · regra <span class="mono">${esc(f.rule)}</span> · ${esc(f.tool)}
+          ${f.line ? `Linha ${f.line} · ` : ''}${esc(f.repo)} · regra <span class="mono">${esc(f.rule)}</span> · ${esc(f.tool)}${f.cwe ? ` · <span class="mono" style="color:var(--accent)">${esc(f.cwe)}</span>` : ''}${f.owasp ? ` · <span style="color:var(--accent)">${esc(f.owasp)}</span>` : ''}
         </div>
         <div style="font-size:11px;color:var(--muted);margin-top:3px">
           Visto pela 1ª vez: ${(f.first_seen||'').slice(0,16).replace('T',' ') || '—'} · Último scan: ${(f.last_seen||'').slice(0,16).replace('T',' ') || '—'}
@@ -2935,9 +2959,10 @@ const DASH_CARDS = {
   lastScans: 'Último scan por projeto',
   riskiest: 'Projetos mais arriscados',
   safest: 'Projetos mais seguros',
+  owasp: 'OWASP Top 10',
   engines: 'Distribuição por engine',
 };
-const DASH_SPANS = {trend: 3, lastScans: 3, riskiest: 2, safest: 2, engines: 2};
+const DASH_SPANS = {trend: 3, lastScans: 3, riskiest: 2, safest: 2, owasp: 2, engines: 2};
 let _dashLayout = null;
 try { _dashLayout = JSON.parse(localStorage.getItem('secpipe-dash')); } catch(e) {}
 if (!_dashLayout || !Array.isArray(_dashLayout.order) || !Array.isArray(_dashLayout.hidden))

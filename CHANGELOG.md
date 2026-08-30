@@ -3,6 +3,19 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.13.0] - 2026-08-30
+
+### Added — paridade Checkmarx: 3 engines novos + PR decoration + compliance
+- **DAST (OWASP ZAP)**: novo job `dast-zap` — baseline scan contra a app rodando; opt-in por repo via input `dast_url`; conversor `scripts/zap2sarif.py` (risk→severity, CWE das tags)
+- **API Security (Spectral)**: job `api-security` detecta specs OpenAPI/Swagger no repo e linta com as regras OAS do Spectral; conversor `scripts/spectral2sarif.py`; neutro quando não há spec
+- **Supply Chain (OSSF Scorecard)**: job `supply-chain` roda o Scorecard (SARIF nativo — pinned deps, token permissions, branch protection, dangerous workflows); só em push (limitação do Scorecard em PR)
+- **PR decoration**: `scripts/pr_comment.py` posta/atualiza comentário no PR com veredito do gate, tabela por severidade, top 10 critical/high com OWASP e saída do gate em caso de reprovação (upsert por marker, 403 tolerado)
+- **Compliance OWASP Top 10**: `normalize.py` extrai CWE/OWASP das tags SARIF + mapa CWE→OWASP 2021 (~150 CWEs); Trivy CVEs caem em A06; findings ganham campos `cwe`/`owasp` (colunas novas no SQLite); card **"OWASP Top 10"** no dashboard customizável; CWE/OWASP visíveis no painel de detalhes
+
+### Changed
+- Gate agora roda com `if: !cancelled()` e needs de todos os 6 jobs — agrega o que chegou mesmo com jobs opcionais pulados; verdito preservado via `continue-on-error` + passo final `Enforce gate`
+- `example-caller.yml` documenta `permissions: pull-requests: write` (necessário no caller para o PR decoration) e o input `dast_url`
+
 ## [0.12.3] - 2026-08-30
 
 ### Changed
