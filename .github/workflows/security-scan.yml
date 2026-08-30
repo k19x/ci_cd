@@ -11,6 +11,13 @@ on:
         description: "URL da aplicação rodando para o DAST (OWASP ZAP). Vazio = DAST desligado"
         type: string
         default: ""
+    secrets:
+      SNYK_TOKEN:
+        description: "Ignorado — aceito apenas para compatibilidade com callers antigos (template Snyk)"
+        required: false
+      SECPIPE_TOKEN:
+        description: "Token do ingest do dashboard (opcional; callers com 'secrets: inherit' já cobrem)"
+        required: false
   push:
     branches: [main]
   pull_request:

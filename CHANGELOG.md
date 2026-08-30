@@ -3,6 +3,11 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.13.1] - 2026-08-30
+
+### Fixed
+- **"Invalid secret, SNYK_TOKEN is not defined"**: caller de repo com template antigo (Snyk) passava `SNYK_TOKEN` explicitamente e o GitHub invalidava o workflow. O reusable agora declara `SNYK_TOKEN` (ignorado) e `SECPIPE_TOKEN` como secrets opcionais em `workflow_call` — callers legados voltam a validar sem mudanças
+
 ## [0.13.0] - 2026-08-30
 
 ### Added — paridade Checkmarx: 3 engines novos + PR decoration + compliance
