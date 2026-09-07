@@ -972,24 +972,6 @@ tr.sla-row td:first-child { background: rgba(255,51,85,.04); }
 /* Spin animation for loader icons */
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Activity rows — pill-card style ── */
-#actScans > div, #actAiJobs > div {
-  background: rgba(0,180,255,.022);
-  border: 1px solid var(--bd) !important;
-  border-radius: 10px;
-  margin: 5px 0;
-  padding: 12px 14px !important;
-  transition: background .15s, border-color .15s, box-shadow .15s;
-}
-#actScans > div:hover, #actAiJobs > div:hover {
-  background: rgba(0,180,255,.05);
-  border-color: var(--bd2) !important;
-  box-shadow: 0 2px 12px rgba(0,180,255,.06);
-}
-/* Status color tints on activity rows */
-#actScans > div:has(span[style*="var(--crit)"]) { border-color: rgba(255,51,85,.18) !important; }
-#actScans > div:has(span[style*="var(--ok)"]) { border-color: rgba(34,197,94,.14) !important; }
-
 /* ── Stat cells — severity gradient tints ── */
 .stat-cell.crit  { background: linear-gradient(145deg, rgba(255,51,85,.09) 0%, rgba(8,21,42,.7) 60%) !important; }
 .stat-cell.high  { background: linear-gradient(145deg, rgba(255,119,51,.08) 0%, rgba(8,21,42,.7) 60%) !important; }
@@ -997,6 +979,7 @@ tr.sla-row td:first-child { background: rgba(255,51,85,.04); }
 .stat-cell.low   { background: linear-gradient(145deg, rgba(59,130,246,.07) 0%, rgba(8,21,42,.7) 60%) !important; }
 .stat-cell.fixed { background: linear-gradient(145deg, rgba(34,197,94,.08) 0%, rgba(8,21,42,.7) 60%) !important; }
 .stat-cell.total { background: linear-gradient(145deg, rgba(0,184,255,.06) 0%, rgba(8,21,42,.7) 60%) !important; }
+.stat-cell.fixready { background: linear-gradient(145deg, rgba(0,184,255,.10) 0%, rgba(8,21,42,.7) 60%) !important; }
 :root[data-theme="light"] .stat-cell { background: rgba(255,255,255,.92) !important; }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) .stat-cell { background: rgba(255,255,255,.92) !important; }
@@ -1012,8 +995,6 @@ tr.sla-row td:first-child { background: rgba(255,51,85,.04); }
 }
 .card-title { font-size: 12px; }
 
-/* ── Card body sections ── */
-#actScans, #actAiJobs { padding: 10px 14px 14px !important; }
 
 /* ── Font rendering ── */
 body {
@@ -1196,6 +1177,19 @@ td { padding: 11px 16px; }
 .fix-state { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; padding:8px 10px; border-radius:6px; background:rgba(0,184,255,.07); border:1px solid rgba(0,184,255,.25); }
 .fix-state.ok { background:rgba(34,212,114,.07); border-color:rgba(34,212,114,.3); color:var(--ok); }
 
+/* ── Badges da sidebar ── */
+.nav-badge { margin-left:auto; background:var(--crit); color:#fff; font-size:9px; font-weight:700; border-radius:10px; padding:1px 6px; line-height:1.6; }
+.nav-badge.muted { background:var(--s3); color:var(--text2); }
+.nav-badge[hidden] { display:none; }
+
+/* ── Stat "Aguardando PR" ── */
+.stat-cell.fixready .stat-val { color: var(--accent); }
+
+/* ── Piloto automático por projeto ── */
+.ap-sel { font-size:11px; padding:3px 6px; border-radius:var(--radius); border:1px solid var(--bd); background:var(--s3); color:var(--muted); cursor:pointer; }
+.ap-sel.on  { color:var(--ok);   border-color:rgba(34,212,114,.45); }
+.ap-sel.off { color:var(--crit); border-color:rgba(255,68,68,.45); }
+
 /* ── Toast ── */
 .ui-toast {
   position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 9999;
@@ -1230,19 +1224,16 @@ td { padding: 11px 16px; }
       <a class="nav-item" onclick="showTab('jobs',this)">
         <i data-lucide="scan"></i>
         Scans
-      </a>
-      <a class="nav-item" id="navActivity" onclick="showTab('activity',this)">
-        <i data-lucide="briefcase"></i>
-        Jobs
-        <span id="navActivityBadge" hidden style="margin-left:auto;background:var(--crit);color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;line-height:1.6"></span>
+        <span id="navScansBadge" class="nav-badge" hidden title="Scans com falha"></span>
       </a>
       <a class="nav-item" onclick="showTab('findings',this)">
-        <i data-lucide="list"></i>
-        Results
+        <i data-lucide="bug"></i>
+        Findings
+        <span id="navFindingsBadge" class="nav-badge muted" hidden title="Findings abertos (To Review)"></span>
       </a>
       <a class="nav-item" onclick="showTab('vulns',this)">
-        <i data-lucide="search"></i>
-        Findings
+        <i data-lucide="history"></i>
+        Histórico
       </a>
     </div>
     <div class="nav-section">
@@ -1371,6 +1362,7 @@ td { padding: 11px 16px; }
         <div class="stat-cell low"   title="Filtrar por Low" onclick="goToFindings('low','open')"><div class="stat-val" id="s-low">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="info"></i></span>Low</div></div>
         <div class="stat-cell fixed" title="Ver findings corrigidos" onclick="goToFindings('','fixed')"><div class="stat-val" id="s-fixed">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="check-circle"></i></span>Corrigidos</div></div>
         <div class="stat-cell crit" title="Findings abertos além do prazo de SLA" onclick="if($('fSlaOnly'))$('fSlaOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-sla">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="clock-alert"></i></span>SLA estourado</div></div>
+        <div class="stat-cell fixready" title="Correções da IA com branch pronta aguardando abertura de PR" onclick="if($('fFixOnly'))$('fFixOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-fixready">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="git-pull-request"></i></span>Aguardando PR</div></div>
       </div>
 
       <!-- customize bar -->
@@ -1511,7 +1503,7 @@ td { padding: 11px 16px; }
     <div id="tab-findings" class="tab-pane">
       <div class="card">
         <div class="card-head">
-          <div class="card-title">Results</div>
+          <div class="card-title">Findings</div>
           <div class="card-sub" id="findCount"></div>
         </div>
         <div class="filter-bar">
@@ -1534,6 +1526,9 @@ td { padding: 11px 16px; }
           </select>
           <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer">
             <input type="checkbox" id="fSlaOnly" class="selbox" onchange="_findPage=0;renderFindPage()"> SLA estourado
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer" title="Findings com branch de correção da IA pronta, aguardando PR">
+            <input type="checkbox" id="fFixOnly" class="selbox" onchange="_findPage=0;renderFindPage()"> Correção pronta
           </label>
           <button class="btn-ghost" onclick="exportFindingsCSV()" title="Exportar CSV"><i data-lucide="download"></i> CSV</button>
           <span id="bulkBar" hidden>
@@ -1569,7 +1564,7 @@ td { padding: 11px 16px; }
     <div id="tab-vulns" class="tab-pane">
       <div class="card">
         <div class="card-head">
-          <div class="card-title">Findings</div>
+          <div class="card-title">Histórico de scans</div>
           <div class="card-sub" id="vulnCount"></div>
         </div>
         <div class="filter-bar">
@@ -1656,6 +1651,7 @@ td { padding: 11px 16px; }
               <th class="sortable" data-k="rep" data-c="4" onclick="sortBy('rep',4,renderRepos)">Open<span class="arr"></span></th>
               <th class="sortable" data-k="rep" data-c="5" onclick="sortBy('rep',5,renderRepos)">Crit / High<span class="arr"></span></th>
               <th class="sortable" data-k="rep" data-c="6" onclick="sortBy('rep',6,renderRepos)">Risk<span class="arr"></span></th>
+              <th title="Piloto automático: seguir o global, ligar ou desligar só neste projeto">Piloto</th>
               <th>Integration</th><th></th>
             </tr></thead>
             <tbody id="repoRows"></tbody>
@@ -1668,6 +1664,7 @@ td { padding: 11px 16px; }
     <div id="tab-settings" class="tab-pane">
       <div class="vis-tabs" style="display:inline-flex;margin-bottom:16px">
         <button class="vis-tab active" onclick="showSettingsTab('policy',this)">Policy</button>
+        <button class="vis-tab" onclick="showSettingsTab('security',this)">Segurança</button>
         <button class="vis-tab" onclick="showSettingsTab('ai',this)">AI</button>
         <button class="vis-tab" onclick="showSettingsTab('notify',this)">Notificações</button>
         <button class="vis-tab" onclick="showSettingsTab('developer',this)">Developer</button>
@@ -1760,55 +1757,6 @@ td { padding: 11px 16px; }
         <span id="policyMsg" class="form-msg"></span>
       </div>
 
-    <!-- ── 2FA / TOTP ── -->
-    <div class="card" style="margin-top:16px">
-      <div class="card-head">
-        <div class="card-title"><i data-lucide="shield-check"></i>Two-Factor Authentication (2FA)</div>
-        <div class="card-sub">TOTP — Google Authenticator, Authy, 1Password</div>
-      </div>
-      <div style="padding:18px">
-
-        <!-- Status -->
-        <div id="totp2faStatus" style="margin-bottom:16px;display:flex;align-items:center;gap:10px">
-          <span id="totp2faBadge" style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:10px"></span>
-          <span id="totp2faDesc" style="font-size:13px;color:var(--text2)"></span>
-        </div>
-
-        <!-- Setup flow -->
-        <div id="totp2faSetup" style="display:none">
-          <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Escaneie o QR code com seu app autenticador, depois insira o código para confirmar.</p>
-          <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
-            <div>
-              <div id="totp2faQR" style="background:#fff;padding:12px;border-radius:8px;border:1px solid var(--border);display:inline-block"></div>
-              <div style="margin-top:8px;font-size:11px;color:var(--muted);max-width:200px;word-break:break-all" id="totp2faSecret"></div>
-            </div>
-            <div style="flex:1;min-width:220px">
-              <div class="login-field" style="margin-bottom:12px">
-                <label style="font-size:12px;font-weight:500;color:var(--text2)">Código de confirmação</label>
-                <input type="text" id="totp2faCode" inputmode="numeric" maxlength="6"
-                       placeholder="000000" style="font-size:20px;letter-spacing:.2em;text-align:center;padding:10px"
-                       onkeydown="if(event.key==='Enter')activateTOTP()">
-              </div>
-              <div style="display:flex;gap:8px">
-                <button class="btn-primary" onclick="activateTOTP()" id="totp2faActivateBtn">Ativar 2FA</button>
-                <button class="btn-ghost" onclick="cancelTOTPSetup()">Cancelar</button>
-              </div>
-              <div class="form-msg" id="totp2faSetupMsg" style="margin-top:8px"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Action buttons -->
-        <div id="totp2faActions">
-          <button class="btn-primary" id="totp2faEnableBtn" onclick="startTOTPSetup()" style="display:none">Ativar 2FA</button>
-          <div id="totp2faDisableForm" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="password" id="totp2faDisablePwd" placeholder="Senha atual para desativar" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--bg);color:var(--text)">
-            <button class="btn-ghost" onclick="disableTOTP()" style="color:var(--crit)">Desativar 2FA</button>
-            <span class="form-msg" id="totp2faDisableMsg"></span>
-          </div>
-        </div>
-      </div>
-    </div>
       <!-- SLA -->
       <div class="card" style="margin-top:16px;max-width:640px">
         <div class="card-head">
@@ -1827,6 +1775,142 @@ td { padding: 11px 16px; }
         </div>
       </div>
     </div><!-- /settingsPane-policy -->
+
+    <!-- ── Sub-aba Segurança ── -->
+    <div id="settingsPane-security" style="display:none">
+
+      <!-- 2FA / TOTP -->
+      <div class="card" style="max-width:720px">
+        <div class="card-head">
+          <div class="card-title"><i data-lucide="shield-check"></i>Two-Factor Authentication (2FA)</div>
+          <div class="card-sub">TOTP — Google Authenticator, Authy, 1Password</div>
+        </div>
+        <div style="padding:18px">
+          <div id="totp2faStatus" style="margin-bottom:16px;display:flex;align-items:center;gap:10px">
+            <span id="totp2faBadge" style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:10px"></span>
+            <span id="totp2faDesc" style="font-size:13px;color:var(--text2)"></span>
+          </div>
+          <div id="totp2faSetup" style="display:none">
+            <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Escaneie o QR code com seu app autenticador, depois insira o código para confirmar.</p>
+            <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+              <div>
+                <div id="totp2faQR" style="background:#fff;padding:12px;border-radius:8px;border:1px solid var(--border);display:inline-block"></div>
+                <div style="margin-top:8px;font-size:11px;color:var(--muted);max-width:200px;word-break:break-all" id="totp2faSecret"></div>
+              </div>
+              <div style="flex:1;min-width:220px">
+                <div class="login-field" style="margin-bottom:12px">
+                  <label style="font-size:12px;font-weight:500;color:var(--text2)">Código de confirmação</label>
+                  <input type="text" id="totp2faCode" inputmode="numeric" maxlength="6"
+                         placeholder="000000" style="font-size:20px;letter-spacing:.2em;text-align:center;padding:10px"
+                         onkeydown="if(event.key==='Enter')activateTOTP()">
+                </div>
+                <div style="display:flex;gap:8px">
+                  <button class="btn-primary" onclick="activateTOTP()" id="totp2faActivateBtn">Ativar 2FA</button>
+                  <button class="btn-ghost" onclick="cancelTOTPSetup()">Cancelar</button>
+                </div>
+                <div class="form-msg" id="totp2faSetupMsg" style="margin-top:8px"></div>
+              </div>
+            </div>
+          </div>
+          <div id="totp2faActions">
+            <button class="btn-primary" id="totp2faEnableBtn" onclick="startTOTPSetup()" style="display:none">Ativar 2FA</button>
+            <div id="totp2faDisableForm" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+              <input type="password" id="totp2faDisablePwd" placeholder="Senha atual para desativar" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--bg);color:var(--text)">
+              <button class="btn-ghost" onclick="disableTOTP()" style="color:var(--crit)">Desativar 2FA</button>
+              <span class="form-msg" id="totp2faDisableMsg"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Usuários -->
+      <div class="card" style="max-width:720px;margin-top:20px" data-min-role="admin">
+        <div class="card-head">
+          <div class="card-title"><i data-lucide="users"></i>Usuários</div>
+          <div class="card-sub">Contas locais do dashboard · viewer lê, analyst faz triagem e scans, admin gerencia</div>
+        </div>
+        <div class="card-body" style="padding:0 18px 18px">
+          <div class="dev-section">
+            <div class="dev-section-title">Novo usuário</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+              <div style="flex:1;min-width:150px">
+                <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Usuário</label>
+                <input id="nuName" autocomplete="off" placeholder="nome.sobrenome" style="width:100%;font-size:13px;padding:8px 11px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);box-sizing:border-box">
+              </div>
+              <div style="flex:1;min-width:150px">
+                <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Senha (mín. 8)</label>
+                <input id="nuPass" type="password" autocomplete="new-password" style="width:100%;font-size:13px;padding:8px 11px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);box-sizing:border-box" onkeydown="if(event.key==='Enter')createUser()">
+              </div>
+              <div style="width:130px">
+                <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Papel</label>
+                <select id="nuRole" style="width:100%;font-size:13px;padding:8px 10px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text)">
+                  <option value="viewer">viewer</option><option value="analyst">analyst</option><option value="admin">admin</option>
+                </select>
+              </div>
+              <button class="btn-primary" onclick="createUser()"><i data-lucide="user-plus"></i> Criar</button>
+            </div>
+            <span class="form-msg" id="nuMsg" style="display:block;margin-top:8px"></span>
+          </div>
+          <table style="width:100%">
+            <thead><tr><th>Usuário</th><th>Papel</th><th>Criado em</th><th>Status</th><th></th></tr></thead>
+            <tbody id="userRows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- API Keys -->
+      <div class="card" style="max-width:720px;margin-top:20px" data-min-role="admin">
+        <div class="card-head">
+          <div class="card-title"><i data-lucide="key-round"></i> API Keys</div>
+          <div class="card-sub">Use <span class="mono">X-API-Key: &lt;token&gt;</span> para autenticar chamadas programáticas</div>
+        </div>
+        <div class="card-body" style="padding:0 18px 18px">
+          <div class="dev-section">
+            <div class="dev-section-title">Nova chave</div>
+            <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Nome</label>
+            <input id="newKeyName" placeholder="ci-github-actions, grafana-monitor, deploy-bot…"
+              style="width:100%;font-size:13px;padding:8px 11px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);box-sizing:border-box;margin-bottom:14px"
+              onkeydown="if(event.key==='Enter')createApiKey()">
+            <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Escopo</label>
+            <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+              <label class="scope-card read" style="flex:1;min-width:120px">
+                <input class="scope-radio" type="radio" name="newKeyScope" value="read" checked>
+                <div class="scope-card-label">read</div>
+                <div class="scope-card-desc">Leitura — findings, scans, overview, projetos</div>
+              </label>
+              <label class="scope-card ingest" style="flex:1;min-width:120px">
+                <input class="scope-radio" type="radio" name="newKeyScope" value="ingest">
+                <div class="scope-card-label">ingest</div>
+                <div class="scope-card-desc">Envio de resultados via <span class="mono">/api/ingest</span></div>
+              </label>
+              <label class="scope-card admin" style="flex:1;min-width:120px">
+                <input class="scope-radio" type="radio" name="newKeyScope" value="admin">
+                <div class="scope-card-label">admin</div>
+                <div class="scope-card-desc">Escrita — triagem, scans e policy; sem gestão de usuários/keys</div>
+              </label>
+            </div>
+            <button class="btn-primary" onclick="createApiKey()"><i data-lucide="plus-circle"></i> Gerar chave</button>
+          </div>
+          <div id="newKeyAlert" hidden class="key-alert">
+            <div class="key-alert-head">
+              <i data-lucide="shield-check" style="color:var(--ok);width:15px;height:15px"></i>
+              <span class="key-alert-title">Chave gerada — copie agora, não será exibida novamente</span>
+              <button class="btn-ghost" onclick="$('newKeyAlert').hidden=true" title="Fechar" style="padding:2px 4px"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+            </div>
+            <div class="key-code-row">
+              <div id="newKeyValue" class="key-code"></div>
+              <button class="btn-ghost" id="copyKeyBtn" onclick="copyApiKey()" title="Copiar chave"><i data-lucide="copy"></i></button>
+            </div>
+          </div>
+          <table style="width:100%">
+            <thead><tr><th>Nome</th><th>Escopo</th><th>Criado em</th><th>Último uso</th><th></th></tr></thead>
+            <tbody id="apiKeyRows">
+              <tr><td colspan="5"><div class="api-empty"><i data-lucide="key-round" style="width:32px;height:32px"></i><span style="font-size:13px">Nenhuma chave criada</span></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /settingsPane-security -->
 
     <!-- ── Sub-aba AI ── -->
     <div id="settingsPane-ai" style="display:none">
@@ -1926,76 +2010,6 @@ td { padding: 11px 16px; }
 
     <!-- ── Sub-aba Developer ── -->
     <div id="settingsPane-developer" style="display:none">
-      <div class="card" style="max-width:720px;margin-bottom:20px">
-        <div class="card-head">
-          <div class="card-title"><i data-lucide="key-round"></i> API Keys</div>
-          <div class="card-sub">Use <span class="mono">X-API-Key: &lt;token&gt;</span> para autenticar chamadas programáticas</div>
-        </div>
-        <div class="card-body" style="padding:0 18px 18px">
-
-          <!-- Create form -->
-          <div class="dev-section">
-            <div class="dev-section-title">Nova chave</div>
-            <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">Nome</label>
-            <input id="newKeyName" placeholder="ci-github-actions, grafana-monitor, deploy-bot…"
-              style="width:100%;font-size:13px;padding:8px 11px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);box-sizing:border-box;margin-bottom:14px"
-              onkeydown="if(event.key==='Enter')createApiKey()">
-
-            <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Escopo</label>
-            <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-              <label class="scope-card read" style="flex:1;min-width:120px">
-                <input class="scope-radio" type="radio" name="newKeyScope" value="read" checked>
-                <div class="scope-card-label">read</div>
-                <div class="scope-card-desc">Leitura — findings, scans, overview, projetos</div>
-              </label>
-              <label class="scope-card ingest" style="flex:1;min-width:120px">
-                <input class="scope-radio" type="radio" name="newKeyScope" value="ingest">
-                <div class="scope-card-label">ingest</div>
-                <div class="scope-card-desc">Envio de resultados via <span class="mono">/api/ingest</span></div>
-              </label>
-              <label class="scope-card admin" style="flex:1;min-width:120px">
-                <input class="scope-radio" type="radio" name="newKeyScope" value="admin">
-                <div class="scope-card-label">admin</div>
-                <div class="scope-card-desc">Escrita — triagem, scans e policy; sem gestão de usuários/keys</div>
-              </label>
-            </div>
-            <button class="btn-primary" onclick="createApiKey()"><i data-lucide="plus-circle"></i> Gerar chave</button>
-          </div>
-
-          <!-- Generated key alert -->
-          <div id="newKeyAlert" hidden class="key-alert">
-            <div class="key-alert-head">
-              <i data-lucide="shield-check" style="color:var(--ok);width:15px;height:15px"></i>
-              <span class="key-alert-title">Chave gerada — copie agora, não será exibida novamente</span>
-              <button class="btn-ghost" onclick="$('newKeyAlert').hidden=true" title="Fechar" style="padding:2px 4px"><i data-lucide="x" style="width:14px;height:14px"></i></button>
-            </div>
-            <div class="key-code-row">
-              <div id="newKeyValue" class="key-code"></div>
-              <button class="btn-ghost" id="copyKeyBtn" onclick="copyApiKey()" title="Copiar chave"><i data-lucide="copy"></i></button>
-            </div>
-          </div>
-
-          <!-- Keys table -->
-          <table style="width:100%">
-            <thead><tr>
-              <th>Nome</th>
-              <th>Escopo</th>
-              <th>Criado em</th>
-              <th>Último uso</th>
-              <th></th>
-            </tr></thead>
-            <tbody id="apiKeyRows">
-              <tr><td colspan="5">
-                <div class="api-empty">
-                  <i data-lucide="key-round" style="width:32px;height:32px"></i>
-                  <span style="font-size:13px">Nenhuma chave criada</span>
-                </div>
-              </td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       <!-- Docs -->
       <div class="card" style="max-width:720px">
         <div class="card-head">
@@ -2085,44 +2099,6 @@ td { padding: 11px 16px; }
     </div><!-- /settingsPane-developer -->
 
     </div><!-- /tab-settings -->
-
-    <!-- ═══ JOBS / ATIVIDADE ═══ -->
-    <div id="tab-activity" class="tab-pane">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
-
-        <!-- Scans GitHub -->
-        <div class="card">
-          <div class="card-head" style="padding-bottom:0">
-            <div class="card-title" style="display:flex;align-items:center;gap:7px">
-              <i data-lucide="github" style="width:15px;height:15px;color:var(--accent)"></i>
-              Scans GitHub Actions
-            </div>
-            <div class="card-sub">Runs em andamento e recentes (últimas 2h)</div>
-          </div>
-          <div id="actScans" style="padding:0 18px 14px;max-height:70vh;overflow-y:auto">
-            <div style="color:var(--muted);font-size:13px;padding:24px 0;text-align:center">
-              <i data-lucide="loader-circle" style="width:16px;height:16px;animation:spin 1s linear infinite"></i>
-              Carregando...
-            </div>
-          </div>
-        </div>
-
-        <!-- IA Engine -->
-        <div class="card">
-          <div class="card-head" style="padding-bottom:0">
-            <div class="card-title" style="display:flex;align-items:center;gap:7px">
-              <i data-lucide="cpu" style="width:15px;height:15px;color:var(--accent)"></i>
-              IA Engine
-            </div>
-            <div class="card-sub">Correções, diagnósticos e sugestões</div>
-          </div>
-          <div id="actAiJobs" style="padding:0 18px 14px;max-height:70vh;overflow-y:auto">
-            <div style="color:var(--muted);font-size:13px;padding:24px 0;text-align:center">Nenhum job de IA recente.</div>
-          </div>
-        </div>
-
-      </div>
-    </div>
 
     <!-- ═══ AUDIT LOG ═══ -->
     <div id="tab-audit" class="tab-pane">
@@ -2330,18 +2306,16 @@ function showTab(tab, el) {
   $(`tab-${tab}`).classList.add('active');
   if (el) el.classList.add('active');
   currentTab = tab;
-  const titles = {dashboard:'Dashboard', jobs:'Scans', activity:'Jobs', findings:'Results', vulns:'Findings', repos:'Projects', settings:'Settings', audit:'Audit Log'};
+  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Findings', vulns:'Histórico de scans', repos:'Projects', settings:'Settings', audit:'Audit Log'};
   $('topbarTitle').textContent = titles[tab] || tab;
   clearInterval(jobTimer);
   clearInterval(dashTimer);
-  clearInterval(activityTimer);
   $('topbarAge').hidden = true;
   if (tab === 'dashboard') {
     loadDashboard();
     dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
   }
   if (tab === 'jobs')     { loadJobs(); jobTimer = setInterval(loadJobs, 15000); }
-  if (tab === 'activity') { loadActivity(); activityTimer = setInterval(loadActivity, 10000); }
   if (tab === 'findings') loadFindings();
   if (tab === 'vulns')    loadVulns();
   if (tab === 'repos')    loadRepos();
@@ -2349,13 +2323,7 @@ function showTab(tab, el) {
   if (tab === 'audit')    loadAudit();
 }
 
-/* ── Jobs / Activity ── */
-async function loadActivity() {
-  renderActivityAiJobs();
-  await renderActivityScans();
-  updateNavActivityBadge();
-}
-
+/* ── Helpers de tempo (drawer de jobs de IA) ── */
 function _elapsed(ms) {
   const s = Math.floor(ms/1000);
   if (s < 60) return `${s}s`;
@@ -2367,16 +2335,6 @@ function _elapsed(ms) {
 function _timeAgo(ts) {
   return _elapsed(Date.now() - ts) + ' atrás';
 }
-
-const ACT_STATUS_META = {
-  completed:   { cls:'ok',     icon:'circle-check',     label:'Concluído' },
-  success:     { cls:'ok',     icon:'circle-check',     label:'Concluído' },
-  failure:     { cls:'crit',   icon:'circle-x',         label:'Falhou' },
-  cancelled:   { cls:'muted',  icon:'circle-minus',     label:'Cancelado' },
-  in_progress: { cls:'accent', icon:'loader-circle',    label:'Em andamento', spin:true },
-  queued:      { cls:'muted',  icon:'clock',            label:'Na fila' },
-  waiting:     { cls:'muted',  icon:'hourglass',        label:'Aguardando' },
-};
 
 const AI_JOB_META = {
   running: { cls:'accent', icon:'loader-circle', spin:true, label:'Em andamento' },
@@ -2394,85 +2352,21 @@ function _typeIconFromLabel(label) {
   return 'cpu';
 }
 
-function renderActivityAiJobs() {
-  const el = $('actAiJobs'); if (!el) return;
-  const j = _ajPrune(_ajLoad());
-  const entries = Object.entries(j).sort((a,b) => (b[1].started||0)-(a[1].started||0));
-  if (!entries.length) {
-    el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:24px 0;text-align:center">Nenhum job de IA recente.</div>';
-    return;
-  }
-  el.innerHTML = entries.map(([id, x]) => {
-    const meta = AI_JOB_META[x.status] || AI_JOB_META.done;
-    const typeIcon = _typeIconFromLabel(x.label);
-    const spinAttr = meta.spin ? 'style="animation:spin 1s linear infinite"' : '';
-    const age = x.done ? _timeAgo(x.done) : _elapsed(Date.now() - (x.started||Date.now()));
-    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd)">
-      <i data-lucide="${typeIcon}" style="width:15px;height:15px;margin-top:1px;color:var(--accent);flex-shrink:0"></i>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12.5px;font-weight:500;word-break:break-word">${esc(x.label||id)}</div>
-        ${x.error ? `<div style="font-size:11.5px;color:var(--crit);margin-top:2px">${esc(x.error)}</div>` : ''}
-        ${x.result && !x.error ? `<div style="font-size:11.5px;color:var(--ok);margin-top:2px">${x.result}</div>` : ''}
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
-        <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--${meta.cls})">
-          <i data-lucide="${meta.icon}" style="width:12px;height:12px" ${spinAttr}></i>${meta.label}
-        </span>
-        <span style="font-size:10.5px;color:var(--muted)">${age}</span>
-      </div>
-    </div>`;
-  }).join('');
-  if (typeof lucide !== 'undefined') lucide.createIcons();
+/* ── Badges da sidebar ── */
+function _setNavBadge(id, n) {
+  const b = $(id); if (!b) return;
+  b.textContent = n;
+  b.hidden = !n;
 }
-
-async function renderActivityScans() {
-  const el = $('actScans'); if (!el) return;
-  const data = await api('/api/runs');
-  if (!data) return;
-  const cutoff = Date.now() - 2 * 3600 * 1000;
-  const runs = (data.runs || []).filter(r => {
-    const t = r.updated_at ? new Date(r.updated_at).getTime() : 0;
-    return r.status === 'in_progress' || r.status === 'queued' || t > cutoff;
-  }).slice(0, 30);
-
-  if (!runs.length) {
-    el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:24px 0;text-align:center">Nenhum scan recente nas últimas 2h.</div>';
-    return;
+function updateScansBadge() {
+  // último run de cada repo; conta os que terminaram em falha
+  const latest = {};
+  for (const r of _runs) {
+    const k = r.repo || '';
+    if (!latest[k] || (r.created_at || '') > (latest[k].created_at || '')) latest[k] = r;
   }
-
-  el.innerHTML = runs.map(r => {
-    // completed → usar conclusion para status visual
-    const effectiveStatus = (r.status === 'completed' && r.conclusion) ? r.conclusion : r.status;
-    const meta = ACT_STATUS_META[effectiveStatus] || { cls:'muted', icon:'circle', label: effectiveStatus };
-    const spinAttr = meta.spin ? 'style="animation:spin 1s linear infinite"' : '';
-    const ts = r.updated_at ? new Date(r.updated_at).getTime() : 0;
-    const age = ts ? _timeAgo(ts) : '';
-    const repo = (r.repo||'').split('/').pop();
-    const fullRepo = esc(r.repo||'');
-    const ghUrl = esc(r.url||'');
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd)">
-      <i data-lucide="radar" style="width:15px;height:15px;color:var(--accent);flex-shrink:0"></i>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12.5px;font-weight:500">${ghUrl ? `<a href="${ghUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(repo)}</a>` : esc(repo)}</div>
-        <div style="font-size:11px;color:var(--muted)">${fullRepo}${r.branch ? ' · ' + esc(r.branch) : ''}${r.commit ? ' · ' + esc(r.commit) : ''}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
-        <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--${meta.cls})">
-          <i data-lucide="${meta.icon}" style="width:12px;height:12px" ${spinAttr}></i>${meta.label}
-        </span>
-        <span style="font-size:10.5px;color:var(--muted)">${age}</span>
-      </div>
-    </div>`;
-  }).join('');
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-function updateNavActivityBadge() {
-  const badge = $('navActivityBadge'); if (!badge) return;
-  const j = _ajLoad();
-  const running = Object.values(j).filter(x => x.status === 'running').length;
-  badge.textContent = running;
-  badge.hidden = running === 0;
+  _setNavBadge('navScansBadge', Object.values(latest)
+    .filter(r => r.conclusion === 'failure' || r.conclusion === 'timed_out').length);
 }
 
 /* ── Audit Log ── */
@@ -2567,6 +2461,9 @@ async function loadDashboard() {
   $('s-low').textContent     = sev.low || 0;
   $('s-fixed').textContent   = data.by_status.fixed || 0;
   $('s-sla').textContent     = data.sla_breached ?? '—';
+  $('s-fixready').textContent = data.fix_ready ?? '—';
+  _setNavBadge('navFindingsBadge', Object.values(data.open_by_severity || {}).reduce((a, b) => a + b, 0));
+  if (!_runs.length) loadJobs();   // popula o badge de Scans já no primeiro carregamento
   _slaCfg = data.sla || _slaCfg;
   _riskMap = Object.fromEntries((data.risk_scores || []).map(r => [r.repo, r.score]));
 
@@ -2725,6 +2622,7 @@ async function loadJobs() {
   $('jobsAge').textContent = 'Updated ' + new Date().toLocaleTimeString('pt-BR');
   _runs = data.runs;
   renderJobs();
+  updateScansBadge();
 }
 
 function renderJobs() {
@@ -2886,6 +2784,7 @@ function renderFindPage() {
   if (q) base = base.filter(f =>
     ((f.rule||'') + ' ' + (f.file||'') + ' ' + (f.message||'') + ' ' + (f.repo||'')).toLowerCase().includes(q));
   if ($('fSlaOnly')?.checked) base = base.filter(slaBreach);
+  if ($('fFixOnly')?.checked) base = base.filter(f => f.fix_branch && !f.fix_pr);
   _findingsView = applySort('res', base, {
     0: f => f.repo || '', 1: f => f.rule || '', 2: f => SEV_ORD[f.severity] ?? 9, 3: f => f.tool || '',
     4: f => (f.file || '') + ':' + (f.line || 0), 5: f => f.status || '',
@@ -3080,12 +2979,13 @@ function showSettingsTab(k, btn) {
   document.querySelectorAll('#tab-settings > .vis-tabs .vis-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   $('settingsPane-policy').style.display    = k === 'policy'    ? '' : 'none';
+  $('settingsPane-security').style.display  = k === 'security'  ? '' : 'none';
   $('settingsPane-ai').style.display        = k === 'ai'        ? '' : 'none';
   $('settingsPane-notify').style.display    = k === 'notify'    ? '' : 'none';
   $('settingsPane-developer').style.display = k === 'developer' ? '' : 'none';
+  if (k === 'security') { loadTOTPStatus(); loadUsers(); loadApiKeys(); }
   if (k === 'ai') loadAIConfig();
   if (k === 'notify') loadNotifyConfig();
-  if (k === 'developer') loadApiKeys();
 }
 
 /* ── API Keys ── */
@@ -3144,9 +3044,82 @@ function copyCurl() {
 }
 
 async function revokeApiKey(id, name) {
-  if (!confirm(`Revogar key "${name}"? Esta ação não pode ser desfeita.`)) return;
+  const ok = await uiConfirm('<i data-lucide="trash-2"></i> Revogar API key?',
+    `A chave <strong>${esc(name)}</strong> deixará de funcionar imediatamente. Esta ação não pode ser desfeita.`,
+    'Revogar', true);
+  if (!ok) return;
   const data = await api(`/api/keys/${id}`, {method:'DELETE'});
-  if (data) { $('newKeyAlert').hidden = true; loadApiKeys(); }
+  if (data) { $('newKeyAlert').hidden = true; uiToast(`Key ${name} revogada`, 'ok'); loadApiKeys(); }
+}
+
+/* ── Usuários ── */
+async function loadUsers() {
+  const tbody = $('userRows'); if (!tbody) return;
+  const d = await api('/api/users');
+  if (!d) return;
+  const roleCls = {admin: 'admin', analyst: 'ingest', viewer: 'read'};
+  tbody.innerHTML = d.users.map(u => `
+    <tr>
+      <td class="primary">${esc(u.username)}</td>
+      <td><span class="ep-scope ${roleCls[u.role] || 'read'}">${esc(u.role)}</span></td>
+      <td style="font-size:12px;color:var(--text2)">${esc((u.created_at || '').slice(0, 10))}</td>
+      <td style="font-size:12px;color:${u.active ? 'var(--ok)' : 'var(--muted)'}">${u.active ? 'ativo' : 'inativo'}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn-ghost" onclick="resetUserPassword(${jsq(u.username)}, this)" title="Redefinir senha"><i data-lucide="key-round"></i></button>
+        <button class="btn-ghost" style="color:var(--crit)" onclick="deleteUser(${jsq(u.username)})" title="Remover usuário"><i data-lucide="trash-2"></i></button>
+      </td>
+    </tr>`).join('');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function createUser() {
+  const msg = $('nuMsg'); msg.className = 'form-msg';
+  const body = {username: $('nuName').value.trim(), password: $('nuPass').value, role: $('nuRole').value};
+  if (!body.username || body.password.length < 8) {
+    msg.className = 'form-msg err'; msg.textContent = 'Informe usuário e uma senha com pelo menos 8 caracteres'; return;
+  }
+  const d = await api('/api/users', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (!d) return;
+  msg.className = 'form-msg ok'; msg.textContent = `Usuário ${body.username} criado como ${body.role}`;
+  $('nuName').value = ''; $('nuPass').value = '';
+  loadUsers();
+}
+
+async function deleteUser(username) {
+  const ok = await uiConfirm('<i data-lucide="trash-2"></i> Remover usuário?',
+    `<strong>${esc(username)}</strong> perderá o acesso imediatamente. Esta ação não pode ser desfeita.`, 'Remover', true);
+  if (!ok) return;
+  const d = await api(`/api/users/${encodeURIComponent(username)}`, {method: 'DELETE'});
+  if (d) { uiToast(`Usuário ${username} removido`, 'ok'); loadUsers(); }
+}
+
+function resetUserPassword(username, btn) {
+  const td = btn.closest('td');
+  td.innerHTML = `<span style="display:inline-flex;gap:6px;align-items:center">
+    <input type="password" autocomplete="new-password" placeholder="Nova senha (mín. 8)"
+      style="font-size:12px;padding:5px 8px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);width:170px"
+      onkeydown="if(event.key==='Enter')saveUserPassword(${jsq(username)},this.value);if(event.key==='Escape')loadUsers()">
+    <button class="btn-ghost" onclick="saveUserPassword(${jsq(username)},this.parentElement.querySelector('input').value)" title="Salvar"><i data-lucide="check"></i></button>
+    <button class="btn-ghost" onclick="loadUsers()" title="Cancelar"><i data-lucide="x"></i></button>
+  </span>`;
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+  td.querySelector('input').focus();
+}
+
+async function saveUserPassword(username, pwd) {
+  if ((pwd || '').length < 8) { uiToast('Senha mínima: 8 caracteres'); return; }
+  const d = await api(`/api/users/${encodeURIComponent(username)}/password`,
+    {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password: pwd})});
+  if (d) { uiToast(`Senha de ${username} redefinida`, 'ok'); loadUsers(); }
+}
+
+/* ── Piloto automático por projeto ── */
+async function setRepoAutopilot(name, mode, sel) {
+  const d = await api(`/api/repos/${encodeURIComponent(name)}/autopilot`,
+    {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({mode})});
+  if (!d) { loadRepos(); return; }
+  sel.className = 'ap-sel ' + (mode || 'global');
+  uiToast(`${name}: piloto ${mode === 'on' ? 'ligado' : mode === 'off' ? 'desligado' : 'seguindo o global'}`, 'ok');
 }
 
 /* ── SLA ── */
@@ -3442,7 +3415,6 @@ function _ajRender() {
   const running = entries.filter(([,x]) => x.status==='running').length;
   const badge = $('ajBadge');
   if (badge) { badge.textContent=running; badge.hidden=running===0; }
-  updateNavActivityBadge();
   const drawer = $('ajDrawer');
   if (!drawer || drawer.hidden) return;
   if (!entries.length) { drawer.innerHTML='<p style="color:var(--muted);font-size:12px;text-align:center;padding:16px 8px">Nenhum job de IA recente.</p>'; return; }
@@ -3793,6 +3765,14 @@ function renderRepos() {
           ? `<span class="sev critical">${r.open_critical_high}</span>`
           : '<span style="color:var(--muted)">0</span>'}</td>
       <td>${riskBadge(_riskMap[r.name])}</td>
+      <td>
+        <select class="ap-sel ${r.autopilot || 'global'}" data-min-role="analyst" title="Piloto automático neste projeto"
+                onchange="setRepoAutopilot(${jsq(r.name)}, this.value, this)">
+          <option value=""    ${!r.autopilot ? 'selected' : ''}>global</option>
+          <option value="on"  ${r.autopilot === 'on' ? 'selected' : ''}>ligado</option>
+          <option value="off" ${r.autopilot === 'off' ? 'selected' : ''}>desligado</option>
+        </select>
+      </td>
       <td>
         <details class="snippet">
           <summary>security.yml</summary>

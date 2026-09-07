@@ -3,6 +3,20 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.0] - 2026-09-07
+
+### Changed — reorganização dos menus
+- **Abas renomeadas**: *Results* → **Findings** (vulnerabilidades com triagem) e *Findings* → **Histórico de scans** (scans ingeridos com totais C/H/M/L). Os nomes estavam invertidos em relação ao conteúdo e causavam confusão ("Findings mostra 8 criticals, Dashboard mostra 2")
+- **Aba Jobs removida**: era um recorte de 2h da aba Scans mais um espelho do drawer de jobs de IA da topbar. O filtro de status em Scans (running/queued/failure…) cobre o caso; ~130 linhas de código duplicado retiradas
+- **Settings reorganizado em 5 sub-abas**: *Policy* (limites, allowlist, SLA) · **Segurança** (novo: 2FA, Usuários, API keys) · *AI* (modelo + piloto automático) · *Notificações* · *Developer* (só documentação da API). O 2FA saiu de dentro de Policy; as API keys saíram de Developer
+- **Revogar API key** agora usa o `uiConfirm` do app em vez do `confirm()` nativo do browser
+
+### Added
+- **Tela de Usuários** (Settings → Segurança, admin): lista, cria (usuário/senha/papel), remove e redefine senha inline — sobre o CRUD `/api/users` que já existia no backend sem interface
+- **Fila de correções**: filtro **Correção pronta** em Findings e card **Aguardando PR** no Dashboard (`overview.fix_ready`), ambos levando direto aos findings com branch da IA pronta
+- **Piloto automático por projeto**: coluna *Piloto* em Projects com `global / ligado / desligado` (`PUT /api/repos/{name}/autopilot`); `off` sempre vence, `on` liga mesmo com o global desligado. Coluna `repos.autopilot`
+- **Badges na sidebar**: Scans mostra quantos projetos têm o último run em falha; Findings mostra o total de findings abertos
+
 ## [0.14.19] - 2026-09-07
 
 ### Added

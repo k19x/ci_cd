@@ -224,6 +224,7 @@ _migrations = [
     "ALTER TABLE findings ADD COLUMN fix_pr TEXT DEFAULT ''",
     "ALTER TABLE findings ADD COLUMN fix_summary TEXT DEFAULT ''",
     "ALTER TABLE findings ADD COLUMN fix_at TEXT DEFAULT ''",
+    "ALTER TABLE repos ADD COLUMN autopilot TEXT DEFAULT ''",
 ]
 for _mig in _migrations:
     try:
@@ -521,9 +522,13 @@ def overview(user=Depends(require_role("viewer"))):
                 raw *= 1.5   # exposição pública pesa mais
             risk_scores.append({"repo": name, "score": round(raw, 1)})
         risk_scores.sort(key=lambda x: -x["score"])
+        fix_ready = conn.execute(
+            "SELECT COUNT(*) FROM findings WHERE status='open' AND fix_branch!='' AND fix_pr=''"
+        ).fetchone()[0]
 
     return {
         "repos": repos,
+        "fix_ready": fix_ready,
         "open_by_severity": {sev: totals.get(sev, 0) for sev in SEVERITIES},
         "by_status": by_status,
         "last_scans": last_scans,
@@ -547,7 +552,7 @@ def list_repos(user=Depends(require_role("viewer"))):
         rows = conn.execute(
             """
             SELECT r.name, r.url, r.created_at,
-                   r.visibility, r.languages,
+                   r.visibility, r.languages, r.autopilot,
                    (SELECT MAX(created_at) FROM scans s WHERE s.repo = r.name) AS last_scan,
                    (SELECT COUNT(*) FROM scans s WHERE s.repo = r.name) AS scan_count,
                    (SELECT COUNT(*) FROM findings f
@@ -557,15 +562,32 @@ def list_repos(user=Depends(require_role("viewer"))):
                        AND f.severity IN ('critical', 'high')) AS open_critical_high
             FROM (SELECT name, url, created_at,
                          COALESCE(visibility,'') AS visibility,
-                         COALESCE(languages,'') AS languages
+                         COALESCE(languages,'') AS languages,
+                         COALESCE(autopilot,'') AS autopilot
                   FROM repos
                   UNION
-                  SELECT DISTINCT repo, '', '', '', '' FROM scans
+                  SELECT DISTINCT repo, '', '', '', '', '' FROM scans
                    WHERE repo NOT IN (SELECT name FROM repos)) r
             ORDER BY r.name
             """
         ).fetchall()
     return {"repos": [dict(r) for r in rows]}
+
+
+class RepoAutopilot(BaseModel):
+    mode: str = ""   # '' = seguir global | 'on' | 'off'
+
+
+@app.put("/api/repos/{name:path}/autopilot")
+def set_repo_autopilot(name: str, body: RepoAutopilot, user=Depends(require_role("analyst"))):
+    if body.mode not in ("", "on", "off"):
+        raise HTTPException(400, "mode deve ser '', 'on' ou 'off'")
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with db() as conn:
+        conn.execute("INSERT OR IGNORE INTO repos(name, created_at) VALUES (?,?)", (name, now))
+        conn.execute("UPDATE repos SET autopilot=? WHERE name=?", (body.mode, name))
+    _audit(user["username"], "repo_autopilot", name, detail=body.mode or "global")
+    return {"ok": True, "mode": body.mode}
 
 
 @app.post("/api/repos", status_code=201)
@@ -1996,8 +2018,14 @@ threading.Thread(target=_autopilot_worker, daemon=True, name="secpipe-autopilot"
 
 
 def _autopilot_enqueue(repo: str, new_findings: list) -> int:
+    if not new_findings:
+        return 0
     cfg = _autopilot_cfg()
-    if not cfg["enabled"] or not new_findings:
+    with db() as conn:
+        row = conn.execute("SELECT COALESCE(autopilot,'') AS m FROM repos WHERE name=?", (repo,)).fetchone()
+    mode = row["m"] if row else ""
+    # override por projeto: 'off' sempre vence; 'on' liga mesmo com o global desligado
+    if mode == "off" or (mode != "on" and not cfg["enabled"]):
         return 0
     thr = SEVERITIES.index(cfg["min_sev"])
     cands = [f for f in new_findings
