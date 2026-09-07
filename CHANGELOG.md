@@ -3,6 +3,19 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.6] - 2026-09-07 20:17
+
+### Added
+- **Sincronizar PRs da IA (Findings › Correções)**: `POST /api/ai/sync-prs` (analyst) lê as PRs `secpipe/ai-fix-*` de todos os repos via GitHub API, extrai a regra/arquivo do título `[SecPipe AI] fix: …` e vincula ao finding correspondente (`fix_branch`, `fix_pr`, `fix_at`), preferindo a PR aberta mais recente por regra e nunca sobrescrevendo vínculo existente. Botão **Sincronizar PRs** na barra de filtros. Necessário porque o vínculo PR↔finding só passou a ser gravado na v0.14.19 — as PRs anteriores existiam no GitHub mas eram invisíveis no dashboard
+
+### Execução
+- Diagnóstico da queixa "não vi correção da IA": motor ativo (Claude Code OAuth, CLI 2.1.263, `GITHUB_TOKEN` ok); audit log com 15 disparos manuais de `ai_autofix`; consulta ao GitHub encontrou **25 PRs da IA já abertas** (tyr 7, mdm 6, web-fr1da 2, Tyr-Red-Team-Agent 10), 12 ainda em aberto — o problema era de visibilidade, não de execução
+- Autofix disparado ao vivo via `POST /api/ai/autofix` no finding `dockerfile.security.missing-user-entrypoint` (Tyr-Red-Team-Agent, `Dockerfile:54`): concluído em **30 s**, branch `secpipe/ai-fix-1788822987`, **PR #11** aberta com diff de 6 linhas (`useradd -r -u 1001`, `chown -R`, `USER appuser` antes do `ENTRYPOINT`); estado gravado no finding pelo fluxo normal
+- Rebuild `docker compose up -d --build` — healthy · `py_compile` OK · `node --check` OK
+- `POST /api/ai/sync-prs`: 45 repos varridos, **29 PRs da IA encontradas, 18 findings vinculados**; Correções passou de 24 para **43 itens** (19 `ai_pr` + 24 `scan`)
+- Limpeza: repo fictício `x/y` (sobra de um teste de auth da v0.14.14) removido de `repos/scans/findings/audit_log`
+- Não verificado: visual do botão e dos chips "PR" (extensão do browser bloqueada)
+
 ## [0.15.5] - 2026-09-07 20:10
 
 ### Fixed

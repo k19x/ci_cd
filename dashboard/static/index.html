@@ -1610,6 +1610,7 @@ td { padding: 11px 16px; }
               <option value="all">Geral (cronológico)</option>
             </select>
             <button class="btn-ghost" onclick="exportFixesCSV()" title="Exportar CSV"><i data-lucide="download"></i> CSV</button>
+            <button class="btn-ghost" id="fxSyncBtn" onclick="syncAiPrs(this)" data-min-role="analyst" title="Ler as PRs secpipe/ai-fix-* do GitHub e ligá-las aos findings"><i data-lucide="refresh-cw"></i> Sincronizar PRs</button>
           </div>
           <div id="fxSummary" class="fx-summary"></div>
           <div id="fxGroups" style="padding:0 18px 18px"></div>
@@ -3245,6 +3246,16 @@ function renderFixes() {
     </div>`).join('');
   }
   if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function syncAiPrs(btn) {
+  btn.disabled = true; btnLabel(btn, 'loader-circle', 'Sincronizando…');
+  const d = await api('/api/ai/sync-prs', {method: 'POST'});
+  btn.disabled = false; btnLabel(btn, 'refresh-cw', 'Sincronizar PRs');
+  if (!d) return;
+  uiToast(`${d.ai_prs} PR(s) da IA encontradas em ${d.repos} repos · ${d.linked} finding(s) vinculados agora`, 'ok');
+  if (d.errors?.length) console.warn('sync-prs:', d.errors);
+  loadFixes();
 }
 
 function exportFixesCSV() {

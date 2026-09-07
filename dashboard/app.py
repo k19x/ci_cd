@@ -2140,6 +2140,57 @@ def autopilot_put(cfg: AutopilotConfig, user=Depends(require_role("admin"))):
     return {"ok": True, **_autopilot_cfg()}
 
 
+@app.post("/api/ai/sync-prs")
+def ai_sync_prs(user=Depends(require_role("analyst"))):
+    """Liga PRs `secpipe/ai-fix-*` já existentes no GitHub aos findings (fix_branch/fix_pr/fix_at).
+    Título da PR: '[SecPipe AI] fix: <rule ou arquivo>'. Prefere a PR mais recente por (repo, regra)."""
+    gh_token = os.environ.get("GITHUB_TOKEN", "")
+    if not gh_token:
+        raise HTTPException(400, "GITHUB_TOKEN não configurado")
+    hdrs = {"Authorization": f"Bearer {gh_token}", "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28"}
+    with db() as conn:
+        repos = [r["name"] for r in conn.execute(
+            "SELECT name FROM repos UNION SELECT DISTINCT repo FROM scans")]
+    linked, prs_seen, errors = 0, 0, []
+    for repo in repos:
+        try:
+            req = urllib.request.Request(
+                f"https://api.github.com/repos/{repo}/pulls?state=all&per_page=100&sort=created&direction=desc",
+                headers=hdrs)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                prs = _json.loads(resp.read())
+        except Exception as e:
+            errors.append(f"{repo}: {str(e)[:80]}")
+            continue
+        best: dict[str, dict] = {}   # key -> PR (mais recente, aberta tem prioridade)
+        for p in prs:
+            head = (p.get("head") or {}).get("ref", "")
+            title = p.get("title", "")
+            if not head.startswith("secpipe/ai-fix") or not title.startswith("[SecPipe AI] fix:"):
+                continue
+            prs_seen += 1
+            key = title.split("fix:", 1)[1].strip()
+            cur = best.get(key)
+            if cur is None or (p["state"] == "open" and cur["state"] != "open"):
+                best[key] = p
+        with db() as conn:
+            for key, p in best.items():
+                rows = conn.execute(
+                    "SELECT fid, fix_pr FROM findings WHERE repo=? AND (rule=? OR file=?) "
+                    "ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, last_seen DESC LIMIT 1",
+                    (repo, key, key)).fetchall()
+                if not rows or rows[0]["fix_pr"]:
+                    continue
+                conn.execute(
+                    "UPDATE findings SET fix_branch=?, fix_pr=?, fix_at=? WHERE repo=? AND fid=?",
+                    (p["head"]["ref"], p["html_url"], (p.get("created_at") or "")[:19] + "+00:00",
+                     repo, rows[0]["fid"]))
+                linked += 1
+    _audit(user["username"], "ai_sync_prs", detail=f"{linked} finding(s) ligados a {prs_seen} PR(s) da IA")
+    return {"ok": True, "repos": len(repos), "ai_prs": prs_seen, "linked": linked, "errors": errors}
+
+
 class OpenPrRequest(BaseModel):
     repo: str
     fid: str
