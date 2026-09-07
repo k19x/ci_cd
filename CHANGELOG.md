@@ -3,6 +3,19 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.4] - 2026-09-07 20:03
+
+### Added
+- **Motivo de falha técnica por job (aba Scans › detalhe do run)**: para cada job que falhou por motivo não relacionado ao gate, o backend baixa o log e extrai as linhas de erro (`##[error]`, `Error:`, `exit code`, `denied`, `timed out`…; fallback: últimas 6 linhas) — exibidas em um bloco vermelho logo abaixo do job. Máximo de 3 downloads de log por run
+- **Aviso "Falha técnica"** quando o run falhou sem gate reprovado: lista os jobs afetados, explica que não é bloqueio de política e oferece atalho para os findings do projeto (que continuam válidos do último scan bem-sucedido)
+- Detecção do job de gate aceita o nome prefixado pelo workflow reutilizável (`scan / Policy Gate`)
+
+### Execução
+- Rebuild `docker compose up -d --build` — container healthy
+- `py_compile` OK · `node --check` OK
+- Teste contra os 4 runs falhos mais recentes via `GET /api/runs/{repo}/{run}/jobs`: nos 3 runs de hoje (Tyr-Red-Team-Agent ×2, AES_DECODE_ENCODE_JS) o job *Supply Chain (OSSF Scorecard)* traz o motivo exato — `Error response from daemon: Head "https://gcr.io/v2/openssf/scorecard-action/manifests/v2.4.0": denied` → `Docker pull failed with exit code 1`; nos runs que também reprovaram o gate, `gate_context` continua presente com os findings bloqueantes
+- Não verificado: visual (extensão do browser bloqueada nesta sessão)
+
 ## [0.15.3] - 2026-09-07 20:00
 
 ### Fixed

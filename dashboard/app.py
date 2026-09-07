@@ -1313,6 +1313,30 @@ def _parse_gate_log(text: str) -> dict | None:
     return out if found else None
 
 
+_ERR_HINT = re.compile(r"(##\[error\]|^error[: ]|^fatal:|^Error:|exit code \d+|FAILED|failed with|not found|denied|timed out|Traceback)", re.I)
+
+
+def _log_error_excerpt(text: str, limit: int = 6) -> list[str]:
+    """Linhas que explicam a falha de um job: marcadas com ##[error] ou com cara de erro;
+    se não houver nenhuma, as últimas linhas do log."""
+    lines = []
+    for raw in text.splitlines():
+        s = _LOG_TS.sub("", raw).rstrip()
+        if not s.strip() or s.startswith("##[group]") or s.startswith("##[endgroup]") or s.startswith("##[debug]"):
+            continue
+        lines.append(s)
+    hits, seen = [], set()
+    for s in lines:
+        if _ERR_HINT.search(s):
+            clean = s.replace("##[error]", "").replace("##[warning]", "").strip()[:220]
+            if clean and clean not in seen:
+                seen.add(clean)
+                hits.append(clean)
+    if hits:
+        return hits[-limit:]
+    return [s.strip()[:220] for s in lines[-limit:]]
+
+
 def _db_blocking_findings(repo: str) -> list[dict]:
     with db() as conn:
         rows = conn.execute(
@@ -1355,22 +1379,32 @@ def get_run_jobs(repo: str, run_id: int, user=Depends(require_role("viewer"))):
     jobs = []
     gate_failed = False
     gate_job_id = None
+    logs_fetched = 0
     for job in jobs_data.get("jobs", []):
         failed_steps = [
             {"name": s["name"], "number": s["number"]}
             for s in job.get("steps", [])
             if s.get("conclusion") in ("failure", "timed_out")
         ]
-        if job.get("conclusion") == "failure" and (
-            any(s["name"] == "Enforce gate" for s in failed_steps) or job.get("name") == "Policy Gate"
-        ):
+        is_gate = job.get("conclusion") == "failure" and (
+            any(s["name"] == "Enforce gate" for s in failed_steps)
+            or (job.get("name") or "").endswith("Policy Gate")   # workflow reutilizável prefixa "scan / "
+        )
+        if is_gate:
             gate_failed = True
             gate_job_id = job.get("id")
+        # Motivo técnico: trecho de erro do log dos jobs que falharam (exceto o gate,
+        # que tem tratamento próprio). Limite de 3 downloads por run.
+        error_excerpt: list[str] = []
+        if job.get("conclusion") in ("failure", "timed_out") and not is_gate and logs_fetched < 3:
+            logs_fetched += 1
+            error_excerpt = _log_error_excerpt(_gh_job_log(repo, job["id"], hdrs))
         jobs.append({
             "name": job["name"],
             "conclusion": job.get("conclusion"),
             "status": job.get("status"),
             "failed_steps": failed_steps,
+            "error_excerpt": error_excerpt,
             "url": job.get("html_url", ""),
             "completed_at": job.get("completed_at", ""),
         })

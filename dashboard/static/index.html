@@ -1169,6 +1169,10 @@ td { padding: 11px 16px; }
 .gate-msg { font-size:11.5px; color:var(--muted); margin-top:2px; }
 .gate-src { margin-top:8px; font-size:11px; color:var(--muted); font-style:italic; }
 .gate-link { display:inline-block; margin-top:8px; color:var(--orange); font-size:11px; cursor:pointer; }
+.gate-banner.tech { border-left-color:var(--high); background:color-mix(in srgb,var(--high) 8%,var(--card)); }
+.job-reason { display:flex; gap:8px; align-items:flex-start; margin:2px 0 8px 26px; padding:7px 10px; border-radius:6px; background:rgba(255,68,68,.06); border:1px solid rgba(255,68,68,.25); }
+.job-reason svg { width:13px; height:13px; color:var(--crit); flex-shrink:0; margin-top:2px; }
+.job-reason pre { margin:0; font-size:11px; font-family:monospace; color:var(--text2); white-space:pre-wrap; word-break:break-word; line-height:1.5; }
 
 /* ── Piloto automático: estado da correção ── */
 .fix-chip { display:inline-flex; align-items:center; gap:4px; margin-left:8px; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:700; letter-spacing:.03em; vertical-align:middle; background:rgba(0,184,255,.12); color:var(--accent); border:1px solid rgba(0,184,255,.3); text-decoration:none; white-space:nowrap; }
@@ -2735,11 +2739,27 @@ async function showRunJobs(repo, runId, btn) {
       ? `<span class="job-steps"> → failed at: ${j.failed_steps.map(s => `<strong>${esc(s.name)}</strong>`).join(', ')}</span>`
       : '';
     const link = j.url ? `<a href="${esc(j.url)}" target="_blank" style="color:var(--orange);font-size:11px;margin-left:6px">↗</a>` : '';
+    const reason = (j.error_excerpt || []).length
+      ? `<div class="job-reason"><i data-lucide="alert-triangle"></i><pre>${esc(j.error_excerpt.join('\n'))}</pre></div>` : '';
     return `<div class="job-row">
       <span style="font-size:13px;color:${conclusionColor(j.conclusion)};font-weight:700">${conclusionIcon(j.conclusion)}</span>
       <span class="job-name">${esc(j.name)}</span>${stepsHtml}${link}
-    </div>`;
+    </div>${reason}`;
   }).join('');
+
+  // Falha técnica (sem gate reprovado): deixa claro que não é bloqueio de política
+  const techFailed = data.jobs.filter(j => (j.conclusion === 'failure' || j.conclusion === 'timed_out') && (j.error_excerpt || []).length);
+  const techBannerHtml = (!data.gate_context && techFailed.length)
+    ? `<div class="gate-banner tech">
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <i data-lucide="wrench" style="width:14px;height:14px;flex-shrink:0"></i>
+          <div style="flex:1;min-width:0">
+            <strong>Falha técnica em ${techFailed.length} job(s)</strong> — ${techFailed.map(j => esc(j.name)).join(', ')}. Não é bloqueio do Policy Gate: o erro está na infraestrutura ou na ferramenta (veja o motivo acima de cada job).
+            Os findings do último scan válido deste projeto continuam disponíveis.
+          </div>
+        </div>
+        <a class="gate-link" onclick="goToFindings('','open',${jsq(repo)})">Ver findings de ${esc(repo)} →</a>
+      </div>` : '';
 
   // Gate context banner — shown when gate failed with details about why
   let gateBannerHtml = '';
@@ -2787,7 +2807,7 @@ async function showRunJobs(repo, runId, btn) {
   const row = document.createElement('tr');
   row.id = detailId;
   row.className = 'job-detail-row';
-  row.innerHTML = `<td colspan="7"><div class="job-detail-wrap">${jobsHtml || '<span style="color:var(--muted);font-size:12px">No job details available.</span>'}${gateBannerHtml}${aiSection}</div></td>`;
+  row.innerHTML = `<td colspan="7"><div class="job-detail-wrap">${jobsHtml || '<span style="color:var(--muted);font-size:12px">No job details available.</span>'}${gateBannerHtml}${techBannerHtml}${aiSection}</div></td>`;
 
   const runRow = document.getElementById(`run-row-${runId}`);
   if (runRow) runRow.after(row);
