@@ -1188,6 +1188,8 @@ td { padding: 11px 16px; }
 
 /* ── Stat "Aguardando PR" ── */
 .stat-cell.fixready .stat-val { color: var(--accent); }
+.stat-note { color: var(--muted); font-weight: 500; text-transform: none; letter-spacing: 0; }
+.stat-note[hidden] { display: none; }
 
 /* ── Piloto automático por projeto ── */
 .ap-sel { font-size:11px; padding:3px 6px; border-radius:var(--radius); border:1px solid var(--bd); background:var(--s3); color:var(--muted); cursor:pointer; }
@@ -1391,7 +1393,7 @@ td { padding: 11px 16px; }
     <!-- ═══ DASHBOARD ═══ -->
     <div id="tab-dashboard" class="tab-pane active">
       <div class="stat-strip" id="statStrip">
-        <div class="stat-cell total" title="Ver todos os findings abertos" onclick="goToFindings('','open')"><div class="stat-val" id="s-total">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="package-open"></i></span>Total abertos</div></div>
+        <div class="stat-cell total" title="Ver todos os findings abertos (inclui severidade info)" onclick="goToFindings('','open')"><div class="stat-val" id="s-total">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="package-open"></i></span>Total abertos<span class="stat-note" id="s-info-note" hidden></span></div></div>
         <div class="stat-cell crit"  title="Filtrar por Critical" onclick="goToFindings('critical','open')"><div class="stat-val" id="s-critical">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="shield-alert"></i></span>Critical</div></div>
         <div class="stat-cell high"  title="Filtrar por High" onclick="goToFindings('high','open')"><div class="stat-val" id="s-high">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="triangle-alert"></i></span>High</div></div>
         <div class="stat-cell med"   title="Filtrar por Medium" onclick="goToFindings('medium','open')"><div class="stat-val" id="s-medium">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="circle-alert"></i></span>Medium</div></div>
@@ -2579,6 +2581,10 @@ async function loadDashboard() {
   $('s-fixed').textContent   = data.by_status.fixed || 0;
   $('s-sla').textContent     = data.sla_breached ?? '—';
   $('s-fixready').textContent = data.fix_ready ?? '—';
+  // o total inclui 'info', que não tem card próprio — sem esta nota os 4 cards visíveis não fecham a soma
+  const nInfo = (data.open_by_severity || {}).info || 0;
+  const note = $('s-info-note');
+  if (note) { note.textContent = nInfo ? ` · ${nInfo} info` : ''; note.hidden = !nInfo; }
   _setNavBadge('navFindingsBadge', Object.values(data.open_by_severity || {}).reduce((a, b) => a + b, 0));
   loadPrsBadge();   // /api/ai/prs tem cache de 60 s no backend
   if (!_runs.length) loadJobs();   // popula o badge de Scans já no primeiro carregamento

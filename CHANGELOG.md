@@ -3,6 +3,18 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.10] - 2026-09-07 20:53
+
+### Changed
+- **Card "Total abertos" agora mostra a nota `· N info`**: o total inclui findings de severidade `info` (hoje 397, todos do `shadow-api-scanner`), que não têm card próprio — sem a nota, os quatro cards visíveis (2 + 335 + 463 + 41 = 841) não fechavam com o 1238 e o total parecia errado. Tooltip do card também explica
+
+### Execução — auditoria das métricas (pedido: "verifique se as métricas estão corretas e atualizando")
+- Recalculadas direto no SQLite e comparadas com `/api/overview`: critical 2, high 335, medium 463, low 41, info 397, total 1238, corrigidos 24, aguardando PR 0, SLA estourado 2 (recalculado com a política 7/30/90/180 dias) — **9/9 iguais**; `last_scans`/`risk_scores` cobrem os 44 repos; `by_status` = 1238 open / 24 fixed / 1 false_positive
+- Valores **na tela** (Playwright, aba Dashboard): 1238 / 2 / 335 / 463 / 41 / 24 / 2 / 0, pill "2 Critical", badges Scans 14 · Findings 1238 · PRs 2, 44 linhas em "Último scan por projeto" — idênticos à API
+- Freshness: um finding `low` marcado como `accepted` direto no banco → overview caiu para 40 na chamada seguinte; revertido → 41. Atualização é imediata (sem cache no overview)
+- Badge Scans: `/api/runs` traz os 30 runs mais recentes (20 repos); 14–16 têm o último run em falha — quase todos pelo Scorecard/gcr.io corrigido na v0.15.3; limpa conforme novos scans rodam. Badge PRs usa cache de 60 s
+- Rebuild `docker compose up -d --build` — healthy
+
 ## [0.15.9] - 2026-09-07 20:40
 
 ### Fixed
