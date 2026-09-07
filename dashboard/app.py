@@ -34,6 +34,7 @@ import pyotp
 
 from fastapi import FastAPI, Header, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 DB_PATH     = Path(os.environ.get("SECPIPE_DB",     Path(__file__).parent / "secpipe.db"))
@@ -2370,6 +2371,10 @@ def health():
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+# Assets locais (Lucide etc.) — sem CDN: o unpkg falhava em silêncio e o app ficava sem ícones
+app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
 
 @app.get("/favicon.ico", include_in_schema=False)

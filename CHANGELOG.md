@@ -3,6 +3,19 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.8] - 2026-09-07 20:37
+
+### Fixed
+- **Ícones nunca renderizavam (sidebar, botões, KPIs, tabelas)** — causa raiz: o `<script src="https://unpkg.com/lucide@0.263.1/…">` apontava para uma **versão que não existe no npm** (só há 0.263.0); o CDN respondia 404, `lucide` ficava indefinido e todas as chamadas `if (typeof lucide !== 'undefined') lucide.createIcons()` falhavam em silêncio desde o início do projeto. O Lucide agora é **servido localmente** (`dashboard/static/vendor/lucide.min.js`, v1.42.0, ISC) pela nova rota `app.mount("/static", …)` — sem dependência de CDN
+- **Aba Pull Requests — coluna de ações cortada**: tabela com `min-width` (1180 px / 900 px) dentro do wrapper de rolagem horizontal e larguras fixas para PR e ações; título da PR (que duplicava a regra do finding) removido da coluna PR, mantido como tooltip do `#número`
+
+### Execução
+- Diagnóstico: extensão do Chrome bloqueada para ações, então o dashboard foi aberto no **Playwright** (headless): `typeof lucide` → `"lucide is not defined"`; `curl unpkg.com/lucide@0.263.1` → "Package version not found"; registry npm consultado (latest 1.42.0, 673 versões)
+- Cobertura: os UMDs 0.263.0 e 1.42.0 foram executados no Node e cruzados com os 73 nomes `data-lucide` usados no HTML — 0.263.0 deixava 12 sem ícone (`triangle-alert`, `circle-alert`, `clock-alert`, `loader-circle`, `circle-check`, `circle-x`…); **1.42.0 cobre 100%**
+- Rebuild `docker compose up -d --build` — healthy · `py_compile` OK · CSS validado com tinycss2 (476 regras, 0 erros) · HTML balanceado
+- Verificação no Playwright após o rebuild: `lucide` carregado com 2070 ícones, **0 `<i data-lucide>` pendentes, 112 SVGs renderizados** (8 na sidebar, 8 na stat-strip); screenshot da aba Pull Requests com 9 PRs, ícones em todos os botões e coluna de ações completa
+- `.playwright-mcp/` adicionado ao `.gitignore`; screenshots temporários removidos da raiz do repo
+
 ## [0.15.7] - 2026-09-07 20:27
 
 ### Added

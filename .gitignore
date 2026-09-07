@@ -9,3 +9,6 @@ __pycache__/
 
 # Docker
 dashboard/secpipe.db
+
+# Playwright MCP scratch (screenshots/snapshots)
+.playwright-mcp/

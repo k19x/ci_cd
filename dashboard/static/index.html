@@ -3,7 +3,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@700;800&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+<!-- Lucide 1.42.0 servido localmente: a URL do unpkg (0.263.1) nunca existiu e o app rodava sem ícones -->
+<script src="/static/vendor/lucide.min.js"></script>
 
 <style>
 /* ═══════════════════════════════════════════════
@@ -2189,9 +2190,9 @@ td { padding: 11px 16px; }
           </select>
         </div>
         <div style="overflow-x:auto">
-          <table style="width:100%">
+          <table style="width:100%;min-width:1180px">
             <thead><tr>
-              <th>Projeto</th><th>PR</th><th>Finding</th><th>Mudanças</th><th>Estado</th><th>Criada em</th><th></th>
+              <th>Projeto</th><th style="width:170px">PR</th><th>Finding</th><th>Mudanças</th><th>Estado</th><th>Criada em</th><th style="width:210px"></th>
             </tr></thead>
             <tbody id="prRows"></tbody>
           </table>
@@ -2204,7 +2205,7 @@ td { padding: 11px 16px; }
           <div class="card-sub" id="readyCount">Correções preparadas pelo piloto automático — abra a PR quando revisar</div>
         </div>
         <div style="overflow-x:auto">
-          <table style="width:100%">
+          <table style="width:100%;min-width:900px">
             <thead><tr><th>Projeto</th><th>Finding</th><th>Branch</th><th>Preparada em</th><th></th></tr></thead>
             <tbody id="readyRows"></tbody>
           </table>
@@ -3371,7 +3372,7 @@ function renderPrs() {
     const canMerge = !p.draft && p.mergeable !== false && ['clean', 'unstable', 'behind', 'unknown'].includes(p.mergeable_state || 'unknown');
     return `<tr>
       <td class="primary" style="white-space:nowrap">${esc(p.repo)}</td>
-      <td><a class="fd-ref" href="${esc(p.url)}" target="_blank" rel="noopener">#${p.number}</a> <span style="font-size:12px">${esc(p.title.replace('[SecPipe AI] fix: ', ''))}</span>
+      <td><a class="fd-ref" href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc(p.title)}">#${p.number}</a>
         <div class="gate-loc"><code>${esc(p.branch)}</code> → ${esc(p.base)}</div></td>
       <td>${_prFinding(p.finding)}</td>
       <td class="mono" style="white-space:nowrap;font-size:12px"><span style="color:var(--ok)">+${p.additions}</span> <span style="color:var(--crit)">−${p.deletions}</span> · ${p.changed_files} arq.</td>
