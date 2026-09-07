@@ -1197,6 +1197,9 @@ td { padding: 11px 16px; }
 .fx-type { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; white-space:nowrap; }
 .fx-type svg { width:13px; height:13px; }
 .fx-type.ok { color:var(--ok); }  .fx-type.accent { color:var(--accent); }  .fx-type.muted { color:var(--muted); }
+.fx-type.high { color:var(--high); }  .fx-type.med { color:var(--med); }  .fx-type.crit { color:var(--crit); }
+#tab-prs .btn-ghost[disabled] { opacity:.4; cursor:not-allowed; }
+#tab-prs a.btn-ghost { text-decoration:none; }
 .fx-group { margin-top:16px; }
 .fx-group-head { display:flex; align-items:center; gap:8px; padding:8px 0 6px; border-bottom:1px solid var(--bd); font-size:13px; }
 .fx-group-head svg { width:14px; height:14px; color:var(--accent); }
@@ -1254,6 +1257,11 @@ td { padding: 11px 16px; }
         <i data-lucide="bug"></i>
         Findings
         <span id="navFindingsBadge" class="nav-badge muted" hidden title="Findings abertos (To Review)"></span>
+      </a>
+      <a class="nav-item" onclick="showTab('prs',this)">
+        <i data-lucide="git-pull-request"></i>
+        Pull Requests
+        <span id="navPrsBadge" class="nav-badge" hidden title="PRs da IA aguardando aprovação"></span>
       </a>
       <a class="nav-item" onclick="showTab('vulns',this)">
         <i data-lucide="history"></i>
@@ -2158,6 +2166,52 @@ td { padding: 11px 16px; }
 
     </div><!-- /tab-settings -->
 
+    <!-- ═══ PULL REQUESTS DA IA ═══ -->
+    <div id="tab-prs" class="tab-pane">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><i data-lucide="git-pull-request"></i> PRs da IA aguardando aprovação</div>
+          <div class="card-sub" id="prsCount">—</div>
+          <span class="card-tools" style="display:flex;gap:6px;align-items:center">
+            <span id="prsFetched" style="font-size:11px;color:var(--muted)"></span>
+            <button class="refresh-btn" onclick="loadPrs(true)" title="Buscar de novo no GitHub"><i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Atualizar</button>
+          </span>
+        </div>
+        <div class="filter-bar">
+          <input id="prSearch" placeholder="Buscar projeto, regra, arquivo, branch..." oninput="renderPrs()">
+          <select id="prRepo" onchange="renderPrs()"><option value="">Todos os projetos</option></select>
+          <select id="prState" onchange="renderPrs()">
+            <option value="">Qualquer estado</option>
+            <option value="clean">Pronta para mesclar</option>
+            <option value="blocked">Aguardando checks / revisão</option>
+            <option value="unstable">Checks falharam</option>
+            <option value="dirty">Com conflito</option>
+          </select>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%">
+            <thead><tr>
+              <th>Projeto</th><th>PR</th><th>Finding</th><th>Mudanças</th><th>Estado</th><th>Criada em</th><th></th>
+            </tr></thead>
+            <tbody id="prRows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <div class="card-head">
+          <div class="card-title"><i data-lucide="git-branch"></i> Branches prontas sem PR</div>
+          <div class="card-sub" id="readyCount">Correções preparadas pelo piloto automático — abra a PR quando revisar</div>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%">
+            <thead><tr><th>Projeto</th><th>Finding</th><th>Branch</th><th>Preparada em</th><th></th></tr></thead>
+            <tbody id="readyRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══ AUDIT LOG ═══ -->
     <div id="tab-audit" class="tab-pane">
       <div class="card">
@@ -2364,7 +2418,7 @@ function showTab(tab, el) {
   $(`tab-${tab}`).classList.add('active');
   if (el) el.classList.add('active');
   currentTab = tab;
-  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Findings', vulns:'Histórico de scans', repos:'Projects', settings:'Settings', audit:'Audit Log'};
+  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Findings', prs:'Pull Requests', vulns:'Histórico de scans', repos:'Projects', settings:'Settings', audit:'Audit Log'};
   $('topbarTitle').textContent = titles[tab] || tab;
   clearInterval(jobTimer);
   clearInterval(dashTimer);
@@ -2375,6 +2429,7 @@ function showTab(tab, el) {
   }
   if (tab === 'jobs')     { loadJobs(); jobTimer = setInterval(loadJobs, 15000); }
   if (tab === 'findings') loadFindings();
+  if (tab === 'prs')      loadPrs();
   if (tab === 'vulns')    loadVulns();
   if (tab === 'repos')    loadRepos();
   if (tab === 'settings') loadSettings();
@@ -2521,6 +2576,7 @@ async function loadDashboard() {
   $('s-sla').textContent     = data.sla_breached ?? '—';
   $('s-fixready').textContent = data.fix_ready ?? '—';
   _setNavBadge('navFindingsBadge', Object.values(data.open_by_severity || {}).reduce((a, b) => a + b, 0));
+  loadPrsBadge();   // /api/ai/prs tem cache de 60 s no backend
   if (!_runs.length) loadJobs();   // popula o badge de Scans já no primeiro carregamento
   _slaCfg = data.sla || _slaCfg;
   _riskMap = Object.fromEntries((data.risk_scores || []).map(r => [r.repo, r.score]));
@@ -3264,6 +3320,113 @@ function exportFixesCSV() {
     severidade: f.severity, regra: f.rule, arquivo: f.file, linha: f.line, engine: f.tool,
     branch: f.branch, pr: f.pr, por: f.who, detalhe: f.detail,
   })));
+}
+
+/* ── Pull Requests da IA ── */
+let _prs = [], _prsReady = [];
+const PR_STATE = {
+  clean:    {cls: 'ok',    icon: 'check-circle',  label: 'Pronta para mesclar'},
+  unstable: {cls: 'high',  icon: 'alert-triangle', label: 'Checks falharam'},
+  blocked:  {cls: 'med',   icon: 'clock',          label: 'Aguardando checks / revisão'},
+  behind:   {cls: 'med',   icon: 'history',        label: 'Atrás da base'},
+  dirty:    {cls: 'crit',  icon: 'git-merge',      label: 'Conflito com a base'},
+  draft:    {cls: 'muted', icon: 'pencil',         label: 'Rascunho'},
+  unknown:  {cls: 'muted', icon: 'help-circle',    label: 'Calculando…'},
+};
+
+async function loadPrs(refresh) {
+  const d = await api('/api/ai/prs' + (refresh ? '?refresh=1' : ''));
+  if (!d) return;
+  _prs = d.prs || []; _prsReady = d.ready || [];
+  _setNavBadge('navPrsBadge', _prs.length);
+  $('prsFetched').textContent = d.fetched_at ? `GitHub · ${fmtLocal(d.fetched_at)}` : '';
+  const sel = $('prRepo'); const cur = sel.value;
+  const repos = [...new Set(_prs.map(p => p.repo))].sort();
+  sel.innerHTML = '<option value="">Todos os projetos</option>' + repos.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+  if (repos.includes(cur)) sel.value = cur;
+  renderPrs();
+}
+
+async function loadPrsBadge() {
+  const d = await api('/api/ai/prs');
+  if (d) _setNavBadge('navPrsBadge', (d.prs || []).length);
+}
+
+function _prFinding(f) {
+  if (!f) return '<span style="color:var(--muted);font-size:12px">— sem vínculo (use "Sincronizar PRs")</span>';
+  return `${f.severity ? `<span class="sev ${sevClass(f.severity)}">${esc(f.severity)}</span> ` : ''}<span class="mono" title="${esc(f.rule)}">${esc(f.rule)}</span>
+    <div class="gate-loc">${esc(f.file)}${f.line ? ':' + f.line : ''}${f.tool ? ' · ' + esc(f.tool) : ''}${f.status && f.status !== 'open' ? ` · <span style="color:var(--ok)">${esc(f.status)}</span>` : ''}</div>`;
+}
+
+function renderPrs() {
+  const q = ($('prSearch').value || '').toLowerCase(), repo = $('prRepo').value, st = $('prState').value;
+  let list = _prs;
+  if (repo) list = list.filter(p => p.repo === repo);
+  if (st) list = list.filter(p => (p.mergeable_state || 'unknown') === st);
+  if (q) list = list.filter(p => [p.repo, p.title, p.branch, p.finding?.rule, p.finding?.file].join(' ').toLowerCase().includes(q));
+  $('prsCount').textContent = `${list.length} de ${_prs.length} PR(s) aberta(s)`;
+  const tbody = $('prRows');
+  tbody.innerHTML = list.length ? list.map(p => {
+    const s = PR_STATE[p.draft ? 'draft' : (p.mergeable_state || 'unknown')] || PR_STATE.unknown;
+    const canMerge = !p.draft && p.mergeable !== false && ['clean', 'unstable', 'behind', 'unknown'].includes(p.mergeable_state || 'unknown');
+    return `<tr>
+      <td class="primary" style="white-space:nowrap">${esc(p.repo)}</td>
+      <td><a class="fd-ref" href="${esc(p.url)}" target="_blank" rel="noopener">#${p.number}</a> <span style="font-size:12px">${esc(p.title.replace('[SecPipe AI] fix: ', ''))}</span>
+        <div class="gate-loc"><code>${esc(p.branch)}</code> → ${esc(p.base)}</div></td>
+      <td>${_prFinding(p.finding)}</td>
+      <td class="mono" style="white-space:nowrap;font-size:12px"><span style="color:var(--ok)">+${p.additions}</span> <span style="color:var(--crit)">−${p.deletions}</span> · ${p.changed_files} arq.</td>
+      <td><span class="fx-type ${s.cls}"><i data-lucide="${s.icon}"></i>${s.label}</span></td>
+      <td class="mono" style="white-space:nowrap;font-size:12px">${fmtLocal(p.created_at)}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <a class="btn-ghost" href="${esc(p.url)}" target="_blank" rel="noopener" title="Abrir no GitHub"><i data-lucide="external-link"></i></a>
+        <button class="btn-ghost" style="color:var(--ok)" ${canMerge ? '' : 'disabled'} data-min-role="analyst" onclick="mergeAiPr(${jsq(p.repo)},${p.number},this)" title="${canMerge ? 'Aprovar e mesclar (squash)' : 'Resolva conflito/rascunho antes de mesclar'}"><i data-lucide="git-merge"></i> Mesclar</button>
+        <button class="btn-ghost" style="color:var(--crit)" data-min-role="analyst" onclick="closeAiPr(${jsq(p.repo)},${p.number},this)" title="Fechar sem mesclar"><i data-lucide="x-circle"></i></button>
+      </td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="7"><div class="empty-state"><i data-lucide="git-pull-request"></i><p>${_prs.length ? 'Nenhuma PR para os filtros' : 'Nenhuma PR da IA aberta — tudo aprovado'}</p></div></td></tr>`;
+
+  $('readyCount').textContent = _prsReady.length
+    ? `${_prsReady.length} correção(ões) preparada(s) pelo piloto automático — abra a PR quando revisar`
+    : 'Nenhuma branch aguardando — o piloto automático não preparou correções pendentes';
+  $('readyRows').innerHTML = _prsReady.length ? _prsReady.map(f => `<tr>
+      <td class="primary" style="white-space:nowrap">${esc(f.repo)}</td>
+      <td>${_prFinding(f)}</td>
+      <td><code>${esc(f.fix_branch)}</code>${f.fix_summary ? `<div class="fx-detail" style="margin-top:3px">${esc(f.fix_summary.slice(0, 200))}${f.fix_summary.length > 200 ? '…' : ''}</div>` : ''}</td>
+      <td class="mono" style="white-space:nowrap;font-size:12px">${fmtLocal(f.fix_at)}</td>
+      <td style="text-align:right;white-space:nowrap"><button class="btn-ghost" style="color:var(--ok)" data-min-role="analyst" onclick="openPrFromReady(${jsq(f.repo)},${jsq(f.fid)},this)"><i data-lucide="git-pull-request"></i> Abrir PR</button></td>
+    </tr>`).join('') : `<tr><td colspan="5"><div class="empty-state"><i data-lucide="git-branch"></i><p>Nenhuma branch pronta</p></div></td></tr>`;
+  if (typeof _currentRole !== 'undefined' && _currentRole) applyRole(_currentRole);   // esconde ações para viewer
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function mergeAiPr(repo, number, btn) {
+  const ok = await uiConfirm('<i data-lucide="git-merge"></i> Aprovar e mesclar?',
+    `A PR <strong>#${number}</strong> de <strong>${esc(repo)}</strong> será mesclada na base com <em>squash</em>. O próximo scan confirma a correção e marca o finding como corrigido.`, 'Mesclar');
+  if (!ok) return;
+  btn.disabled = true; btnLabel(btn, 'loader-circle', 'Mesclando…');
+  const d = await api(`/api/ai/prs/${encodeURIComponent(repo)}/${number}/merge`, {method: 'POST'});
+  if (!d) { btn.disabled = false; btnLabel(btn, 'git-merge', 'Mesclar'); return; }
+  uiToast(`PR #${number} mesclada em ${repo}`, 'ok');
+  loadPrs(true);
+}
+
+async function closeAiPr(repo, number, btn) {
+  const ok = await uiConfirm('<i data-lucide="x-circle"></i> Fechar PR sem mesclar?',
+    `A PR <strong>#${number}</strong> de <strong>${esc(repo)}</strong> será fechada. A branch continua no GitHub; o finding segue aberto.`, 'Fechar PR', true);
+  if (!ok) return;
+  btn.disabled = true;
+  const d = await api(`/api/ai/prs/${encodeURIComponent(repo)}/${number}/close`, {method: 'POST'});
+  if (!d) { btn.disabled = false; return; }
+  uiToast(`PR #${number} fechada`, 'ok');
+  loadPrs(true);
+}
+
+async function openPrFromReady(repo, fid, btn) {
+  btn.disabled = true; btnLabel(btn, 'loader-circle', 'Abrindo…');
+  const d = await api('/api/ai/open-pr', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({repo, fid})});
+  if (!d) { btn.disabled = false; btnLabel(btn, 'git-pull-request', 'Abrir PR'); return; }
+  uiToast(`PR aberta: ${d.pr_url}`, 'ok');
+  loadPrs(true);
 }
 
 /* ── Usuários ── */

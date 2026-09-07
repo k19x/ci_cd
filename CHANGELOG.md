@@ -3,6 +3,20 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.7] - 2026-09-07 20:27
+
+### Added
+- **Aba "Pull Requests"** (sidebar, com badge de contagem): fila das PRs da IA abertas em todos os repos, lida direto do GitHub — projeto, número/título/branch→base, finding vinculado (severidade, regra, arquivo:linha), tamanho do diff (+/−, arquivos), **estado de merge** (pronta / checks falharam / aguardando checks / conflito / rascunho) e data. Filtros por projeto, estado e busca; botão *Atualizar* força nova leitura
+- **Ações por PR** (role analyst): **Mesclar** (squash via API, desabilitado em conflito/rascunho) e **Fechar** sem mesclar — ambas com confirmação e registro no Audit Log (`ai_pr_merged` / `ai_pr_closed`); link direto para o GitHub
+- **Seção "Branches prontas sem PR"**: correções preparadas pelo piloto automático (`fix_branch` sem `fix_pr`) com botão **Abrir PR**
+- **`GET /api/ai/prs`** usa a Search API do GitHub (`"[SecPipe AI] fix" in:title is:pr is:open user:<owner>`) — uma chamada para todos os repos — e enriquece cada PR com `GET /pulls/{n}` (mergeable_state, additions…); cache de 60 s no servidor; `?refresh=1` ignora o cache. **`POST /api/ai/prs/{repo}/{n}/merge`** e **`/close`**. Helpers `_gh_headers()` / `_gh_json()` introduzidos
+
+### Execução
+- Rebuild `docker compose up -d --build` — healthy · `py_compile` OK · `node --check` OK · 7 ids novos únicos · `_currentRole` reutilizado para esconder ações de viewer
+- `GET /api/ai/prs?refresh=1` no container: **14 PRs da IA abertas** em 9,0 s (Tyr-Red-Team-Agent 6, tyr 4, mdm 3, OmniHook 1 — este último não estava na varredura anterior, a Search API o encontrou); estados: 5 *checks falharam*, 3 *conflito*, 6 *calculando*; 10/14 com finding vinculado; segunda chamada servida do cache em 0,00 s; merge de PR inexistente → 404 propagado do GitHub
+- Nenhuma PR foi mesclada ou fechada — apenas leitura
+- Não verificado: visual da aba (extensão do browser bloqueada)
+
 ## [0.15.6] - 2026-09-07 20:17
 
 ### Added

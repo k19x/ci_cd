@@ -2191,6 +2191,92 @@ def ai_sync_prs(user=Depends(require_role("analyst"))):
     return {"ok": True, "repos": len(repos), "ai_prs": prs_seen, "linked": linked, "errors": errors}
 
 
+# ── Fila de PRs da IA ──────────────────────────────
+_prs_cache: dict = {"ts": 0.0, "data": None}
+
+
+def _gh_headers() -> dict:
+    tok = os.environ.get("GITHUB_TOKEN", "")
+    if not tok:
+        raise HTTPException(400, "GITHUB_TOKEN não configurado")
+    return {"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"}
+
+
+def _gh_json(url: str, method: str = "GET", body: dict | None = None, timeout: int = 15):
+    req = urllib.request.Request(url, headers=_gh_headers(), method=method,
+                                 data=_json.dumps(body).encode() if body is not None else None)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return _json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        raise HTTPException(e.code, f"GitHub: {e.read().decode(errors='replace')[:200]}")
+    except urllib.error.URLError as e:
+        raise HTTPException(502, f"GitHub inacessível: {e}")
+
+
+@app.get("/api/ai/prs")
+def ai_list_prs(refresh: int = 0, user=Depends(require_role("viewer"))):
+    """PRs da IA abertas (todos os repos, via Search API) + branches prontas sem PR. Cache de 60 s."""
+    if not refresh and _prs_cache["data"] and time.time() - _prs_cache["ts"] < 60:
+        return _prs_cache["data"]
+    with db() as conn:
+        repos = [r["name"] for r in conn.execute("SELECT name FROM repos UNION SELECT DISTINCT repo FROM scans")]
+    owners = sorted({r.split("/")[0] for r in repos if "/" in r})
+    prs: list[dict] = []
+    if owners:
+        q = '"[SecPipe AI] fix" in:title is:pr is:open ' + " ".join(f"user:{o}" for o in owners)
+        search = _gh_json("https://api.github.com/search/issues?q=" + urllib.parse.quote(q)
+                          + "&per_page=100&sort=created&order=desc")
+        with db() as conn:
+            for it in search.get("items", []):
+                repo = it["repository_url"].split("/repos/", 1)[1]
+                try:
+                    det = _gh_json(f"https://api.github.com/repos/{repo}/pulls/{it['number']}")
+                except HTTPException:
+                    continue
+                if not (det.get("head") or {}).get("ref", "").startswith("secpipe/ai-fix"):
+                    continue
+                f = conn.execute(
+                    "SELECT fid,rule,severity,file,line,tool,status FROM findings WHERE fix_pr=?",
+                    (det["html_url"],)).fetchone()
+                prs.append({
+                    "repo": repo, "number": det["number"], "title": det["title"], "url": det["html_url"],
+                    "branch": det["head"]["ref"], "base": (det.get("base") or {}).get("ref", ""),
+                    "created_at": det.get("created_at", ""), "updated_at": det.get("updated_at", ""),
+                    "draft": det.get("draft", False), "mergeable": det.get("mergeable"),
+                    "mergeable_state": det.get("mergeable_state", "unknown"),
+                    "additions": det.get("additions", 0), "deletions": det.get("deletions", 0),
+                    "changed_files": det.get("changed_files", 0),
+                    "finding": dict(f) if f else None,
+                })
+    with db() as conn:
+        ready = [dict(r) for r in conn.execute(
+            "SELECT repo,fid,rule,severity,file,line,tool,fix_branch,fix_at,fix_summary FROM findings "
+            "WHERE fix_branch!='' AND fix_pr='' AND status='open' ORDER BY fix_at DESC")]
+    data = {"prs": prs, "ready": ready,
+            "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    _prs_cache.update(ts=time.time(), data=data)
+    return data
+
+
+@app.post("/api/ai/prs/{repo:path}/{number}/merge")
+def ai_merge_pr(repo: str, number: int, user=Depends(require_role("analyst"))):
+    res = _gh_json(f"https://api.github.com/repos/{repo}/pulls/{number}/merge", "PUT",
+                   {"merge_method": "squash", "commit_title": f"[SecPipe AI] merge PR #{number}"})
+    _prs_cache["ts"] = 0.0
+    _audit(user["username"], "ai_pr_merged", repo, f"#{number}", (res.get("sha") or "")[:12])
+    return {"ok": True, "merged": res.get("merged", True), "sha": res.get("sha", "")}
+
+
+@app.post("/api/ai/prs/{repo:path}/{number}/close")
+def ai_close_pr(repo: str, number: int, user=Depends(require_role("analyst"))):
+    _gh_json(f"https://api.github.com/repos/{repo}/pulls/{number}", "PATCH", {"state": "closed"})
+    _prs_cache["ts"] = 0.0
+    _audit(user["username"], "ai_pr_closed", repo, f"#{number}")
+    return {"ok": True}
+
+
 class OpenPrRequest(BaseModel):
     repo: str
     fid: str
