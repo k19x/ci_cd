@@ -3,6 +3,11 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.18] - 2026-09-07
+
+### Fixed
+- **Drawer "Jobs de IA" transparente**: o painel usava `background:var(--card)`, mas `--card` nunca foi definida — o fundo resolvia para transparente e o conteúdo do dashboard vazava por trás. Definido `--card: var(--s1)` no `:root` (opaco, acompanha o tema claro/escuro); corrige também o banner de gate reprovado, que usava a mesma variável
+
 ## [0.14.17] - 2026-09-07
 
 ### Fixed
