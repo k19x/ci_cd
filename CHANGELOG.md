@@ -3,7 +3,15 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.15.0] - 2026-09-07
+## [0.15.0] - 2026-09-07 19:43
+
+### Execução
+- Rebuild do container `ci_cd-dashboard-1` via `docker compose up -d --build` (healthy)
+- Migração automática no boot: `ALTER TABLE repos ADD COLUMN autopilot` — confirmada via `PRAGMA table_info(repos)`
+- Testes de API dentro do container (sessão admin + key `ingest` temporária): 10/10 passaram — `overview.fix_ready`, `GET /api/users`, `PUT /api/repos/{name}/autopilot` (400 para modo inválido, 200 para `off`), `GET /api/repos` expõe `autopilot`, override `global ON + repo OFF → 0 enfileirados`, `global OFF + repo ON → 1 enfileirado`
+- `python -m py_compile app.py` OK; `node --check` no JS inline OK; varredura de ids duplicados e de referências às funções da aba Jobs removida — zero órfãos após limpar o CSS morto
+- Limpeza: repo fictício `secpipe/ap-override-test` (findings/scans/audit/repos) e key temporária removidos; global do piloto restaurado ao padrão (desligado / critical / 3)
+- Não verificado: visual das novas telas (extensão do browser bloqueada nesta sessão) — pendente de confirmação pelo usuário
 
 ### Changed — reorganização dos menus
 - **Abas renomeadas**: *Results* → **Findings** (vulnerabilidades com triagem) e *Findings* → **Histórico de scans** (scans ingeridos com totais C/H/M/L). Os nomes estavam invertidos em relação ao conteúdo e causavam confusão ("Findings mostra 8 criticals, Dashboard mostra 2")
