@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import contextlib
 import json as _json
+import queue
 import re
 import os
 import secrets
@@ -219,6 +220,10 @@ _migrations = [
     " id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,"
     " key_hash TEXT UNIQUE NOT NULL, scopes TEXT NOT NULL DEFAULT 'read',"
     " created_at TEXT NOT NULL, last_used TEXT DEFAULT NULL)",
+    "ALTER TABLE findings ADD COLUMN fix_branch TEXT DEFAULT ''",
+    "ALTER TABLE findings ADD COLUMN fix_pr TEXT DEFAULT ''",
+    "ALTER TABLE findings ADD COLUMN fix_summary TEXT DEFAULT ''",
+    "ALTER TABLE findings ADD COLUMN fix_at TEXT DEFAULT ''",
 ]
 for _mig in _migrations:
     try:
@@ -395,6 +400,7 @@ def ingest(payload: IngestPayload, x_api_key: str | None = Header(default=None))
         )
         seen_ids = set()
         new_crits = []
+        new_findings = []
         for f in payload.findings:
             seen_ids.add(f.id)
             existing = conn.execute(
@@ -417,6 +423,7 @@ def ingest(payload: IngestPayload, x_api_key: str | None = Header(default=None))
                     (payload.repo, f.id, f.tool, f.rule, f.severity, f.file, f.line, f.message,
                      f.cwe, f.owasp, now, now),
                 )
+                new_findings.append(f)
                 if f.severity == "critical":
                     new_crits.append(f)
         # o que estava aberto e não veio neste scan foi corrigido
@@ -431,7 +438,9 @@ def ingest(payload: IngestPayload, x_api_key: str | None = Header(default=None))
             )
 
     _send_notifications(payload.repo, new_crits)
-    return {"ok": True, "ingested": len(payload.findings), "auto_fixed": len(fixed)}
+    queued = _autopilot_enqueue(payload.repo, new_findings)
+    return {"ok": True, "ingested": len(payload.findings), "auto_fixed": len(fixed),
+            "autopilot_queued": queued}
 
 
 @app.get("/api/overview")
@@ -1708,8 +1717,57 @@ def _run_git(args: list, cwd: str, timeout: int = 60) -> str:
     return proc.stdout
 
 
-def _do_autofix(r: AIFixRequest):
-    """Clona o repo, deixa o Claude Code corrigir o finding e abre um Pull Request."""
+def _save_fix_state(repo: str, fid: str, **cols) -> None:
+    if not fid:
+        return
+    allowed = {"fix_branch", "fix_pr", "fix_summary", "fix_at"}
+    cols = {k: v for k, v in cols.items() if k in allowed and v is not None}
+    if not cols:
+        return
+    sets = ", ".join(f"{k}=?" for k in cols)
+    with db() as conn:
+        conn.execute(f"UPDATE findings SET {sets} WHERE repo=? AND fid=?", (*cols.values(), repo, fid))
+
+
+def _open_fix_pr(r: AIFixRequest, branch: str, summary: str, gh_token: str) -> str:
+    """Abre o PR de uma branch de correção já enviada e devolve a URL."""
+    hdrs = {"Authorization": f"Bearer {gh_token}", "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"}
+    base = "main"
+    try:
+        req = urllib.request.Request(f"https://api.github.com/repos/{r.repo}", headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            base = _json.loads(resp.read()).get("default_branch", "main")
+    except Exception:
+        pass
+
+    pr_payload = _json.dumps({
+        "title": f"[SecPipe AI] fix: {r.rule or r.file}",
+        "head": branch, "base": base,
+        "body": (f"## 🤖 Correção automática — SecPipe AI Engine\n\n"
+                 f"| | |\n|---|---|\n| **Engine** | {r.tool} |\n| **Regra** | `{r.rule}` |\n"
+                 f"| **Severidade** | {r.severity} |\n| **Arquivo** | `{r.file}:{r.line}` |\n\n"
+                 f"**Mensagem do scanner:** {r.message}\n\n"
+                 f"**Resumo da IA:**\n{summary}\n\n"
+                 f"> ⚠️ Correção gerada por IA — revise antes do merge. "
+                 f"O scan de segurança rodará automaticamente neste PR."),
+    }).encode()
+    try:
+        req = urllib.request.Request(f"https://api.github.com/repos/{r.repo}/pulls",
+                                     data=pr_payload, headers=hdrs, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            pr = _json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        raise HTTPException(e.code, f"Branch enviado ({branch}) mas o PR falhou: "
+                                    f"{e.read().decode(errors='replace')[:200]}")
+    pr_url = pr.get("html_url", "")
+    _save_fix_state(r.repo, r.fid, fix_pr=pr_url)
+    return pr_url
+
+
+def _do_autofix(r: AIFixRequest, open_pr: bool = True):
+    """Clona o repo, deixa o Claude Code corrigir o finding, faz push da branch e
+    (se open_pr) abre o Pull Request. O piloto automático chama com open_pr=False."""
     gh_token = os.environ.get("GITHUB_TOKEN", "")
     if not gh_token:
         raise HTTPException(400, "GITHUB_TOKEN não configurado")
@@ -1760,40 +1818,13 @@ def _do_autofix(r: AIFixRequest):
                   f"Finding: {r.tool} / {r.severity} / linha {r.line}"],
                  cwd=workdir)
         _run_git(["push", "origin", branch], cwd=workdir, timeout=90)
+        _save_fix_state(r.repo, r.fid, fix_branch=branch, fix_summary=summary,
+                        fix_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        if not open_pr:
+            return {"applied": True, "pr_url": "", "branch": branch, "diff": diff, "summary": summary}
 
-        # branch padrão do repo (para o base do PR)
-        hdrs = {"Authorization": f"Bearer {gh_token}", "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"}
-        base = "main"
-        try:
-            req = urllib.request.Request(f"https://api.github.com/repos/{r.repo}", headers=hdrs)
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                base = _json.loads(resp.read()).get("default_branch", "main")
-        except Exception:
-            pass
-
-        pr_payload = _json.dumps({
-            "title": f"[SecPipe AI] fix: {r.rule or r.file}",
-            "head": branch, "base": base,
-            "body": (f"## 🤖 Correção automática — SecPipe AI Engine\n\n"
-                     f"| | |\n|---|---|\n| **Engine** | {r.tool} |\n| **Regra** | `{r.rule}` |\n"
-                     f"| **Severidade** | {r.severity} |\n| **Arquivo** | `{r.file}:{r.line}` |\n\n"
-                     f"**Mensagem do scanner:** {r.message}\n\n"
-                     f"**Resumo da IA:**\n{summary}\n\n"
-                     f"> ⚠️ Correção gerada por IA — revise antes do merge. "
-                     f"O scan de segurança rodará automaticamente neste PR."),
-        }).encode()
-        try:
-            req = urllib.request.Request(f"https://api.github.com/repos/{r.repo}/pulls",
-                                         data=pr_payload, headers=hdrs, method="POST")
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                pr = _json.loads(resp.read())
-        except urllib.error.HTTPError as e:
-            raise HTTPException(e.code, f"Branch enviado ({branch}) mas o PR falhou: "
-                                        f"{e.read().decode(errors='replace')[:200]}")
-
-        return {"applied": True, "pr_url": pr.get("html_url", ""), "branch": branch,
-                "diff": diff, "summary": summary}
+        pr_url = _open_fix_pr(r, branch, summary, gh_token)
+        return {"applied": True, "pr_url": pr_url, "branch": branch, "diff": diff, "summary": summary}
     except subprocess.TimeoutExpired:
         raise HTTPException(504, "Correção automática excedeu o tempo limite")
     finally:
@@ -1926,6 +1957,109 @@ def ai_autofix(r: AIFixRequest, user=Depends(require_role("analyst"))):
 @app.post("/api/ai/diagnose")
 def ai_diagnose(r: AIDiagnoseRequest, user=Depends(require_role("analyst"))):
     return _start_ai_job(_do_diagnose, r)
+
+
+# ── Piloto automático ──────────────────────────────
+# Fila serial global: um autofix por vez em todo o sistema — cada job é um clone
+# + uma execução do Claude, então paralelizar só estoura token e rate limit do GitHub.
+_autopilot_q: queue.Queue = queue.Queue()
+_AUTOPILOT_SEVS = ("critical", "high", "medium")
+
+
+def _autopilot_cfg() -> dict:
+    sev = _get_setting("autopilot_min_sev", "critical")
+    try:
+        mx = max(1, min(10, int(_get_setting("autopilot_max_per_scan", "3") or 3)))
+    except ValueError:
+        mx = 3
+    return {"enabled": _get_setting("autopilot_enabled", "0") == "1",
+            "min_sev": sev if sev in _AUTOPILOT_SEVS else "critical",
+            "max_per_scan": mx}
+
+
+def _autopilot_worker() -> None:
+    while True:
+        r = _autopilot_q.get()
+        try:
+            res = _do_autofix(r, open_pr=False)
+            detail = f"branch={res['branch']}" if res.get("applied") else "IA não alterou o código"
+            _audit("autopilot", "ai_autofix_auto", r.repo, r.fid, detail)
+        except HTTPException as e:
+            _audit("autopilot", "ai_autofix_auto_error", r.repo, r.fid, str(e.detail)[:200])
+        except Exception as e:
+            _audit("autopilot", "ai_autofix_auto_error", r.repo, r.fid, repr(e)[:200])
+        finally:
+            _autopilot_q.task_done()
+
+
+threading.Thread(target=_autopilot_worker, daemon=True, name="secpipe-autopilot").start()
+
+
+def _autopilot_enqueue(repo: str, new_findings: list) -> int:
+    cfg = _autopilot_cfg()
+    if not cfg["enabled"] or not new_findings:
+        return 0
+    thr = SEVERITIES.index(cfg["min_sev"])
+    cands = [f for f in new_findings
+             if f.file and f.severity in SEVERITIES and SEVERITIES.index(f.severity) <= thr]
+    cands.sort(key=lambda f: SEVERITIES.index(f.severity))
+    picked = cands[:cfg["max_per_scan"]]
+    for f in picked:
+        _autopilot_q.put(AIFixRequest(repo=repo, fid=f.id, rule=f.rule, severity=f.severity,
+                                      file=f.file, line=f.line, message=f.message, tool=f.tool))
+    if picked:
+        _audit("autopilot", "ai_autopilot_enqueued", repo,
+               detail=f"{len(picked)} de {len(cands)} elegível(is), limiar={cfg['min_sev']}")
+    return len(picked)
+
+
+class AutopilotConfig(BaseModel):
+    enabled: bool = False
+    min_sev: str = "critical"
+    max_per_scan: int = 3
+
+
+@app.get("/api/ai/autopilot")
+def autopilot_get(user=Depends(require_role("viewer"))):
+    return {**_autopilot_cfg(), "queued": _autopilot_q.qsize()}
+
+
+@app.put("/api/ai/autopilot")
+def autopilot_put(cfg: AutopilotConfig, user=Depends(require_role("admin"))):
+    if cfg.min_sev not in _AUTOPILOT_SEVS:
+        raise HTTPException(400, "min_sev deve ser critical, high ou medium")
+    if not 1 <= cfg.max_per_scan <= 10:
+        raise HTTPException(400, "max_per_scan deve estar entre 1 e 10")
+    _set_setting("autopilot_enabled", "1" if cfg.enabled else "0")
+    _set_setting("autopilot_min_sev", cfg.min_sev)
+    _set_setting("autopilot_max_per_scan", str(cfg.max_per_scan))
+    _audit(user["username"], "autopilot_change",
+           detail=f"enabled={cfg.enabled} min_sev={cfg.min_sev} max={cfg.max_per_scan}")
+    return {"ok": True, **_autopilot_cfg()}
+
+
+class OpenPrRequest(BaseModel):
+    repo: str
+    fid: str
+
+
+@app.post("/api/ai/open-pr")
+def ai_open_pr(r: OpenPrRequest, user=Depends(require_role("analyst"))):
+    with db() as conn:
+        row = conn.execute("SELECT * FROM findings WHERE repo=? AND fid=?", (r.repo, r.fid)).fetchone()
+    if not row or not row["fix_branch"]:
+        raise HTTPException(404, "Nenhuma branch de correção pronta para este finding")
+    if row["fix_pr"]:
+        return {"pr_url": row["fix_pr"], "branch": row["fix_branch"], "already_open": True}
+    gh_token = os.environ.get("GITHUB_TOKEN", "")
+    if not gh_token:
+        raise HTTPException(400, "GITHUB_TOKEN não configurado")
+    req = AIFixRequest(repo=r.repo, fid=r.fid, rule=row["rule"] or "", severity=row["severity"] or "",
+                       file=row["file"] or "", line=row["line"] or 0, message=row["message"] or "",
+                       tool=row["tool"] or "")
+    pr_url = _open_fix_pr(req, row["fix_branch"], row["fix_summary"] or "", gh_token)
+    _audit(user["username"], "ai_open_pr", r.repo, r.fid, pr_url)
+    return {"pr_url": pr_url, "branch": row["fix_branch"], "already_open": False}
 
 
 # ── Relatório executivo ───────────────────────────────────────────────────

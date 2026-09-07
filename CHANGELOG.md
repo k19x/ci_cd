@@ -3,6 +3,17 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.19] - 2026-09-07
+
+### Added
+- **Piloto automático (Settings → AI)**: a cada ingest, findings novos acima da severidade mínima configurada (critical/high/medium) entram numa fila serial onde a IA clona o repo, corrige o código e faz push da branch `secpipe/ai-fix-…` — **sem abrir a PR**. Teto por scan configurável (1–10, padrão 3); só findings com arquivo associado são elegíveis; cada execução vira evento `ai_autofix_auto` / `ai_autofix_auto_error` no Audit Log com usuário `autopilot`
+- **Chip "branch pronta" / "PR" em Results**: findings com correção pronta mostram o estado ao lado da regra; o detalhe exibe a branch, a data e o resumo da IA, com botão **Abrir PR** (role analyst) que cria o Pull Request a partir da branch já enviada
+- **`/api/ai/autopilot`** (GET/PUT, admin para gravar) e **`POST /api/ai/open-pr`** `{repo, fid}`; ingest responde `autopilot_queued`
+- Colunas `fix_branch`, `fix_pr`, `fix_summary`, `fix_at` em `findings`
+
+### Changed
+- `_do_autofix(r, open_pr=True)`: criação do PR extraída para `_open_fix_pr()`, reutilizada pelo botão manual "Aplicar correção" e pelo "Abrir PR" do piloto; estado da correção persistido no finding em ambos os fluxos
+
 ## [0.14.18] - 2026-09-07
 
 ### Fixed

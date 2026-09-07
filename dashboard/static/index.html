@@ -1189,6 +1189,13 @@ td { padding: 11px 16px; }
 .gate-src { margin-top:8px; font-size:11px; color:var(--muted); font-style:italic; }
 .gate-link { display:inline-block; margin-top:8px; color:var(--orange); font-size:11px; cursor:pointer; }
 
+/* ── Piloto automático: estado da correção ── */
+.fix-chip { display:inline-flex; align-items:center; gap:4px; margin-left:8px; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:700; letter-spacing:.03em; vertical-align:middle; background:rgba(0,184,255,.12); color:var(--accent); border:1px solid rgba(0,184,255,.3); text-decoration:none; white-space:nowrap; }
+.fix-chip svg { width:11px; height:11px; }
+.fix-chip.pr { background:rgba(34,212,114,.12); color:var(--ok); border-color:rgba(34,212,114,.35); }
+.fix-state { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; padding:8px 10px; border-radius:6px; background:rgba(0,184,255,.07); border:1px solid rgba(0,184,255,.25); }
+.fix-state.ok { background:rgba(34,212,114,.07); border-color:rgba(34,212,114,.3); color:var(--ok); }
+
 /* ── Toast ── */
 .ui-toast {
   position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 9999;
@@ -1845,6 +1852,43 @@ td { padding: 11px 16px; }
           <div style="display:flex;gap:10px;align-items:center">
             <button class="btn-primary" onclick="saveAIModel()" data-min-role="admin">Salvar modelo</button>
             <span class="form-msg" id="aiCfgMsg"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Piloto automático -->
+      <div class="card" style="max-width:640px;margin-top:20px">
+        <div class="card-head">
+          <div class="card-title"><i data-lucide="zap"></i>Piloto automático</div>
+          <div class="card-sub" id="apStatus">—</div>
+        </div>
+        <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text)">
+            <input type="checkbox" id="apEnabled" style="width:15px;height:15px;accent-color:var(--accent)">
+            Corrigir automaticamente findings novos a cada ingest
+          </label>
+          <div style="display:flex;gap:14px;flex-wrap:wrap">
+            <div style="flex:1;min-width:180px">
+              <label style="display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px">Severidade mínima</label>
+              <select id="apMinSev" style="width:100%;font-size:13px;padding:9px 11px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text)">
+                <option value="critical">critical — só o que bloqueia o gate</option>
+                <option value="high">high ou pior</option>
+                <option value="medium">medium ou pior</option>
+              </select>
+            </div>
+            <div style="width:150px">
+              <label style="display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px">Máx. por scan</label>
+              <input id="apMax" type="number" min="1" max="10" value="3" style="width:100%;font-size:13px;padding:9px 11px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);box-sizing:border-box">
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;background:rgba(0,0,0,.15);border:1px solid var(--bd);border-radius:var(--radius);padding:10px 12px">
+            Para cada finding novo elegível, a IA clona o repo, corrige o código e faz push da branch <span class="mono">secpipe/ai-fix-…</span> — mas <strong>não abre a PR</strong>.
+            O finding aparece em Results com o chip <strong>branch pronta</strong>; você revisa o diff e clica <strong>Abrir PR</strong>.
+            Jobs rodam em fila serial (um por vez) e cada execução fica registrada no Audit Log como <span class="mono">autopilot</span>.
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn-primary" onclick="saveAutopilot()" data-min-role="admin"><i data-lucide="save"></i> Salvar</button>
+            <span class="form-msg" id="apMsg"></span>
           </div>
         </div>
       </div>
@@ -2872,6 +2916,8 @@ function renderFindPage() {
       <td class="mono" style="font-size:11px;color:var(--text2);white-space:nowrap">${esc(f.repo)}</td>
       <td class="primary vuln-name-cell" style="cursor:pointer" onclick="toggleFindDetail(${gi}, this.parentElement.querySelector('.chev-btn'))">
         <span class="vname" title="${esc(f.rule)}">${esc(f.rule)}</span>
+        ${f.fix_pr ? `<a class="fix-chip pr" href="${esc(f.fix_pr)}" target="_blank" rel="noopener" title="PR aberta pela IA"><i data-lucide="git-pull-request"></i> PR</a>`
+          : f.fix_branch ? `<span class="fix-chip" title="Branch de correção pronta: ${esc(f.fix_branch)}"><i data-lucide="git-branch"></i> branch pronta</span>` : ''}
       </td>
       <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span>${breach ? `<i data-lucide="alarm-clock" style="width:12px;height:12px;color:var(--crit);vertical-align:-2px;margin-left:5px" title="SLA estourado — aberto há ${ageDays(f)} dias"></i>` : ''}</td>
       <td style="color:var(--muted);font-size:12px">${esc(f.tool)}</td>
@@ -3008,6 +3054,12 @@ function toggleFindDetail(gi, btn) {
     </div>
     <div class="fd-section full">
       <div class="fd-label">✨ AI Engine</div>
+      ${f.fix_pr ? `<div class="fd-text fix-state ok">Correção da IA já tem PR: <a class="fd-ref" href="${esc(f.fix_pr)}" target="_blank" rel="noopener">${esc(f.fix_pr)} ↗</a></div>`
+        : f.fix_branch ? `<div class="fd-text fix-state">
+            <span>Branch pronta pelo piloto automático: <code>${esc(f.fix_branch)}</code>${f.fix_at ? ` <span style="color:var(--muted)">· ${esc(f.fix_at.slice(0,16).replace('T',' '))}</span>` : ''}</span>
+            <button class="detail-btn" onclick="openFixPr(${gi}, this)" data-min-role="analyst" style="border-color:rgba(34,212,114,.4);color:var(--ok)"><i data-lucide="git-pull-request"></i> Abrir PR</button>
+          </div>` : ''}
+      ${f.fix_summary ? `<details style="margin-bottom:8px"><summary style="cursor:pointer;color:var(--accent);font-size:11px">Resumo da correção pela IA</summary>${renderMd(f.fix_summary)}</details>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="detail-btn" onclick="aiFix(${gi}, this)" data-min-role="analyst"><i data-lucide="sparkles"></i> Sugerir correção com IA</button>
         <button class="detail-btn" onclick="aiAutofix(${gi}, this)" data-min-role="analyst" style="border-color:rgba(34,212,114,.4);color:var(--ok)"><i data-lucide="wrench"></i> Aplicar correção (abre PR)</button>
@@ -3169,6 +3221,45 @@ async function loadAIConfig() {
     inp.value = c.model;
   }
   $('aiCfgVia').textContent = `Modelo em uso: ${c.model}`;
+  loadAutopilot();
+}
+
+async function loadAutopilot() {
+  const c = await api('/api/ai/autopilot');
+  if (!c) return;
+  $('apEnabled').checked = !!c.enabled;
+  $('apMinSev').value = c.min_sev;
+  $('apMax').value = c.max_per_scan;
+  $('apStatus').textContent = c.enabled
+    ? `ativo · ≥ ${c.min_sev} · máx ${c.max_per_scan}/scan${c.queued ? ` · ${c.queued} na fila` : ''}`
+    : 'desativado';
+}
+
+async function saveAutopilot() {
+  const msg = $('apMsg'); msg.className = 'form-msg';
+  const body = {enabled: $('apEnabled').checked, min_sev: $('apMinSev').value,
+                max_per_scan: +$('apMax').value || 3};
+  const data = await api('/api/ai/autopilot', {method: 'PUT',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (!data) { msg.className = 'form-msg err'; msg.textContent = 'Não salvo'; return; }
+  msg.className = 'form-msg ok';
+  msg.textContent = data.enabled ? 'Salvo — piloto automático ativo' : 'Salvo — piloto automático desativado';
+  loadAutopilot();
+}
+
+async function openFixPr(gi, btn) {
+  const f = _findingsView[gi] || _findings[gi];
+  if (!f) return;
+  btn.disabled = true; btnLabel(btn, 'loader-circle', 'Abrindo…');
+  const data = await api('/api/ai/open-pr', {method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify({repo: f.repo, fid: f.fid})});
+  if (!data) { btn.disabled = false; btnLabel(btn, 'git-pull-request', 'Abrir PR'); return; }
+  f.fix_pr = data.pr_url;
+  btnLabel(btn, 'check', 'PR aberta');
+  const out = $(`aiFixOut-${gi}`);
+  if (out) out.innerHTML = `<div class="fd-text" style="color:var(--ok)">PR aberta: <a class="fd-ref" href="${esc(data.pr_url)}" target="_blank" rel="noopener">${esc(data.pr_url)} ↗</a></div>`;
+  uiToast(data.already_open ? 'Este finding já tinha PR aberta' : 'PR aberta com sucesso', 'ok');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 async function saveAIModel() {
