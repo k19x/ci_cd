@@ -256,11 +256,15 @@ async def get_current_user(request: Request):
             ).fetchone()
         if not row:
             raise HTTPException(401, "X-API-Key inválido")
+        if row["scopes"] == "ingest":
+            raise HTTPException(403, "Key com escopo 'ingest' só pode usar /api/ingest")
         today = datetime.now(timezone.utc).date().isoformat()
         with db() as conn:
             conn.execute("UPDATE api_keys SET last_used=? WHERE id=?", (today, row["id"]))
-        _role = {"read": "viewer", "ingest": "viewer", "admin": "admin"}.get(row["scopes"], "viewer")
-        return {"id": 0, "username": f"api:{row['name']}", "role": _role, "scopes": row["scopes"]}
+        # API keys nunca recebem role 'admin': gestão de usuários/keys exige sessão humana
+        _role = {"read": "viewer", "admin": "analyst"}.get(row["scopes"], "viewer")
+        return {"id": 0, "username": f"api:{row['name']}", "role": _role,
+                "scopes": row["scopes"], "api_key": True}
 
     # Session cookie auth
     token = request.cookies.get(SESSION_COOKIE)
@@ -280,6 +284,8 @@ async def get_current_user(request: Request):
 
 def require_role(min_role: str):
     async def dep(user=Depends(get_current_user)):
+        if min_role == "admin" and user.get("api_key"):
+            raise HTTPException(403, "Operação exige sessão de administrador, não API key")
         if ROLES.index(user["role"]) < ROLES.index(min_role):
             raise HTTPException(403, "Permissão insuficiente")
         return user
@@ -307,19 +313,21 @@ class IngestPayload(BaseModel):
 
 
 def check_token(x_api_key: str | None) -> None:
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="X-API-Key obrigatório")
     legacy = os.environ.get("SECPIPE_TOKEN")
-    if legacy and x_api_key == legacy:
+    if legacy and secrets.compare_digest(x_api_key, legacy):
         return
-    if x_api_key:
-        key_hash = _hash_api_key(x_api_key)
-        with db() as conn:
-            row = conn.execute(
-                "SELECT scopes FROM api_keys WHERE key_hash=?", (key_hash,)
-            ).fetchone()
-        if row and row["scopes"] in ("ingest", "admin"):
-            return
-    if legacy:
+    key_hash = _hash_api_key(x_api_key)
+    with db() as conn:
+        row = conn.execute(
+            "SELECT id,scopes FROM api_keys WHERE key_hash=?", (key_hash,)
+        ).fetchone()
+    if not row or row["scopes"] not in ("ingest", "admin"):
         raise HTTPException(status_code=401, detail="X-API-Key inválido")
+    today = datetime.now(timezone.utc).date().isoformat()
+    with db() as conn:
+        conn.execute("UPDATE api_keys SET last_used=? WHERE id=?", (today, row["id"]))
 
 
 # ── API Keys CRUD ──────────────────────────────────

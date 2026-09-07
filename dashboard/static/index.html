@@ -1878,7 +1878,7 @@ td { padding: 11px 16px; }
               <label class="scope-card admin" style="flex:1;min-width:120px">
                 <input class="scope-radio" type="radio" name="newKeyScope" value="admin">
                 <div class="scope-card-label">admin</div>
-                <div class="scope-card-desc">Acesso total — inclui gestão de usuários e keys</div>
+                <div class="scope-card-desc">Escrita — triagem, scans e policy; sem gestão de usuários/keys</div>
               </label>
             </div>
             <button class="btn-primary" onclick="createApiKey()"><i data-lucide="plus-circle"></i> Gerar chave</button>
@@ -2079,6 +2079,9 @@ td { padding: 11px 16px; }
 /* ── helpers ── */
 const $ = id => document.getElementById(id);
 const esc = s => (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// String JS segura para dentro de atributos onclick="...": o parser HTML decodifica
+// entidades antes do JS rodar, então esc() sozinho não protege aspas em código inline.
+const jsq = s => esc(JSON.stringify(String(s ?? '')));
 const sevClass = s => ({critical:'critical',high:'high',medium:'medium',low:'low',info:'info'}[s]||'info');
 
 /* ── Ordenação de tabelas ── */
@@ -2493,7 +2496,7 @@ async function loadDashboard() {
   const allRepos = data.repos || [];
   const riskiest = (data.risk_scores || []).slice(0, 6);
   $('riskiestRows').innerHTML = riskiest.length ? riskiest.map(r => `
-    <tr style="cursor:pointer" onclick="goToFindings('','open','${esc(r.repo)}')">
+    <tr style="cursor:pointer" onclick="goToFindings('','open',${jsq(r.repo)})">
       <td class="primary">${esc(r.repo)}</td>
       <td style="text-align:right">${riskBadge(r.score)}</td>
     </tr>`).join('')
@@ -2549,11 +2552,11 @@ function renderLastScans() {
     0: s => s.repo, 1: s => s.last_scan || '', 2: s => +(s.critical||0), 3: s => +(s.high||0),
   });
   $('lastScans').innerHTML = sorted.map(s => `
-    <tr style="cursor:pointer" onclick="goToFindings('','open','${esc(s.repo)}')" title="Ver findings de ${esc(s.repo)}">
+    <tr style="cursor:pointer" onclick="goToFindings('','open',${jsq(s.repo)})" title="Ver findings de ${esc(s.repo)}">
       <td class="primary" style="color:var(--orange)">${esc(s.repo)}</td>
       <td class="mono">${s.last_scan ? s.last_scan.slice(0,16).replace('T',' ') : '<span style="color:var(--muted)">—</span>'}</td>
-      <td onclick="event.stopPropagation();goToFindings('critical','open','${esc(s.repo)}')" title="Ver criticals de ${esc(s.repo)}"><span class="sev critical" style="${s.critical?'':'opacity:.3'}">${s.critical||0}</span></td>
-      <td onclick="event.stopPropagation();goToFindings('high','open','${esc(s.repo)}')"    title="Ver highs de ${esc(s.repo)}"><span class="sev high"     style="${s.high?'':'opacity:.3'}">${s.high||0}</span></td>
+      <td onclick="event.stopPropagation();goToFindings('critical','open',${jsq(s.repo)})" title="Ver criticals de ${esc(s.repo)}"><span class="sev critical" style="${s.critical?'':'opacity:.3'}">${s.critical||0}</span></td>
+      <td onclick="event.stopPropagation();goToFindings('high','open',${jsq(s.repo)})"    title="Ver highs de ${esc(s.repo)}"><span class="sev high"     style="${s.high?'':'opacity:.3'}">${s.high||0}</span></td>
     </tr>`).join('');
 }
 
@@ -2641,7 +2644,6 @@ function renderJobs() {
   });
   tbody.innerHTML = sorted.map(r => {
     const isFailed = r.conclusion === 'failure' || r.conclusion === 'timed_out';
-    const repoKey  = r.repo.replace(/'/g, "\\'");
     return `
     <tr id="run-row-${r.run_id}">
       <td class="primary">${esc(r.repo)}</td>
@@ -2650,7 +2652,7 @@ function renderJobs() {
       <td>${jobStatusBadge(r)}</td>
       <td class="mono" style="font-size:12px">${r.created_at.slice(0,16).replace('T',' ')}</td>
       <td><a href="${esc(r.url)}" target="_blank" style="color:var(--orange);font-size:12px;text-decoration:none">View ↗</a></td>
-      <td>${isFailed ? `<button class="why-icon-btn" id="why-${r.run_id}" onclick="showRunJobs('${repoKey}',${r.run_id},this)" title="Ver por que falhou"><i data-lucide="help-circle"></i></button>` : ''}</td>
+      <td>${isFailed ? `<button class="why-icon-btn" id="why-${r.run_id}" onclick="showRunJobs(${jsq(r.repo)},${r.run_id},this)" title="Ver por que falhou"><i data-lucide="help-circle"></i></button>` : ''}</td>
     </tr>`;
   }).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
@@ -2688,8 +2690,6 @@ async function showRunJobs(repo, runId, btn) {
     </div>`;
   }).join('');
 
-  const repoKey = repo.replace(/'/g, "\\'");
-
   // Gate context banner — shown when gate failed with details about why
   let gateBannerHtml = '';
   if (data.gate_context) {
@@ -2706,7 +2706,7 @@ async function showRunJobs(repo, runId, btn) {
 
   const aiSection = `
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">
-      <button class="detail-btn" onclick="aiDiagnose('${repoKey}', ${runId}, this)" data-min-role="analyst"><i data-lucide="sparkles"></i> Diagnosticar com IA</button>
+      <button class="detail-btn" onclick="aiDiagnose(${jsq(repo)}, ${runId}, this)" data-min-role="analyst"><i data-lucide="sparkles"></i> Diagnosticar com IA</button>
       <div id="aiDiag-${runId}" style="margin-top:8px"></div>
     </div>`;
 
@@ -2797,9 +2797,9 @@ function renderFindPage() {
       </td>
       <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span>${breach ? `<i data-lucide="alarm-clock" style="width:12px;height:12px;color:var(--crit);vertical-align:-2px;margin-left:5px" title="SLA estourado — aberto há ${ageDays(f)} dias"></i>` : ''}</td>
       <td style="color:var(--muted);font-size:12px">${esc(f.tool)}</td>
-      <td class="mono file-cell" title="${esc(f.file)}"><a class="fd-file-link" href="${fileLink(f)}" target="_blank" rel="noopener">${esc(f.file)}${f.line?':'+f.line:''}</a></td>
+      <td class="mono file-cell" title="${esc(f.file)}"><a class="fd-file-link" href="${esc(fileLink(f))}" target="_blank" rel="noopener">${esc(f.file)}${f.line?':'+f.line:''}</a></td>
       <td>
-        <select class="triage" onchange="setTriage('${esc(f.repo)}','${f.fid}',this.value)">
+        <select class="triage" onchange="setTriage(${jsq(f.repo)},${jsq(f.fid)},this.value)">
           <option value="open"           ${f.status==='open'           ?'selected':''}>To Review</option>
           <option value="false_positive" ${f.status==='false_positive' ?'selected':''}>Not Exploitable</option>
           <option value="accepted"       ${f.status==='accepted'       ?'selected':''}>Risk Accepted</option>
@@ -2826,7 +2826,8 @@ function renderFindPage() {
 
 /* ── Finding detail: link, remediação e DoD ── */
 function fileLink(f) {
-  const base = `https://github.com/${f.repo}/blob/main/${f.file}`;
+  const seg = p => String(p || '').split('/').map(encodeURIComponent).join('/');
+  const base = `https://github.com/${seg(f.repo)}/blob/main/${seg(f.file)}`;
   return f.line ? `${base}#L${f.line}` : base;
 }
 
@@ -2906,7 +2907,7 @@ function toggleFindDetail(gi, btn) {
     <div class="fd-section">
       <div class="fd-label">Localização</div>
       <div class="fd-text">
-        <a class="fd-file-link" href="${fileLink(f)}" target="_blank" rel="noopener">${esc(f.file)}${f.line ? ':' + f.line : ''}</a>
+        <a class="fd-file-link" href="${esc(fileLink(f))}" target="_blank" rel="noopener">${esc(f.file)}${f.line ? ':' + f.line : ''}</a>
         <div style="font-size:11px;color:var(--muted);margin-top:5px">
           ${f.line ? `Linha ${f.line} · ` : ''}${esc(f.repo)} · regra <span class="mono">${esc(f.rule)}</span> · ${esc(f.tool)}${f.cwe ? ` · <span class="mono" style="color:var(--accent)">${esc(f.cwe)}</span>` : ''}${f.owasp ? ` · <span style="color:var(--accent)">${esc(f.owasp)}</span>` : ''}
         </div>
@@ -2976,7 +2977,7 @@ async function loadApiKeys() {
       <td><span class="ep-scope ${esc(k.scopes)}">${esc(k.scopes)}</span></td>
       <td style="font-size:12px;color:var(--text2)">${k.created_at.slice(0,10)}</td>
       <td style="font-size:12px;color:var(--muted)">${k.last_used || 'Nunca'}</td>
-      <td style="text-align:right"><button class="btn-ghost" style="color:var(--crit)" onclick="revokeApiKey(${k.id},'${esc(k.name)}')"><i data-lucide="trash-2"></i> Revogar</button></td>
+      <td style="text-align:right"><button class="btn-ghost" style="color:var(--crit)" onclick="revokeApiKey(${k.id},${jsq(k.name)})"><i data-lucide="trash-2"></i> Revogar</button></td>
     </tr>`).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
 }
@@ -3165,7 +3166,7 @@ async function fetchOtherCriticals(repo, excludeFid, container) {
         <code style="color:var(--accent);font-size:11px;flex-shrink:0">${esc(x.rule || x.fid)}</code>
         <span style="color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.file||'')}">
           ${esc(x.file || '')}</span>
-        <button class="detail-btn" onclick="aiAutofixFromPending('${esc(x.fid)}',this)"
+        <button class="detail-btn" onclick="aiAutofixFromPending(${jsq(x.fid)},this)"
           style="padding:3px 8px;font-size:11px;white-space:nowrap;flex-shrink:0" data-min-role="analyst">
           <i data-lucide="wrench"></i> Corrigir
         </button>
@@ -3188,7 +3189,7 @@ async function aiAutofixFromPending(fid, btn) {
   if (!f) return;
   const out = document.getElementById(`pendingfixout-${fid}`);
   if (!out) return;
-  if (!await uiConfirm(`Aplicar correção AI para: ${f.rule || fid}?`)) return;
+  if (!await uiConfirm(`Aplicar correção AI para: ${esc(f.rule || fid)}?`)) return;
   btn.disabled = true; btnLabel(btn, 'loader-circle', 'Aplicando…');
   out.innerHTML = '<div class="fd-text ai-progress" style="color:var(--muted)">⏳ Clonando e corrigindo… (1–3 min)</div>';
   const done = body => {
@@ -3311,7 +3312,7 @@ function aiJobsResumeAll() {
     if (now - x.started > 1_200_000) { aiJobFail(jobId, 'Tempo esgotado ou serviço reiniciou.'); continue; }
     const dummy = document.createElement('div');
     pollAiJob(jobId, dummy,
-      r => aiJobDone(jobId, r?.pr_url ? `PR: <a href="${esc(r.pr_url)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(r.branch||'ver PR')}</a>` : r?.applied===false?(r.detail||'IA não fez alterações.') : 'Concluído.'),
+      r => aiJobDone(jobId, r?.pr_url ? `PR: <a href="${esc(r.pr_url)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(r.branch||'ver PR')}</a>` : r?.applied===false?esc(r.detail||'IA não fez alterações.') : 'Concluído.'),
       err => aiJobFail(jobId, err)
     );
   }
@@ -3330,11 +3331,11 @@ function pollAiJobTracked(jobId, label, out, onDone, onFail, resultFmt) {
 
 const _fmtAutofix = r => r?.pr_url
   ? `PR: <a href="${esc(r.pr_url)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(r.branch||'ver PR')}</a>`
-  : r?.applied===false ? (r.detail||'IA não fez alterações.') : 'Concluído.';
+  : r?.applied===false ? esc(r.detail||'IA não fez alterações.') : 'Concluído.';
 
 const _fmtVerify = r => r?.verified && r?.fixed ? 'Corrigido — marcado como Fixed'
   : r?.verified ? 'Finding ainda presente'
-  : (r?.detail || 'Verificação inconclusiva');
+  : esc(r?.detail || 'Verificação inconclusiva');
 
 /* ── AI Engine ── */
 function btnLabel(btn, icon, label) {
@@ -3601,7 +3602,6 @@ function renderRepos() {
       ? r.languages.split(',').filter(Boolean).map(l =>
           `<span class="lang-chip">${esc(l)}</span>`).join('')
       : `<span style="color:var(--muted);font-size:11px">–</span>`;
-    const nameKey = r.name.replace(/'/g, "\\'");
     return `
     <tr>
       <td>
@@ -3636,10 +3636,10 @@ function renderRepos() {
             <i data-lucide="more-vertical" style="width:14px;height:14px"></i>
           </button>
           <div class="kebab-menu">
-            <button onclick="closeKebabs();triggerScan('${nameKey}',this)"><i data-lucide="play-circle" style="width:13px;height:13px"></i> Scan</button>
-            <button onclick="closeKebabs();refreshMeta('${nameKey}',this)"><i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Atualizar meta</button>
+            <button onclick="closeKebabs();triggerScan(${jsq(r.name)},this)"><i data-lucide="play-circle" style="width:13px;height:13px"></i> Scan</button>
+            <button onclick="closeKebabs();refreshMeta(${jsq(r.name)},this)"><i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Atualizar meta</button>
             <div class="menu-sep"></div>
-            <button class="danger" onclick="closeKebabs();delRepo('${nameKey}')"><i data-lucide="trash-2" style="width:13px;height:13px"></i> Remover</button>
+            <button class="danger" onclick="closeKebabs();delRepo(${jsq(r.name)})"><i data-lucide="trash-2" style="width:13px;height:13px"></i> Remover</button>
           </div>
         </div>
       </td>
@@ -3801,7 +3801,7 @@ function renderVulns() {
       <td style="text-align:center">${chip('m', s.medium||0)}</td>
       <td style="text-align:center">${chip('l', s.low||0)}</td>
       <td style="text-align:center;font-weight:600;color:var(--text2)">${total}</td>
-      <td style="text-align:right">${total > 0 ? `<button class="detail-btn" onclick="showScanFindings(${i}, '${esc(s.repo)}', this)"><i data-lucide="chevron-down"></i> Detalhes</button>` : ''}</td>
+      <td style="text-align:right">${total > 0 ? `<button class="detail-btn" onclick="showScanFindings(${i}, ${jsq(s.repo)}, this)"><i data-lucide="chevron-down"></i> Detalhes</button>` : ''}</td>
     </tr>`;
   }).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
@@ -3828,14 +3828,14 @@ async function showScanFindings(idx, repo, btn) {
   const rows = shown.map(f => `<div class="job-row">
       <span class="sev ${sevClass(f.severity)}">${esc(f.severity)}</span>
       <span class="mono" style="color:var(--text)">${esc(f.rule || f.fid || '')}</span>
-      <a class="fd-file-link" href="${fileLink(f)}" target="_blank" rel="noopener" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.file)}${f.line ? ':'+f.line : ''}</a>
+      <a class="fd-file-link" href="${esc(fileLink(f))}" target="_blank" rel="noopener" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.file)}${f.line ? ':'+f.line : ''}</a>
       <span style="font-size:11px;color:var(--muted)">${esc(f.tool)}</span>
       <span class="msg-cell" style="font-size:11px;color:var(--text2)">${esc(f.message)}</span>
     </div>`).join('');
 
   const more = data.count > shown.length
     ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">… e mais ${data.count - shown.length} finding(s).</div>` : '';
-  const allLink = `<a onclick="goToFindings('','open','${esc(repo)}')" style="color:var(--orange);font-size:11px;cursor:pointer;margin-top:6px">Ver tudo em Results →</a>`;
+  const allLink = `<a onclick="goToFindings('','open',${jsq(repo)})" style="color:var(--orange);font-size:11px;cursor:pointer;margin-top:6px">Ver tudo em Results →</a>`;
   const header = `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">${data.count} finding(s) abertos de <strong style="color:var(--text)">${esc(repo)}</strong></div>`;
 
   const row = document.createElement('tr');

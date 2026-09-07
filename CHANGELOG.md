@@ -3,6 +3,17 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.14] - 2026-09-07
+
+### Security
+- **`/api/ingest` fail-closed**: `check_token` agora exige `X-API-Key` sempre; sem `SECPIPE_TOKEN` no `.env` o endpoint rejeitava nada e aceitava qualquer payload. Comparação do token legado com `compare_digest`; `last_used` atualizado também para keys de ingest
+- **API keys nunca viram admin**: scope `admin` mapeia para role `analyst` (triagem, scans, policy); `require_role("admin")` rejeita qualquer principal de API key — gestão de usuários e keys exige sessão humana. Scope `ingest` só é aceito em `/api/ingest` (403 nos demais endpoints)
+- **XSS em handlers inline**: novo helper `jsq()` (JSON.stringify + esc) substitui o padrão `onclick="fn('${esc(x)}')"` em 14 pontos — o parser HTML decodificava `&#39;` de volta para `'` antes do JS rodar, permitindo injeção via nome de API key, repo ou finding id. Removidos os `replace(/'/g,"\\'")` manuais (`repoKey`, `nameKey`)
+- **Escape em campos esquecidos**: `r.detail` (autofix/verify), `f.rule` no `uiConfirm`, e `href` de `fileLink()` (agora com `encodeURIComponent` por segmento)
+
+### Changed
+- Developer tab: descrição do scope `admin` atualizada para refletir o novo limite
+
 ## [0.14.13] - 2026-08-30
 
 ### Changed
