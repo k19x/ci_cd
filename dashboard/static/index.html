@@ -1190,6 +1190,16 @@ td { padding: 11px 16px; }
 .ap-sel.on  { color:var(--ok);   border-color:rgba(34,212,114,.45); }
 .ap-sel.off { color:var(--crit); border-color:rgba(255,68,68,.45); }
 
+/* ── Findings › Correções ── */
+.fx-type { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; white-space:nowrap; }
+.fx-type svg { width:13px; height:13px; }
+.fx-type.ok { color:var(--ok); }  .fx-type.accent { color:var(--accent); }  .fx-type.muted { color:var(--muted); }
+.fx-group { margin-top:16px; }
+.fx-group-head { display:flex; align-items:center; gap:8px; padding:8px 0 6px; border-bottom:1px solid var(--bd); font-size:13px; }
+.fx-group-head svg { width:14px; height:14px; color:var(--accent); }
+.fx-group-count { margin-left:auto; font-size:11px; color:var(--muted); background:var(--s3); padding:1px 8px; border-radius:10px; }
+.fx-detail { font-size:12px; color:var(--text2); max-width:520px; white-space:pre-wrap; }
+
 /* ── Toast ── */
 .ui-toast {
   position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 9999;
@@ -1501,6 +1511,12 @@ td { padding: 11px 16px; }
 
     <!-- ═══ FINDINGS / RESULTS ═══ -->
     <div id="tab-findings" class="tab-pane">
+      <div class="vis-tabs" style="display:inline-flex;margin-bottom:16px">
+        <button class="vis-tab active" data-k="list" onclick="showFindingsTab('list',this)">Findings</button>
+        <button class="vis-tab" data-k="fixes" onclick="showFindingsTab('fixes',this)">Correções</button>
+      </div>
+
+      <div id="findingsPane-list">
       <div class="card">
         <div class="card-head">
           <div class="card-title">Findings</div>
@@ -1558,6 +1574,28 @@ td { padding: 11px 16px; }
         </div>
         <div class="pager" id="findPager" hidden></div>
       </div>
+      </div><!-- /findingsPane-list -->
+
+      <div id="findingsPane-fixes" style="display:none">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Correções</div>
+            <div class="card-sub" id="fxCount"></div>
+          </div>
+          <div class="filter-bar">
+            <input id="fxSearch" placeholder="Buscar regra, arquivo, branch, usuário..." oninput="renderFixes()">
+            <select id="fxRepo" onchange="renderFixes()"><option value="">Todos os projetos</option></select>
+            <select id="fxType" onchange="renderFixes()">
+              <option value="">Todos os tipos</option>
+              <option value="scan">Corrigido no scan</option>
+              <option value="ai">Correção da IA (branch / PR)</option>
+              <option value="triage">Triagem manual</option>
+            </select>
+            <button class="btn-ghost" onclick="exportFixesCSV()" title="Exportar CSV"><i data-lucide="download"></i> CSV</button>
+          </div>
+          <div id="fxGroups" style="padding:0 18px 18px"></div>
+        </div>
+      </div><!-- /findingsPane-fixes -->
     </div>
 
     <!-- ═══ VULNERABILIDADES ═══ -->
@@ -2746,6 +2784,7 @@ async function showRunJobs(repo, runId, btn) {
 let _findings = [], _findPage = 0, _findPageSize = 25;
 
 function goToFindings(severity, status, repo) {
+  showFindingsTab('list');
   if (repo !== undefined) $('fRepo').value = repo;
   $('fSev').value    = severity || '';
   $('fStatus').value = status   || 'open';
@@ -3050,6 +3089,99 @@ async function revokeApiKey(id, name) {
   if (!ok) return;
   const data = await api(`/api/keys/${id}`, {method:'DELETE'});
   if (data) { $('newKeyAlert').hidden = true; uiToast(`Key ${name} revogada`, 'ok'); loadApiKeys(); }
+}
+
+/* ── Findings › sub-aba Correções ── */
+function showFindingsTab(k) {
+  document.querySelectorAll('#tab-findings > .vis-tabs .vis-tab')
+    .forEach(b => b.classList.toggle('active', b.dataset.k === k));
+  $('findingsPane-list').style.display  = k === 'list'  ? '' : 'none';
+  $('findingsPane-fixes').style.display = k === 'fixes' ? '' : 'none';
+  if (k === 'fixes') loadFixes();
+}
+
+let _fixes = [];
+const FIX_TYPES = {
+  scan:                  {icon: 'check-circle',     cls: 'ok',     label: 'Corrigido no scan'},
+  ai_branch:             {icon: 'git-branch',       cls: 'accent', label: 'Branch da IA pronta'},
+  ai_pr:                 {icon: 'git-pull-request', cls: 'ok',     label: 'PR da IA aberta'},
+  triage_fixed:          {icon: 'user-check',       cls: 'ok',     label: 'Marcado como corrigido'},
+  triage_false_positive: {icon: 'user-x',           cls: 'muted',  label: 'Não explorável'},
+  triage_accepted:       {icon: 'shield-check',     cls: 'muted',  label: 'Risco aceito'},
+};
+const fmtLocal = ts => {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  return isNaN(d) ? esc(ts) : d.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+};
+
+async function loadFixes() {
+  const d = await api('/api/fixes');
+  if (!d) return;
+  _fixes = d.fixes || [];
+  const sel = $('fxRepo'); const cur = sel.value;
+  const repos = [...new Set(_fixes.map(f => f.repo))].sort();
+  sel.innerHTML = '<option value="">Todos os projetos</option>' + repos.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+  if (repos.includes(cur)) sel.value = cur;
+  renderFixes();
+}
+
+function _fixesFiltered() {
+  const repo = $('fxRepo').value, type = $('fxType').value;
+  const q = ($('fxSearch').value || '').toLowerCase();
+  let list = _fixes;
+  if (repo) list = list.filter(f => f.repo === repo);
+  if (type) list = list.filter(f => type === 'ai' ? f.type.startsWith('ai_') : type === 'triage' ? f.type.startsWith('triage_') : f.type === type);
+  if (q) list = list.filter(f => [f.rule, f.file, f.detail, f.branch, f.who, f.repo].join(' ').toLowerCase().includes(q));
+  return list;
+}
+
+function renderFixes() {
+  const list = _fixesFiltered();
+  $('fxCount').textContent = `${list.length} correç${list.length === 1 ? 'ão' : 'ões'}`;
+  const wrap = $('fxGroups');
+  if (!list.length) {
+    wrap.innerHTML = `<div class="empty-state"><i data-lucide="check-circle-2"></i><p>Nenhuma correção registrada para os filtros</p></div>`;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    return;
+  }
+  const groups = {};
+  for (const f of list) (groups[f.repo] ||= []).push(f);
+  wrap.innerHTML = Object.keys(groups).sort().map(r => {
+    const rows = groups[r].map(f => {
+      const t = FIX_TYPES[f.type] || {icon: 'circle', cls: 'muted', label: f.type};
+      const links = [
+        f.pr ? `<a class="fd-ref" href="${esc(f.pr)}" target="_blank" rel="noopener">Pull Request ↗</a>` : '',
+        f.branch ? `<code>${esc(f.branch)}</code>` : '',
+      ].filter(Boolean).join(' · ');
+      return `<tr>
+        <td class="mono" style="white-space:nowrap;font-size:12px">${fmtLocal(f.at)}</td>
+        <td><span class="fx-type ${t.cls}"><i data-lucide="${t.icon}"></i>${t.label}</span></td>
+        <td>
+          ${f.severity ? `<span class="sev ${sevClass(f.severity)}">${esc(f.severity)}</span> ` : ''}<span class="mono" title="${esc(f.rule)}">${esc(f.rule || f.fid)}</span>
+          <div class="gate-loc">${esc(f.file)}${f.line ? ':' + f.line : ''}${f.tool ? ' · ' + esc(f.tool) : ''}</div>
+        </td>
+        <td style="font-size:12px;color:var(--text2)">
+          ${links ? `<div style="margin-bottom:3px">${links}</div>` : ''}
+          ${f.detail ? `<div class="fx-detail">${esc(f.detail)}</div>` : ''}
+          <div style="font-size:11px;color:var(--muted)">por ${esc(f.who)}</div>
+        </td>
+      </tr>`;
+    }).join('');
+    return `<div class="fx-group">
+      <div class="fx-group-head"><i data-lucide="folder-git-2"></i><span class="primary">${esc(r)}</span><span class="fx-group-count">${groups[r].length}</span></div>
+      <table style="width:100%"><thead><tr><th>Data / hora</th><th>Tipo</th><th>Finding</th><th>Detalhes</th></tr></thead><tbody>${rows}</tbody></table>
+    </div>`;
+  }).join('');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function exportFixesCSV() {
+  exportCSV('secpipe-correcoes.csv', _fixesFiltered().map(f => ({
+    data_hora: fmtLocal(f.at), projeto: f.repo, tipo: (FIX_TYPES[f.type] || {}).label || f.type,
+    severidade: f.severity, regra: f.rule, arquivo: f.file, linha: f.line, engine: f.tool,
+    branch: f.branch, pr: f.pr, por: f.who, detalhe: f.detail,
+  })));
 }
 
 /* ── Usuários ── */

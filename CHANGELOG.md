@@ -3,6 +3,19 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.1] - 2026-09-07 19:50
+
+### Added
+- **Findings › sub-aba "Correções"**: linha do tempo de tudo que foi corrigido, agrupada por projeto, com data/hora local, tipo, finding (severidade, regra, arquivo:linha, engine) e detalhes (branch, link da PR, resumo da IA, quem fez). Três origens unificadas: **corrigido no scan** (finding sumiu no ingest), **correção da IA** (branch pronta / PR aberta) e **triagem manual** (corrigido, não explorável, risco aceito). Filtros por projeto, tipo e busca livre; exportação CSV
+- **`GET /api/fixes?repo=`** (viewer): une `findings` (status `fixed` ou `fix_branch`) com `audit_log` (ação `triage`), ordenado por data desc, limite 500 (máx. 2000)
+- Cards do Dashboard que levam a Findings agora garantem a sub-aba "Findings" ativa (`goToFindings` → `showFindingsTab('list')`)
+
+### Execução
+- Rebuild `docker compose up -d --build` — container healthy
+- `py_compile app.py` OK · `node --check` no JS inline OK · 7 ids novos únicos no DOM
+- Teste de API no container: `GET /api/fixes` → 200, **24 correções reais em 4 projetos** (Tyr-Red-Team-Agent 9, web-fr1da 9, tyr 5), todas do tipo `scan` (ainda não há correções da IA nem triagem manual no banco); ordenação desc confirmada; `?repo=k19x/tyr` → 5 itens, todos do repo
+- Não verificado: visual da sub-aba (extensão do browser bloqueada nesta sessão)
+
 ## [0.15.0] - 2026-09-07 19:43
 
 ### Execução

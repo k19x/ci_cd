@@ -444,6 +444,45 @@ def ingest(payload: IngestPayload, x_api_key: str | None = Header(default=None))
             "autopilot_queued": queued}
 
 
+@app.get("/api/fixes")
+def list_fixes(repo: str | None = None, limit: int = 500, user=Depends(require_role("viewer"))):
+    """Linha do tempo de correções: sumiu no scan, correção da IA (branch/PR) e triagem manual."""
+    limit = max(1, min(limit, 2000))
+    items: list[dict] = []
+    with db() as conn:
+        q = ("SELECT repo,fid,tool,rule,severity,file,line,status,last_seen,"
+             "fix_branch,fix_pr,fix_summary,fix_at FROM findings WHERE (status='fixed' OR fix_branch!='')")
+        params: list = []
+        if repo:
+            q += " AND repo=?"
+            params.append(repo)
+        for r in conn.execute(q, params):
+            base = {k: r[k] for k in ("repo", "fid", "tool", "rule", "severity", "file", "line")}
+            if r["status"] == "fixed":
+                items.append({**base, "type": "scan", "at": r["last_seen"], "who": "scan",
+                              "detail": "Não apareceu mais no scan — marcado como corrigido automaticamente",
+                              "branch": "", "pr": ""})
+            if r["fix_branch"]:
+                items.append({**base, "type": "ai_pr" if r["fix_pr"] else "ai_branch",
+                              "at": r["fix_at"] or r["last_seen"], "who": "ai",
+                              "detail": r["fix_summary"] or "", "branch": r["fix_branch"], "pr": r["fix_pr"]})
+        aq = ("SELECT a.ts,a.username,a.repo,a.target,a.detail,f.tool,f.rule,f.severity,f.file,f.line "
+              "FROM audit_log a LEFT JOIN findings f ON f.repo=a.repo AND f.fid=a.target "
+              "WHERE a.action='triage' AND a.detail IN ('fixed','false_positive','accepted')")
+        aparams: list = []
+        if repo:
+            aq += " AND a.repo=?"
+            aparams.append(repo)
+        for r in conn.execute(aq, aparams):
+            items.append({"repo": r["repo"], "fid": r["target"], "tool": r["tool"] or "",
+                          "rule": r["rule"] or "", "severity": r["severity"] or "",
+                          "file": r["file"] or "", "line": r["line"] or 0,
+                          "type": f"triage_{r['detail']}", "at": r["ts"], "who": r["username"],
+                          "detail": "", "branch": "", "pr": ""})
+    items.sort(key=lambda x: x["at"] or "", reverse=True)
+    return {"fixes": items[:limit], "total": len(items)}
+
+
 @app.get("/api/overview")
 def overview(user=Depends(require_role("viewer"))):
     with db() as conn:
