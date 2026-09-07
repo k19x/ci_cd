@@ -843,6 +843,13 @@ pre.yaml {
 .theme-btn:hover { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 .theme-btn svg { width: 15px; height: 15px; }
 .theme-btn svg[hidden] { display: none; }
+.aj-badge {
+  position: absolute; top: -5px; right: -5px; min-width: 15px; height: 15px; padding: 0 3px;
+  background: var(--crit); color: #fff; font-size: 9px; font-weight: 700; line-height: 1;
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.aj-badge[hidden] { display: none; }
 
 /* ── Dashboard customizável ── */
 .dash-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; align-items: start; }
@@ -1322,7 +1329,7 @@ td { padding: 11px 16px; }
       <div style="position:relative">
         <button class="theme-btn" onclick="toggleAiJobs()" title="Jobs de IA em andamento" style="position:relative">
           <i data-lucide="cpu" style="width:14px;height:14px"></i>
-          <span id="ajBadge" hidden style="position:absolute;top:2px;right:2px;background:var(--crit);color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;line-height:1"></span>
+          <span id="ajBadge" class="aj-badge" hidden></span>
         </button>
         <div id="ajDrawer" hidden style="position:absolute;right:0;top:calc(100% + 6px);width:320px;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:0 12px 4px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:420px;overflow-y:auto">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0 6px;border-bottom:1px solid var(--bd);margin-bottom:4px">

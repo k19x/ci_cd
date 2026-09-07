@@ -3,6 +3,11 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.16] - 2026-09-07
+
+### Fixed
+- **Ícone "Jobs de IA" na topbar**: o badge de contagem tinha `display:flex` inline, que anulava o atributo `hidden` — o círculo vermelho vazio ficava sempre visível por cima do ícone `cpu`. Estilo movido para a classe `.aj-badge` com regra `[hidden]{display:none}`; badge reposicionado no canto (`-5px`) para não cobrir o ícone
+
 ## [0.14.15] - 2026-09-07
 
 ### Fixed
