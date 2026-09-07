@@ -3,6 +3,18 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.5] - 2026-09-07 20:10
+
+### Fixed
+- **Motivo da falha "não chegava ao front"**: chegava, mas escondido atrás de um ícone `?` de 16px na última coluna da aba Scans. O ícone virou um botão vermelho visível **"Motivo"** (com estados *Carregando…* / *Fechar*) em todo run com falha; o tooltip explica que abre gate reprovado ou erro técnico
+- **Parser do gate cortava a engine "Semgrep OSS"**: o regex assumia engine de uma palavra e jogava "OSS" para dentro da regra. Agora a regra é o último token antes do `—` (nunca tem espaço) e a engine fica com o resto
+
+### Execução
+- Antes da correção, `GET /api/runs/k19x/Tyr-Red-Team-Agent/34168500815/jobs` já devolvia `source: log`, violação `37 finding(s) >= high`, totais `198 ativos / high 37 / medium 16 / low 4 / info 141` e **10 findings bloqueantes** — confirmando que o problema era de descoberta na UI, não de dados
+- Rebuild `docker compose up -d --build` — container healthy · `py_compile` OK · `node --check` OK
+- Re-teste do mesmo run após o fix do regex: engine `Semgrep OSS` / regra `dockerfile.security.missing-user-entrypoint…` separadas corretamente
+- Não verificado: visual — pedido ao usuário para abrir o "Motivo" do run e validar
+
 ## [0.15.4] - 2026-09-07 20:03
 
 ### Added

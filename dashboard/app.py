@@ -1264,8 +1264,9 @@ def _gh_job_log(repo: str, job_id: int, hdrs: dict) -> str:
         return ""
 
 
+# tool pode ter espaço ("Semgrep OSS"); rule nunca tem — por isso rule é o último token antes do "—"
 _GATE_FINDING = re.compile(
-    r"^\[(CRITICAL|HIGH|MEDIUM|LOW|INFO)\]\s+(\S+)\s+(.+?)\s+—\s+(.*?):(\d+)\s*$"
+    r"^\[(CRITICAL|HIGH|MEDIUM|LOW|INFO)\]\s+(.+?)\s+(\S+)\s+—\s+(.*?):(\d+)\s*$"
 )
 _LOG_TS = re.compile(r"^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s?")
 

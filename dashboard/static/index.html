@@ -1067,14 +1067,7 @@ td { padding: 11px 16px; }
 .badge-yellow { background: var(--med-bg);  color: var(--med);  border: 1px solid rgba(240,185,11,.2); }
 .badge-blue   { background: var(--low-bg);  color: var(--low);  border: 1px solid rgba(59,130,246,.2); }
 
-/* Why? icon button */
-.why-icon-btn {
-  background: none; border: none; color: var(--crit); cursor: pointer;
-  padding: 3px 5px; display: inline-flex; align-items: center;
-  border-radius: var(--radius); transition: background .12s, color .12s;
-}
-.why-icon-btn:hover { background: rgba(255,51,85,.1); }
-.why-icon-btn i[data-lucide] { width: 16px; height: 16px; }
+/* Botão "Motivo" dos runs com falha: estilo definido junto com .gate-banner */
 
 /* Project kebab dropdown */
 .kebab-wrap { position: relative; display: inline-block; }
@@ -1170,6 +1163,12 @@ td { padding: 11px 16px; }
 .gate-src { margin-top:8px; font-size:11px; color:var(--muted); font-style:italic; }
 .gate-link { display:inline-block; margin-top:8px; color:var(--orange); font-size:11px; cursor:pointer; }
 .gate-banner.tech { border-left-color:var(--high); background:color-mix(in srgb,var(--high) 8%,var(--card)); }
+/* botão "Motivo" nos runs com falha — visível, não um ícone escondido */
+.why-icon-btn { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:700; letter-spacing:.02em; white-space:nowrap; cursor:pointer;
+  color:var(--crit); background:rgba(255,68,68,.10); border:1px solid rgba(255,68,68,.45); transition:background .15s; }
+.why-icon-btn:hover { background:rgba(255,68,68,.20); }
+.why-icon-btn svg { width:12px; height:12px; }
+.why-icon-btn.loading { opacity:.7; cursor:progress; }
 .job-reason { display:flex; gap:8px; align-items:flex-start; margin:2px 0 8px 26px; padding:7px 10px; border-radius:6px; background:rgba(255,68,68,.06); border:1px solid rgba(255,68,68,.25); }
 .job-reason svg { width:13px; height:13px; color:var(--crit); flex-shrink:0; margin-top:2px; }
 .job-reason pre { margin:0; font-size:11px; font-family:monospace; color:var(--text2); white-space:pre-wrap; word-break:break-word; line-height:1.5; }
@@ -2708,7 +2707,7 @@ function renderJobs() {
       <td>${jobStatusBadge(r)}</td>
       <td class="mono" style="font-size:12px">${r.created_at.slice(0,16).replace('T',' ')}</td>
       <td><a href="${esc(r.url)}" target="_blank" style="color:var(--orange);font-size:12px;text-decoration:none">View ↗</a></td>
-      <td>${isFailed ? `<button class="why-icon-btn" id="why-${r.run_id}" onclick="showRunJobs(${jsq(r.repo)},${r.run_id},this)" title="Ver por que falhou"><i data-lucide="help-circle"></i></button>` : ''}</td>
+      <td>${isFailed ? `<button class="why-icon-btn" id="why-${r.run_id}" onclick="showRunJobs(${jsq(r.repo)},${r.run_id},this)" title="Ver por que este scan falhou: gate reprovado (findings) ou erro técnico"><i data-lucide="alert-circle"></i> Motivo</button>` : ''}</td>
     </tr>`;
   }).join('');
   if(typeof lucide!=='undefined')lucide.createIcons();
@@ -2724,11 +2723,11 @@ function exportJobsCSV() {
 async function showRunJobs(repo, runId, btn) {
   const detailId = `detail-${runId}`;
   const existing = document.getElementById(detailId);
-  if (existing) { existing.remove(); btnLabel(btn, 'help-circle', ''); return; }
+  if (existing) { existing.remove(); btnLabel(btn, 'alert-circle', 'Motivo'); return; }
 
-  btnLabel(btn, 'loader-circle', ''); btn.classList.add('loading'); btn.disabled = true;
+  btnLabel(btn, 'loader-circle', 'Carregando…'); btn.classList.add('loading'); btn.disabled = true;
   const data = await api(`/api/runs/${encodeURIComponent(repo)}/${runId}/jobs`);
-  btnLabel(btn, 'help-circle', ''); btn.classList.remove('loading'); btn.disabled = false;
+  btnLabel(btn, 'chevron-up', 'Fechar'); btn.classList.remove('loading'); btn.disabled = false;
   if (!data) return;
 
   const conclusionIcon = c => ({failure:'✗', timed_out:'⏱', success:'✓', skipped:'—', cancelled:'✗'}[c] || '?');
