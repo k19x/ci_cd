@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import contextlib
 import json as _json
+import re
 import os
 import secrets
 import sqlite3
@@ -145,13 +146,17 @@ app = FastAPI(title="SecPipe Dashboard", lifespan=_lifespan)
 
 
 def db() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    # timeout: threads de notificação/IA + last_used em toda request com API key
+    # disputam o mesmo arquivo; sem isso o SQLite levanta "database is locked" na hora
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db() -> None:
     with db() as conn:
+        # WAL é persistente no arquivo: leitores não bloqueiam o escritor e vice-versa
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS scans(
@@ -1159,6 +1164,96 @@ def change_password(username: str, payload: PasswordChange, user=Depends(get_cur
     return {"ok": True}
 
 
+# ── Contexto do gate reprovado ─────────────────────
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):
+        return None
+
+
+def _gh_job_log(repo: str, job_id: int, hdrs: dict) -> str:
+    # A API responde 302 para um blob storage que rejeita o header Authorization,
+    # então o redirect é seguido manualmente sem credenciais.
+    url = f"https://api.github.com/repos/{repo}/actions/jobs/{job_id}/logs"
+    try:
+        with urllib.request.build_opener(_NoRedirect).open(
+            urllib.request.Request(url, headers=hdrs), timeout=10
+        ) as r:
+            return r.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        if e.code not in (301, 302, 307, 308):
+            return ""
+        loc = e.headers.get("Location", "")
+    except Exception:
+        return ""
+    if not loc:
+        return ""
+    try:
+        with urllib.request.urlopen(loc, timeout=15) as r:
+            return r.read().decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
+_GATE_FINDING = re.compile(
+    r"^\[(CRITICAL|HIGH|MEDIUM|LOW|INFO)\]\s+(\S+)\s+(.+?)\s+—\s+(.*?):(\d+)\s*$"
+)
+_LOG_TS = re.compile(r"^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s?")
+
+
+def _parse_gate_log(text: str) -> dict | None:
+    """Extrai do stdout do scripts/gate.py as violações e os findings bloqueantes."""
+    out = {"violations": [], "blocking": [], "counts": {}, "active_total": None, "allowlisted": None}
+    found = in_viol = in_block = False
+    for raw in text.splitlines():
+        s = _LOG_TS.sub("", raw).strip()
+        m = re.match(r"Findings ativos:\s*(\d+)\s*\(allowlisted:\s*(\d+)\)", s)
+        if m:
+            out["active_total"], out["allowlisted"] = int(m[1]), int(m[2])
+            found = True
+            continue
+        m = re.match(r"^(critical|high|medium|low|info):\s*(\d+)$", s)
+        if m and found and not in_block:
+            out["counts"][m[1]] = int(m[2])
+            continue
+        if "GATE REPROVADO" in s:
+            in_viol, in_block, found = True, False, True
+            continue
+        if s.startswith("Principais findings bloqueantes"):
+            in_viol, in_block = False, True
+            continue
+        if s.startswith("Para suprimir") or "GATE APROVADO" in s:
+            in_viol = in_block = False
+            continue
+        if in_viol:
+            if s.startswith("- "):
+                out["violations"].append(s[2:].strip())
+            elif not s:
+                in_viol = False
+            continue
+        if in_block:
+            m = _GATE_FINDING.match(s)
+            if m:
+                out["blocking"].append({
+                    "severity": m[1].lower(), "tool": m[2], "rule": m[3],
+                    "file": m[4], "line": int(m[5]), "message": "",
+                })
+            elif s and out["blocking"]:
+                last = out["blocking"][-1]
+                last["message"] = (last["message"] + " " + s).strip()[:300]
+    return out if found else None
+
+
+def _db_blocking_findings(repo: str) -> list[dict]:
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT severity,tool,rule,file,line,message FROM findings "
+            "WHERE repo=? AND status='open' AND severity IN ('critical','high') "
+            "ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, tool, rule LIMIT 10",
+            (repo,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ── Re-run workflow ────────────────────────────────
 @app.get("/api/runs/{repo:path}/{run_id}/jobs")
 def get_run_jobs(repo: str, run_id: int, user=Depends(require_role("viewer"))):
@@ -1189,14 +1284,18 @@ def get_run_jobs(repo: str, run_id: int, user=Depends(require_role("viewer"))):
 
     jobs = []
     gate_failed = False
+    gate_job_id = None
     for job in jobs_data.get("jobs", []):
         failed_steps = [
             {"name": s["name"], "number": s["number"]}
             for s in job.get("steps", [])
             if s.get("conclusion") in ("failure", "timed_out")
         ]
-        if job.get("conclusion") == "failure" and any(s["name"] == "Enforce gate" for s in failed_steps):
+        if job.get("conclusion") == "failure" and (
+            any(s["name"] == "Enforce gate" for s in failed_steps) or job.get("name") == "Policy Gate"
+        ):
             gate_failed = True
+            gate_job_id = job.get("id")
         jobs.append({
             "name": job["name"],
             "conclusion": job.get("conclusion"),
@@ -1233,6 +1332,17 @@ def get_run_jobs(repo: str, run_id: int, user=Depends(require_role("viewer"))):
                 f"em aberto no repositório. Corrija os findings ou ajuste a política <code>fail_on</code>."
             )
         gate_context = {"critical_count": crits, "high_count": highs, "is_pr": is_pr, "note": note, "branch": branch}
+
+        # Findings que o gate de fato viu: parse do log do job (exato); se o log
+        # expirou ou o token não lê logs, cai para os critical/high abertos no banco.
+        parsed = _parse_gate_log(_gh_job_log(repo, gate_job_id, hdrs)) if gate_job_id else None
+        if parsed and (parsed["blocking"] or parsed["violations"]):
+            gate_context.update(parsed, source="log")
+        else:
+            gate_context.update(
+                blocking=_db_blocking_findings(repo), violations=[], counts={},
+                active_total=None, allowlisted=None, source="db",
+            )
 
     return {"jobs": jobs, "gate_context": gate_context}
 

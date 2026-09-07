@@ -3,6 +3,17 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.15] - 2026-09-07
+
+### Fixed
+- **SQLite sob concorrência**: `db()` abre conexões com `timeout=10` e `init_db()` ativa `PRAGMA journal_mode=WAL` — threads de notificação/IA e o `UPDATE last_used` das API keys não geram mais `database is locked`
+- **`api()` no frontend**: agora trata falha de rede, corpo não-JSON e `!res.ok`; retorna `null` em qualquer erro (em vez de devolver `{detail}` como se fosse dado, o que quebrava `data.keys.length` para viewers) e exibe a mensagem em um toast
+- **Callers sem null-check**: `loadTrend` e `loadFindings` não quebram mais quando `api()` retorna `null`
+
+### Added
+- **Gate reprovado — findings bloqueantes no painel**: ao expandir um scan com falha na aba Scans, o detalhe agora lista as violações (`3 finding(s) com severidade >= high`) e os findings que o gate de fato viu — severidade, engine, regra, arquivo:linha e mensagem — mais os totais (ativos / allowlisted / por severidade). O backend baixa o log do job Policy Gate via GitHub API (`/actions/jobs/{id}/logs`, seguindo o redirect para o blob sem credenciais) e parseia a saída do `scripts/gate.py`; se o log expirou ou está indisponível, cai para os critical/high abertos no banco e avisa (`source: db`)
+- **`uiToast(msg, kind)`**: notificação discreta no rodapé (4,5s), usada por `api()` para erros sem interromper auto-refresh com modais
+
 ## [0.14.14] - 2026-09-07
 
 ### Security

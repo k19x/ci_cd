@@ -1165,6 +1165,31 @@ td { padding: 11px 16px; }
 .ep-scope.read   { background:rgba(34,212,114,.12); color:var(--ok); }
 .ep-scope.ingest { background:rgba(240,185,11,.12); color:var(--orange, #f0b90b); }
 .ep-scope.admin  { background:rgba(255,68,68,.12); color:var(--crit); }
+
+/* ── Gate reprovado (detalhe do run) ── */
+.gate-banner { margin-top:10px; padding:10px 12px; border-radius:6px; border-left:3px solid var(--crit); background:color-mix(in srgb,var(--crit) 8%,var(--card)); font-size:12px; line-height:1.5; }
+.gate-viol { margin:6px 0 0; padding-left:18px; color:var(--crit); font-weight:600; }
+.gate-totals { display:block; margin-top:4px; font-size:11px; color:var(--muted); font-family:monospace; }
+.gate-list-title { margin:10px 0 6px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+.gate-list { display:flex; flex-direction:column; gap:5px; }
+.gate-finding { display:flex; gap:10px; align-items:flex-start; padding:7px 10px; border-radius:6px; background:var(--s2); border:1px solid var(--bd); }
+.gate-finding .sev { flex-shrink:0; margin-top:1px; }
+.gate-finding-body { flex:1; min-width:0; }
+.gate-tool { margin-left:8px; font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+.gate-loc { font-family:monospace; font-size:11px; color:var(--text2); word-break:break-all; }
+.gate-msg { font-size:11.5px; color:var(--muted); margin-top:2px; }
+.gate-src { margin-top:8px; font-size:11px; color:var(--muted); font-style:italic; }
+.gate-link { display:inline-block; margin-top:8px; color:var(--orange); font-size:11px; cursor:pointer; }
+
+/* ── Toast ── */
+.ui-toast {
+  position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 9999;
+  max-width: 480px; padding: 10px 16px; border-radius: var(--radius); font-size: 12.5px;
+  background: var(--s3); color: var(--text); border: 1px solid var(--bd);
+  box-shadow: 0 6px 24px rgba(0,0,0,.35); pointer-events: none;
+}
+.ui-toast.err { border-color: var(--crit); }
+.ui-toast.ok  { border-color: var(--ok); }
 </style>
 
 <div class="sidebar">
@@ -2137,10 +2162,31 @@ function applySort(key, arr, accs) {
 
 let _currentRole = 'viewer';
 
+let _toastTimer = null;
+function uiToast(msg, kind = 'err') {
+  let el = $('uiToast');
+  if (!el) { el = document.createElement('div'); el.id = 'uiToast'; document.body.appendChild(el); }
+  el.className = `ui-toast ${kind}`;
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.hidden = true; }, 4500);
+}
+
+// Retorna o JSON em sucesso; null em qualquer falha (rede, 401, !ok, corpo inválido).
+// Callers fazem `if (!data) return` — o erro já foi mostrado ao usuário aqui.
 async function api(path, opts) {
-  const r = await fetch(path, opts);
+  let r;
+  try { r = await fetch(path, opts); }
+  catch { uiToast('Sem conexão com o servidor'); return null; }
   if (r.status === 401) { showLogin(); return null; }
-  return r.json();
+  let body = null;
+  try { body = await r.json(); } catch {}
+  if (!r.ok) {
+    uiToast((body && body.detail) || `Erro ${r.status}`);
+    return null;
+  }
+  return body;
 }
 
 /* ── Auth / RBAC ── */
@@ -2564,6 +2610,7 @@ async function loadTrend() {
   const repo = $('trendRepo').value;
   if (!repo) return;
   const data = await api('/api/trend?repo=' + encodeURIComponent(repo));
+  if (!data) return;
   const wrap = $('trendChart').parentElement;
   if (!data.scans || data.scans.length < 2) {
     if (chart) { chart.destroy(); chart = null; }
@@ -2671,8 +2718,7 @@ async function showRunJobs(repo, runId, btn) {
   if (existing) { existing.remove(); btnLabel(btn, 'help-circle', ''); return; }
 
   btnLabel(btn, 'loader-circle', ''); btn.classList.add('loading'); btn.disabled = true;
-  const data = await fetch(`/api/runs/${encodeURIComponent(repo)}/${runId}/jobs`)
-    .then(r => r.ok ? r.json() : null).catch(() => null);
+  const data = await api(`/api/runs/${encodeURIComponent(repo)}/${runId}/jobs`);
   btnLabel(btn, 'help-circle', ''); btn.classList.remove('loading'); btn.disabled = false;
   if (!data) return;
 
@@ -2697,10 +2743,33 @@ async function showRunJobs(repo, runId, btn) {
     const iconHtml = gc.is_pr
       ? '<i data-lucide="git-pull-request" style="width:14px;height:14px;flex-shrink:0"></i>'
       : '<i data-lucide="shield-alert" style="width:14px;height:14px;flex-shrink:0"></i>';
+    const violHtml = (gc.violations || []).length
+      ? `<ul class="gate-viol">${gc.violations.map(v => `<li>${esc(v)}</li>`).join('')}</ul>` : '';
+    const blocking = gc.blocking || [];
+    const rowsHtml = blocking.map(f => `
+      <div class="gate-finding">
+        <span class="sev ${sevClass(f.severity)}">${esc(f.severity)}</span>
+        <div class="gate-finding-body">
+          <div><span class="mono" style="color:var(--text)">${esc(f.rule)}</span><span class="gate-tool">${esc(f.tool)}</span></div>
+          <div class="gate-loc">${esc(f.file)}${f.line ? ':' + f.line : ''}</div>
+          ${f.message ? `<div class="gate-msg">${esc(f.message)}</div>` : ''}
+        </div>
+      </div>`).join('');
+    const totals = gc.active_total != null
+      ? `<span class="gate-totals">${gc.active_total} ativos · ${gc.allowlisted} allowlisted${Object.entries(gc.counts||{}).map(([s,n]) => ` · ${n} ${s}`).join('')}</span>` : '';
+    const srcNote = gc.source === 'db'
+      ? `<div class="gate-src">Log do job indisponível — exibindo os critical/high abertos no dashboard para este repo.</div>` : '';
     gateBannerHtml = `
-      <div style="margin-top:10px;padding:10px 12px;border-radius:6px;border-left:3px solid var(--crit);background:color-mix(in srgb,var(--crit) 8%,var(--card));display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5">
-        ${iconHtml}
-        <span>${gc.note}</span>
+      <div class="gate-banner">
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          ${iconHtml}
+          <div style="flex:1;min-width:0"><span>${gc.note}</span>${violHtml}${totals}</div>
+        </div>
+        ${blocking.length ? `
+        <div class="gate-list-title">Findings que bloquearam o gate</div>
+        <div class="gate-list">${rowsHtml}</div>
+        ${srcNote}
+        <a class="gate-link" onclick="goToFindings('','open',${jsq(repo)})">Ver todos em Results →</a>` : srcNote}
       </div>`;
   }
 
@@ -2743,7 +2812,7 @@ async function loadFindings(resetPage = true) {
   if ($('fTool').value)   p.set('tool',     $('fTool').value);
   p.set('limit', '2000');
   const data = await api('/api/findings?' + p);
-  _findings = data.findings || [];
+  _findings = (data && data.findings) || [];
   renderFindPage();
 }
 
