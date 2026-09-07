@@ -3,6 +3,16 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.3] - 2026-09-07 20:00
+
+### Fixed
+- **Job "Supply Chain (OSSF Scorecard)" falhando com `Docker pull failed with exit code 1`**: o `ossf/scorecard-action@v2.4.0` (jul/2024) puxa `gcr.io/openssf/scorecard-action`, registro do Google que foi desativado. Pin atualizado para **v2.4.4** (jul/2026), que usa `ghcr.io/ossf/scorecard-action`. O `continue-on-error: true` do step não cobria o erro porque o pull da imagem acontece na preparação do job, antes do step rodar
+
+### Execução
+- Consultada a API do GitHub: releases do `ossf/scorecard-action` — v2.4.4 (2026-07-23) é a mais recente; `action.yaml` em `main` confirma `image: docker://ghcr.io/ossf/scorecard-action:v2.4.4`
+- Alteração só em `.github/workflows/security-scan.yml` (workflow reutilizável) — sem rebuild do container; como os repos chamam `k19x/ci_cd/.github/workflows/security-scan.yml@main`, o fix vale para todos assim que o push entra
+- Não executado: um scan real para confirmar o pull — basta re-rodar o job que falhou (o run usa o workflow atual de `main`)
+
 ## [0.15.2] - 2026-09-07 19:53
 
 ### Added
