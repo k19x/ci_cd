@@ -1199,6 +1199,17 @@ td { padding: 11px 16px; }
 .fx-group-head svg { width:14px; height:14px; color:var(--accent); }
 .fx-group-count { margin-left:auto; font-size:11px; color:var(--muted); background:var(--s3); padding:1px 8px; border-radius:10px; }
 .fx-detail { font-size:12px; color:var(--text2); max-width:520px; white-space:pre-wrap; }
+.fx-summary { padding:0 18px; display:flex; flex-direction:column; gap:8px; }
+.fx-summary:empty { display:none; }
+.fx-kpis { display:flex; gap:8px; flex-wrap:wrap; align-items:stretch; }
+.fx-kpi { display:flex; flex-direction:column; min-width:88px; padding:8px 12px; border-radius:var(--radius); background:var(--s2); border:1px solid var(--bd); }
+.fx-kpi b { font-size:20px; font-weight:700; line-height:1.1; font-variant-numeric:tabular-nums; color:var(--text); }
+.fx-kpi span { font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-top:2px; }
+.fx-kpi.total b { color:var(--accent); font-size:24px; }
+.fx-kpi.ok b { color:var(--ok); }  .fx-kpi.accent b { color:var(--accent); }  .fx-kpi.muted b { color:var(--text2); }
+.fx-kpi.sev-crit b { color:var(--crit); }  .fx-kpi.sev-high b { color:var(--high); }
+.fx-kpi.sev-med b { color:var(--med); }    .fx-kpi.sev-low b { color:var(--low, #3b82f6); }
+.fx-kpi-sep { width:1px; background:var(--bd); margin:4px 4px; }
 
 /* ── Toast ── */
 .ui-toast {
@@ -1591,8 +1602,13 @@ td { padding: 11px 16px; }
               <option value="ai">Correção da IA (branch / PR)</option>
               <option value="triage">Triagem manual</option>
             </select>
+            <select id="fxView" onchange="renderFixes()" title="Modo de exibição">
+              <option value="repo">Por projeto</option>
+              <option value="all">Geral (cronológico)</option>
+            </select>
             <button class="btn-ghost" onclick="exportFixesCSV()" title="Exportar CSV"><i data-lucide="download"></i> CSV</button>
           </div>
+          <div id="fxSummary" class="fx-summary"></div>
           <div id="fxGroups" style="padding:0 18px 18px"></div>
         </div>
       </div><!-- /findingsPane-fixes -->
@@ -3136,43 +3152,79 @@ function _fixesFiltered() {
   return list;
 }
 
+function _fixRow(f, withRepo) {
+  const t = FIX_TYPES[f.type] || {icon: 'circle', cls: 'muted', label: f.type};
+  const links = [
+    f.pr ? `<a class="fd-ref" href="${esc(f.pr)}" target="_blank" rel="noopener">Pull Request ↗</a>` : '',
+    f.branch ? `<code>${esc(f.branch)}</code>` : '',
+  ].filter(Boolean).join(' · ');
+  return `<tr>
+    <td class="mono" style="white-space:nowrap;font-size:12px">${fmtLocal(f.at)}</td>
+    ${withRepo ? `<td class="primary" style="white-space:nowrap">${esc(f.repo)}</td>` : ''}
+    <td><span class="fx-type ${t.cls}"><i data-lucide="${t.icon}"></i>${t.label}</span></td>
+    <td>
+      ${f.severity ? `<span class="sev ${sevClass(f.severity)}">${esc(f.severity)}</span> ` : ''}<span class="mono" title="${esc(f.rule)}">${esc(f.rule || f.fid)}</span>
+      <div class="gate-loc">${esc(f.file)}${f.line ? ':' + f.line : ''}${f.tool ? ' · ' + esc(f.tool) : ''}</div>
+    </td>
+    <td style="font-size:12px;color:var(--text2)">
+      ${links ? `<div style="margin-bottom:3px">${links}</div>` : ''}
+      ${f.detail ? `<div class="fx-detail">${esc(f.detail)}</div>` : ''}
+      <div style="font-size:11px;color:var(--muted)">por ${esc(f.who)}</div>
+    </td>
+  </tr>`;
+}
+
+function _fixSummary(list) {
+  const now = Date.now(), d7 = now - 7 * 864e5, d30 = now - 30 * 864e5;
+  const ts = f => { const t = Date.parse(f.at || ''); return isNaN(t) ? 0 : t; };
+  const n = p => list.filter(p).length;
+  const sev = s => n(f => f.severity === s);
+  const kpi = (v, label, cls = '') => `<div class="fx-kpi ${cls}"><b>${v}</b><span>${label}</span></div>`;
+  const repos = new Set(list.map(f => f.repo)).size;
+  return `
+    <div class="fx-kpis">
+      ${kpi(list.length, 'correções', 'total')}
+      ${kpi(repos, repos === 1 ? 'projeto' : 'projetos')}
+      ${kpi(n(f => ts(f) >= d7), 'últimos 7 dias')}
+      ${kpi(n(f => ts(f) >= d30), 'últimos 30 dias')}
+    </div>
+    <div class="fx-kpis">
+      ${kpi(n(f => f.type === 'scan'), 'no scan', 'ok')}
+      ${kpi(n(f => f.type.startsWith('ai_')), 'pela IA', 'accent')}
+      ${kpi(n(f => f.type.startsWith('triage_')), 'triagem manual', 'muted')}
+      <div class="fx-kpi-sep"></div>
+      ${kpi(sev('critical'), 'critical', 'sev-crit')}
+      ${kpi(sev('high'), 'high', 'sev-high')}
+      ${kpi(sev('medium'), 'medium', 'sev-med')}
+      ${kpi(sev('low'), 'low', 'sev-low')}
+    </div>`;
+}
+
 function renderFixes() {
   const list = _fixesFiltered();
   $('fxCount').textContent = `${list.length} correç${list.length === 1 ? 'ão' : 'ões'}`;
+  $('fxSummary').innerHTML = list.length ? _fixSummary(list) : '';
   const wrap = $('fxGroups');
   if (!list.length) {
     wrap.innerHTML = `<div class="empty-state"><i data-lucide="check-circle-2"></i><p>Nenhuma correção registrada para os filtros</p></div>`;
     if (typeof lucide !== 'undefined') lucide.createIcons();
     return;
   }
-  const groups = {};
-  for (const f of list) (groups[f.repo] ||= []).push(f);
-  wrap.innerHTML = Object.keys(groups).sort().map(r => {
-    const rows = groups[r].map(f => {
-      const t = FIX_TYPES[f.type] || {icon: 'circle', cls: 'muted', label: f.type};
-      const links = [
-        f.pr ? `<a class="fd-ref" href="${esc(f.pr)}" target="_blank" rel="noopener">Pull Request ↗</a>` : '',
-        f.branch ? `<code>${esc(f.branch)}</code>` : '',
-      ].filter(Boolean).join(' · ');
-      return `<tr>
-        <td class="mono" style="white-space:nowrap;font-size:12px">${fmtLocal(f.at)}</td>
-        <td><span class="fx-type ${t.cls}"><i data-lucide="${t.icon}"></i>${t.label}</span></td>
-        <td>
-          ${f.severity ? `<span class="sev ${sevClass(f.severity)}">${esc(f.severity)}</span> ` : ''}<span class="mono" title="${esc(f.rule)}">${esc(f.rule || f.fid)}</span>
-          <div class="gate-loc">${esc(f.file)}${f.line ? ':' + f.line : ''}${f.tool ? ' · ' + esc(f.tool) : ''}</div>
-        </td>
-        <td style="font-size:12px;color:var(--text2)">
-          ${links ? `<div style="margin-bottom:3px">${links}</div>` : ''}
-          ${f.detail ? `<div class="fx-detail">${esc(f.detail)}</div>` : ''}
-          <div style="font-size:11px;color:var(--muted)">por ${esc(f.who)}</div>
-        </td>
-      </tr>`;
-    }).join('');
-    return `<div class="fx-group">
-      <div class="fx-group-head"><i data-lucide="folder-git-2"></i><span class="primary">${esc(r)}</span><span class="fx-group-count">${groups[r].length}</span></div>
-      <table style="width:100%"><thead><tr><th>Data / hora</th><th>Tipo</th><th>Finding</th><th>Detalhes</th></tr></thead><tbody>${rows}</tbody></table>
+  if ($('fxView').value === 'all') {
+    wrap.innerHTML = `<div class="fx-group">
+      <div class="fx-group-head"><i data-lucide="list"></i><span class="primary">Geral — todas as correções em ordem cronológica</span><span class="fx-group-count">${list.length}</span></div>
+      <table style="width:100%"><thead><tr><th>Data / hora</th><th>Projeto</th><th>Tipo</th><th>Finding</th><th>Detalhes</th></tr></thead>
+      <tbody>${list.map(f => _fixRow(f, true)).join('')}</tbody></table>
     </div>`;
-  }).join('');
+  } else {
+    const groups = {};
+    for (const f of list) (groups[f.repo] ||= []).push(f);
+    wrap.innerHTML = Object.keys(groups).sort().map(r => `<div class="fx-group">
+      <div class="fx-group-head"><i data-lucide="folder-git-2"></i><span class="primary">${esc(r)}</span><span class="fx-group-count">${groups[r].length}</span></div>
+      <table style="width:100%"><thead><tr><th>Data / hora</th><th>Tipo</th><th>Finding</th><th>Detalhes</th></tr></thead>
+      <tbody>${groups[r].map(f => _fixRow(f, false)).join('')}</tbody></table>
+    </div>`).join('');
+  }
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 

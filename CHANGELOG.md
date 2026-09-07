@@ -3,6 +3,19 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.2] - 2026-09-07 19:53
+
+### Added
+- **Correções › bloco Geral**: painel de totais no topo da sub-aba — total de correções, projetos, últimos 7 e 30 dias; por origem (scan / IA / triagem manual); por severidade (critical / high / medium / low). Recalculado a cada filtro aplicado
+- **Correções › visão "Geral (cronológico)"**: seletor *Por projeto / Geral* — a segunda lista todas as correções numa única tabela ordenada por data, com coluna Projeto. A visão por projeto continua sendo o padrão
+- Render das linhas extraído para `_fixRow(f, withRepo)`, compartilhado pelas duas visões
+
+### Execução
+- Rebuild `docker compose up -d --build` — container healthy
+- `node --check` no JS inline OK; variáveis CSS `--high/--med/--low/--crit/--ok/--accent` usadas nos KPIs confirmadas no `:root`; ids `fxView` e `fxSummary` únicos
+- Sem mudança de backend: reaproveita `GET /api/fixes` (24 correções reais em 4 projetos, validado na v0.15.1)
+- Não verificado: visual (extensão do browser bloqueada nesta sessão)
+
 ## [0.15.1] - 2026-09-07 19:50
 
 ### Added
