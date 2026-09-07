@@ -1200,6 +1200,9 @@ td { padding: 11px 16px; }
 .fx-type.ok { color:var(--ok); }  .fx-type.accent { color:var(--accent); }  .fx-type.muted { color:var(--muted); }
 .fx-type.high { color:var(--high); }  .fx-type.med { color:var(--med); }  .fx-type.crit { color:var(--crit); }
 #tab-prs .btn-ghost[disabled] { opacity:.4; cursor:not-allowed; }
+.pr-hint { margin-top:4px; font-size:11px; color:var(--muted); line-height:1.4; max-width:220px; }
+.pr-hint.ok { color:var(--ok); display:flex; gap:4px; align-items:center; }
+.pr-hint svg { width:11px; height:11px; flex-shrink:0; }
 #tab-prs a.btn-ghost { text-decoration:none; }
 .fx-group { margin-top:16px; }
 .fx-group-head { display:flex; align-items:center; gap:8px; padding:8px 0 6px; border-bottom:1px solid var(--bd); font-size:13px; }
@@ -3369,19 +3372,28 @@ function renderPrs() {
   const tbody = $('prRows');
   tbody.innerHTML = list.length ? list.map(p => {
     const s = PR_STATE[p.draft ? 'draft' : (p.mergeable_state || 'unknown')] || PR_STATE.unknown;
-    const canMerge = !p.draft && p.mergeable !== false && ['clean', 'unstable', 'behind', 'unknown'].includes(p.mergeable_state || 'unknown');
+    const conflict = p.mergeable === false || p.mergeable_state === 'dirty';
+    const alreadyFixed = p.finding?.status === 'fixed';
+    const canMerge = !p.draft && !conflict && !alreadyFixed && ['clean', 'unstable', 'behind', 'unknown'].includes(p.mergeable_state || 'unknown');
+    const canRedo = conflict && p.finding && !alreadyFixed && p.finding.file;
+    const hint = alreadyFixed
+      ? `<div class="pr-hint ok"><i data-lucide="check-circle"></i> Finding já corrigido na base — feche esta PR</div>`
+      : conflict ? `<div class="pr-hint">${p.finding ? 'Base mudou — use <strong>Refazer</strong> para gerar correção nova' : 'Base mudou — sem finding vinculado, resolva no GitHub ou feche'}</div>` : '';
+    const mainAction = canRedo
+      ? `<button class="btn-ghost" style="color:var(--accent)" data-min-role="analyst" onclick="redoAiPr(${jsq(p.repo)},${p.number},this)" title="Fecha esta PR e gera uma correção nova a partir da base atual"><i data-lucide="rotate-cw"></i> Refazer</button>`
+      : `<button class="btn-ghost" style="color:var(--ok)" ${canMerge ? '' : 'disabled'} data-min-role="analyst" onclick="mergeAiPr(${jsq(p.repo)},${p.number},this)" title="${canMerge ? 'Aprovar e mesclar (squash)' : alreadyFixed ? 'Já corrigido na base' : 'Resolva conflito/rascunho antes de mesclar'}"><i data-lucide="git-merge"></i> Mesclar</button>`;
     return `<tr>
       <td class="primary" style="white-space:nowrap">${esc(p.repo)}</td>
       <td><a class="fd-ref" href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc(p.title)}">#${p.number}</a>
         <div class="gate-loc"><code>${esc(p.branch)}</code> → ${esc(p.base)}</div></td>
       <td>${_prFinding(p.finding)}</td>
       <td class="mono" style="white-space:nowrap;font-size:12px"><span style="color:var(--ok)">+${p.additions}</span> <span style="color:var(--crit)">−${p.deletions}</span> · ${p.changed_files} arq.</td>
-      <td><span class="fx-type ${s.cls}"><i data-lucide="${s.icon}"></i>${s.label}</span></td>
+      <td><span class="fx-type ${s.cls}"><i data-lucide="${s.icon}"></i>${s.label}</span>${hint}</td>
       <td class="mono" style="white-space:nowrap;font-size:12px">${fmtLocal(p.created_at)}</td>
       <td style="text-align:right;white-space:nowrap">
         <a class="btn-ghost" href="${esc(p.url)}" target="_blank" rel="noopener" title="Abrir no GitHub"><i data-lucide="external-link"></i></a>
-        <button class="btn-ghost" style="color:var(--ok)" ${canMerge ? '' : 'disabled'} data-min-role="analyst" onclick="mergeAiPr(${jsq(p.repo)},${p.number},this)" title="${canMerge ? 'Aprovar e mesclar (squash)' : 'Resolva conflito/rascunho antes de mesclar'}"><i data-lucide="git-merge"></i> Mesclar</button>
-        <button class="btn-ghost" style="color:var(--crit)" data-min-role="analyst" onclick="closeAiPr(${jsq(p.repo)},${p.number},this)" title="Fechar sem mesclar"><i data-lucide="x-circle"></i></button>
+        ${mainAction}
+        <button class="btn-ghost" style="color:var(--crit)${alreadyFixed ? ';border-color:rgba(255,68,68,.5)' : ''}" data-min-role="analyst" onclick="closeAiPr(${jsq(p.repo)},${p.number},this)" title="Fechar sem mesclar"><i data-lucide="x-circle"></i>${alreadyFixed ? ' Fechar' : ''}</button>
       </td>
     </tr>`;
   }).join('') : `<tr><td colspan="7"><div class="empty-state"><i data-lucide="git-pull-request"></i><p>${_prs.length ? 'Nenhuma PR para os filtros' : 'Nenhuma PR da IA aberta — tudo aprovado'}</p></div></td></tr>`;
@@ -3408,6 +3420,21 @@ async function mergeAiPr(repo, number, btn) {
   const d = await api(`/api/ai/prs/${encodeURIComponent(repo)}/${number}/merge`, {method: 'POST'});
   if (!d) { btn.disabled = false; btnLabel(btn, 'git-merge', 'Mesclar'); return; }
   uiToast(`PR #${number} mesclada em ${repo}`, 'ok');
+  loadPrs(true);
+}
+
+async function redoAiPr(repo, number, btn) {
+  const ok = await uiConfirm('<i data-lucide="rotate-cw"></i> Refazer correção?',
+    `A PR <strong>#${number}</strong> de <strong>${esc(repo)}</strong> será fechada e a IA vai gerar uma correção nova para o mesmo finding a partir da base atual (1–3 min). A nova PR aparece aqui quando terminar.`, 'Refazer');
+  if (!ok) return;
+  btn.disabled = true; btnLabel(btn, 'loader-circle', 'Refazendo…');
+  const d = await api(`/api/ai/prs/${encodeURIComponent(repo)}/${number}/redo`, {method: 'POST'});
+  if (!d) { btn.disabled = false; btnLabel(btn, 'rotate-cw', 'Refazer'); return; }
+  uiToast(`PR #${number} fechada — nova correção em andamento`, 'ok');
+  const dummy = document.createElement('div');
+  pollAiJobTracked(d.job, `Autofix: ${repo} / ${d.rule || d.fid}`, dummy,
+    r => { uiToast(r?.pr_url ? `Nova PR aberta: ${r.pr_url}` : (r?.detail || 'IA não alterou o código')); loadPrs(true); },
+    e => { uiToast(e); loadPrs(true); }, _fmtAutofix);
   loadPrs(true);
 }
 

@@ -2261,13 +2261,53 @@ def ai_list_prs(refresh: int = 0, user=Depends(require_role("viewer"))):
     return data
 
 
+_CONFLICT_MSG = ("PR #{n} está em conflito com a base ({base}) — a main mudou depois que a correção foi gerada. "
+                 "Use \"Refazer\" para gerar uma correção nova a partir do código atual, ou resolva o conflito no GitHub.")
+
+
 @app.post("/api/ai/prs/{repo:path}/{number}/merge")
 def ai_merge_pr(repo: str, number: int, user=Depends(require_role("analyst"))):
-    res = _gh_json(f"https://api.github.com/repos/{repo}/pulls/{number}/merge", "PUT",
-                   {"merge_method": "squash", "commit_title": f"[SecPipe AI] merge PR #{number}"})
+    det = _gh_json(f"https://api.github.com/repos/{repo}/pulls/{number}")
+    base = (det.get("base") or {}).get("ref", "main")
+    if det.get("state") != "open":
+        raise HTTPException(409, f"PR #{number} já está {det.get('state')} no GitHub")
+    if det.get("draft"):
+        raise HTTPException(409, f"PR #{number} é rascunho — marque como pronta no GitHub antes de mesclar")
+    if det.get("mergeable") is False or det.get("mergeable_state") == "dirty":
+        raise HTTPException(409, _CONFLICT_MSG.format(n=number, base=base))
+    try:
+        res = _gh_json(f"https://api.github.com/repos/{repo}/pulls/{number}/merge", "PUT",
+                       {"merge_method": "squash", "commit_title": f"[SecPipe AI] merge PR #{number}"})
+    except HTTPException as e:
+        if e.status_code == 405:   # GitHub: "Pull Request is not mergeable"
+            raise HTTPException(409, _CONFLICT_MSG.format(n=number, base=base))
+        raise
     _prs_cache["ts"] = 0.0
     _audit(user["username"], "ai_pr_merged", repo, f"#{number}", (res.get("sha") or "")[:12])
     return {"ok": True, "merged": res.get("merged", True), "sha": res.get("sha", "")}
+
+
+@app.post("/api/ai/prs/{repo:path}/{number}/redo")
+def ai_redo_pr(repo: str, number: int, user=Depends(require_role("analyst"))):
+    """Fecha uma PR obsoleta/em conflito e gera nova correção do mesmo finding a partir da base atual."""
+    det = _gh_json(f"https://api.github.com/repos/{repo}/pulls/{number}")
+    with db() as conn:
+        f = conn.execute("SELECT * FROM findings WHERE fix_pr=?", (det.get("html_url", ""),)).fetchone()
+    if not f:
+        raise HTTPException(400, f"PR #{number} não está vinculada a nenhum finding — use \"Sincronizar PRs\" em Correções")
+    if f["status"] == "fixed":
+        raise HTTPException(409, f"O finding desta PR já consta como corrigido na base — basta fechar a PR #{number}")
+    if not f["file"]:
+        raise HTTPException(400, "Finding sem arquivo associado — correção automática indisponível")
+    if det.get("state") == "open":
+        _gh_json(f"https://api.github.com/repos/{repo}/pulls/{number}", "PATCH", {"state": "closed"})
+        _audit(user["username"], "ai_pr_closed", repo, f"#{number}", "refazer")
+    _save_fix_state(repo, f["fid"], fix_branch="", fix_pr="", fix_summary="", fix_at="")
+    _prs_cache["ts"] = 0.0
+    req = AIFixRequest(repo=repo, fid=f["fid"], rule=f["rule"] or "", severity=f["severity"] or "",
+                       file=f["file"] or "", line=f["line"] or 0, message=f["message"] or "", tool=f["tool"] or "")
+    _audit(user["username"], "ai_autofix", repo, f["fid"], f"refazer PR #{number}: {f['rule']}")
+    return {**_start_ai_job(_do_autofix, req), "closed": number, "fid": f["fid"], "rule": f["rule"]}
 
 
 @app.post("/api/ai/prs/{repo:path}/{number}/close")

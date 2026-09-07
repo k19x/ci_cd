@@ -3,6 +3,21 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.9] - 2026-09-07 20:40
+
+### Fixed
+- **"Mesclar" devolvia 405 cru em PR com conflito**: o GitHub responde `405 Pull Request is not mergeable` quando a base mudou depois da correção. O backend agora pré-checa `mergeable`/`mergeable_state`/`draft`/`state` e responde **409 com explicação** ("PR #n está em conflito com a base — use Refazer…"); um 405 tardio do GitHub é traduzido para a mesma mensagem
+
+### Added
+- **Refazer** (`POST /api/ai/prs/{repo}/{n}/redo`, analyst): para PR em conflito com finding vinculado, fecha a PR obsoleta, limpa o estado da correção e dispara um novo autofix do mesmo finding a partir da base atual; a nova PR aparece na fila ao terminar (job rastreado no drawer de IA). Substitui o botão Mesclar nessas linhas
+- **Dicas por linha** na coluna Estado: "Base mudou — use Refazer", ou "Finding já corrigido na base — feche esta PR" (quando o finding vinculado já está `fixed`; nesse caso Mesclar fica desabilitado e Fechar vira a ação principal)
+
+### Execução
+- Rebuild `docker compose up -d --build` — healthy · `py_compile` OK · `node --check` OK
+- Testes no container (sem efeito colateral — nenhuma PR mesclada/fechada): `merge #10` e `merge #8` (Tyr-Red-Team-Agent, em conflito) → **409** com a mensagem nova; `redo #10` (finding já `fixed`) → 409 "basta fechar"; `redo #8` (sem vínculo) → 400 "use Sincronizar PRs"
+- Verificação visual no Playwright da aba com os novos botões/dicas
+- Observação: a fila caiu de 9 para 6 PRs abertas entre as leituras — fechamentos feitos pelo usuário no GitHub, não pelo SecPipe (audit log sem `ai_pr_closed`)
+
 ## [0.15.8] - 2026-09-07 20:37
 
 ### Fixed
