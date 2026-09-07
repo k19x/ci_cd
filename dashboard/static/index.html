@@ -1328,7 +1328,8 @@ td { padding: 11px 16px; }
       <!-- AI Jobs Widget -->
       <div style="position:relative">
         <button class="theme-btn" onclick="toggleAiJobs()" title="Jobs de IA em andamento" style="position:relative">
-          <i data-lucide="cpu" style="width:14px;height:14px"></i>
+          <!-- lucide "cpu" inline: topbar não depende do timing do createIcons() (mesmo padrão do toggle de tema) -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2"/></svg>
           <span id="ajBadge" class="aj-badge" hidden></span>
         </button>
         <div id="ajDrawer" hidden style="position:absolute;right:0;top:calc(100% + 6px);width:320px;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:0 12px 4px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:420px;overflow-y:auto">

@@ -3,6 +3,11 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.17] - 2026-09-07
+
+### Fixed
+- **Ícone "Jobs de IA" invisível**: o `<i data-lucide="cpu">` da topbar não renderizava de forma confiável; substituído pelo SVG inline do próprio glyph Lucide `cpu`, mesmo padrão já usado pelo toggle de tema ao lado, eliminando a dependência do timing de `createIcons()`
+
 ## [0.14.16] - 2026-09-07
 
 ### Fixed
