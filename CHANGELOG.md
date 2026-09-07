@@ -3,6 +3,18 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.11] - 2026-09-07 20:57
+
+### Fixed
+- **PRs da IA apareciam como "abertas" depois de mescladas/fechadas** (Correções, chips em Findings, detalhe do finding): o vínculo PR↔finding era gravado uma vez e nunca reconsultado. Novas colunas `fix_pr_state` (`open`/`merged`/`closed`) e `fix_pr_merged_at`; `_sync_pr_states()` consulta a Search API do GitHub (1–3 chamadas para todas as PRs `[SecPipe AI]`) e atualiza os findings — roda automaticamente ao abrir Correções (cache de 60 s) e no botão "Sincronizar PRs"
+- **Correções** distingue `PR da IA aberta` / `PR da IA mesclada` (data = merge) / `PR da IA fechada sem mesclar`; chips em Findings: **PR aberta** (azul) / **PR mesclada** (verde) / **PR fechada** (cinza); detalhe do finding usa o mesmo estado
+- **Mesclar numa PR já mesclada** dizia "já está closed" — agora "PR #n já foi mesclada" (o GitHub marca merged como closed); em qualquer 409 a fila da aba Pull Requests recarrega sozinha, descartando linhas obsoletas do cache
+
+### Execução
+- Rebuild `docker compose up -d --build` — healthy · `py_compile` OK · `node --check` OK · migração confirmada (`fix_pr_state`, `fix_pr_merged_at`)
+- Primeiro `GET /api/fixes` após o deploy: `pr_sync = {linked: 20, updated: 20, prs_seen: 30}` → **19 mescladas, 1 fechada, 0 abertas** — tipos em Correções: 19 `ai_pr_merged` + 1 `ai_pr_closed` + 24 `scan`
+- Jokenpo #1: mesclada às 23:56 UTC (pelo usuário); `merge` repetido → 409 "já foi mesclada"; fila `/api/ai/prs?refresh=1` sem Jokenpo — consistente
+
 ## [0.15.10] - 2026-09-07 20:53
 
 ### Changed

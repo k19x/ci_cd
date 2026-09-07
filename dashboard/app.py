@@ -226,6 +226,8 @@ _migrations = [
     "ALTER TABLE findings ADD COLUMN fix_summary TEXT DEFAULT ''",
     "ALTER TABLE findings ADD COLUMN fix_at TEXT DEFAULT ''",
     "ALTER TABLE repos ADD COLUMN autopilot TEXT DEFAULT ''",
+    "ALTER TABLE findings ADD COLUMN fix_pr_state TEXT DEFAULT ''",
+    "ALTER TABLE findings ADD COLUMN fix_pr_merged_at TEXT DEFAULT ''",
 ]
 for _mig in _migrations:
     try:
@@ -445,14 +447,63 @@ def ingest(payload: IngestPayload, x_api_key: str | None = Header(default=None))
             "autopilot_queued": queued}
 
 
+_pr_state_sync: dict = {"ts": 0.0}
+
+
+def _sync_pr_states(force: bool = False) -> dict:
+    """Atualiza fix_pr_state/fix_pr_merged_at dos findings consultando o GitHub (Search API, 1–3 chamadas).
+    Best-effort com cache de 60 s: nunca derruba o caller."""
+    if not force and time.time() - _pr_state_sync["ts"] < 60:
+        return {"skipped": True}
+    if not os.environ.get("GITHUB_TOKEN"):
+        return {"skipped": True, "reason": "sem GITHUB_TOKEN"}
+    with db() as conn:
+        linked = conn.execute("SELECT repo, fid, fix_pr, fix_pr_state FROM findings WHERE fix_pr!=''").fetchall()
+    if not linked:
+        _pr_state_sync["ts"] = time.time()
+        return {"linked": 0, "updated": 0}
+    owners = sorted({r["repo"].split("/")[0] for r in linked if "/" in r["repo"]})
+    states: dict[str, tuple[str, str]] = {}
+    try:
+        q = '"[SecPipe AI] fix" in:title is:pr ' + " ".join(f"user:{o}" for o in owners)
+        for page in (1, 2, 3):
+            data = _gh_json("https://api.github.com/search/issues?q=" + urllib.parse.quote(q)
+                            + f"&per_page=100&sort=updated&order=desc&page={page}")
+            items = data.get("items", [])
+            for it in items:
+                pr = it.get("pull_request") or {}
+                merged_at = pr.get("merged_at") or ""
+                state = "merged" if merged_at else it.get("state", "open")
+                states[it["html_url"]] = (state, merged_at)
+            if len(items) < 100:
+                break
+    except HTTPException as e:
+        return {"error": str(e.detail)[:120]}
+    updated = 0
+    with db() as conn:
+        for r in linked:
+            st = states.get(r["fix_pr"])
+            if not st:
+                continue
+            state, merged_at = st
+            if state != r["fix_pr_state"]:
+                conn.execute("UPDATE findings SET fix_pr_state=?, fix_pr_merged_at=? WHERE repo=? AND fid=?",
+                             (state, merged_at, r["repo"], r["fid"]))
+                updated += 1
+    _pr_state_sync["ts"] = time.time()
+    return {"linked": len(linked), "updated": updated, "prs_seen": len(states)}
+
+
 @app.get("/api/fixes")
 def list_fixes(repo: str | None = None, limit: int = 500, user=Depends(require_role("viewer"))):
-    """Linha do tempo de correções: sumiu no scan, correção da IA (branch/PR) e triagem manual."""
+    """Linha do tempo de correções: sumiu no scan, correção da IA (branch/PR aberta/mesclada/fechada) e triagem manual."""
     limit = max(1, min(limit, 2000))
+    sync = _sync_pr_states()
     items: list[dict] = []
     with db() as conn:
         q = ("SELECT repo,fid,tool,rule,severity,file,line,status,last_seen,"
-             "fix_branch,fix_pr,fix_summary,fix_at FROM findings WHERE (status='fixed' OR fix_branch!='')")
+             "fix_branch,fix_pr,fix_summary,fix_at,fix_pr_state,fix_pr_merged_at "
+             "FROM findings WHERE (status='fixed' OR fix_branch!='')")
         params: list = []
         if repo:
             q += " AND repo=?"
@@ -464,9 +515,17 @@ def list_fixes(repo: str | None = None, limit: int = 500, user=Depends(require_r
                               "detail": "Não apareceu mais no scan — marcado como corrigido automaticamente",
                               "branch": "", "pr": ""})
             if r["fix_branch"]:
-                items.append({**base, "type": "ai_pr" if r["fix_pr"] else "ai_branch",
-                              "at": r["fix_at"] or r["last_seen"], "who": "ai",
-                              "detail": r["fix_summary"] or "", "branch": r["fix_branch"], "pr": r["fix_pr"]})
+                if not r["fix_pr"]:
+                    typ, at = "ai_branch", r["fix_at"] or r["last_seen"]
+                elif r["fix_pr_state"] == "merged":
+                    typ, at = "ai_pr_merged", r["fix_pr_merged_at"] or r["fix_at"] or r["last_seen"]
+                elif r["fix_pr_state"] == "closed":
+                    typ, at = "ai_pr_closed", r["fix_at"] or r["last_seen"]
+                else:
+                    typ, at = "ai_pr", r["fix_at"] or r["last_seen"]
+                items.append({**base, "type": typ, "at": at, "who": "ai",
+                              "detail": r["fix_summary"] or "", "branch": r["fix_branch"], "pr": r["fix_pr"],
+                              "pr_state": r["fix_pr_state"] or ("open" if r["fix_pr"] else "")})
         aq = ("SELECT a.ts,a.username,a.repo,a.target,a.detail,f.tool,f.rule,f.severity,f.file,f.line "
               "FROM audit_log a LEFT JOIN findings f ON f.repo=a.repo AND f.fid=a.target "
               "WHERE a.action='triage' AND a.detail IN ('fixed','false_positive','accepted')")
@@ -481,7 +540,7 @@ def list_fixes(repo: str | None = None, limit: int = 500, user=Depends(require_r
                           "type": f"triage_{r['detail']}", "at": r["ts"], "who": r["username"],
                           "detail": "", "branch": "", "pr": ""})
     items.sort(key=lambda x: x["at"] or "", reverse=True)
-    return {"fixes": items[:limit], "total": len(items)}
+    return {"fixes": items[:limit], "total": len(items), "pr_sync": sync}
 
 
 @app.get("/api/overview")
@@ -2188,8 +2247,11 @@ def ai_sync_prs(user=Depends(require_role("analyst"))):
                     (p["head"]["ref"], p["html_url"], (p.get("created_at") or "")[:19] + "+00:00",
                      repo, rows[0]["fid"]))
                 linked += 1
-    _audit(user["username"], "ai_sync_prs", detail=f"{linked} finding(s) ligados a {prs_seen} PR(s) da IA")
-    return {"ok": True, "repos": len(repos), "ai_prs": prs_seen, "linked": linked, "errors": errors}
+    states = _sync_pr_states(force=True)
+    _audit(user["username"], "ai_sync_prs",
+           detail=f"{linked} finding(s) ligados a {prs_seen} PR(s) da IA; estados atualizados: {states.get('updated', 0)}")
+    return {"ok": True, "repos": len(repos), "ai_prs": prs_seen, "linked": linked,
+            "states_updated": states.get("updated", 0), "errors": errors}
 
 
 # ── Fila de PRs da IA ──────────────────────────────
@@ -2270,7 +2332,9 @@ def ai_merge_pr(repo: str, number: int, user=Depends(require_role("analyst"))):
     det = _gh_json(f"https://api.github.com/repos/{repo}/pulls/{number}")
     base = (det.get("base") or {}).get("ref", "main")
     if det.get("state") != "open":
-        raise HTTPException(409, f"PR #{number} já está {det.get('state')} no GitHub")
+        _prs_cache["ts"] = 0.0
+        raise HTTPException(409, f"PR #{number} já foi mesclada" if det.get("merged")
+                            else f"PR #{number} já está fechada no GitHub")
     if det.get("draft"):
         raise HTTPException(409, f"PR #{number} é rascunho — marque como pronta no GitHub antes de mesclar")
     if det.get("mergeable") is False or det.get("mergeable_state") == "dirty":

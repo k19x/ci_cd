@@ -1178,6 +1178,7 @@ td { padding: 11px 16px; }
 .fix-chip { display:inline-flex; align-items:center; gap:4px; margin-left:8px; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:700; letter-spacing:.03em; vertical-align:middle; background:rgba(0,184,255,.12); color:var(--accent); border:1px solid rgba(0,184,255,.3); text-decoration:none; white-space:nowrap; }
 .fix-chip svg { width:11px; height:11px; }
 .fix-chip.pr { background:rgba(34,212,114,.12); color:var(--ok); border-color:rgba(34,212,114,.35); }
+.fix-chip.closed { background:var(--s3); color:var(--muted); border-color:var(--bd); }
 .fix-state { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; padding:8px 10px; border-radius:6px; background:rgba(0,184,255,.07); border:1px solid rgba(0,184,255,.25); }
 .fix-state.ok { background:rgba(34,212,114,.07); border-color:rgba(34,212,114,.3); color:var(--ok); }
 
@@ -2956,7 +2957,11 @@ function renderFindPage() {
       <td class="mono" style="font-size:11px;color:var(--text2);white-space:nowrap">${esc(f.repo)}</td>
       <td class="primary vuln-name-cell" style="cursor:pointer" onclick="toggleFindDetail(${gi}, this.parentElement.querySelector('.chev-btn'))">
         <span class="vname" title="${esc(f.rule)}">${esc(f.rule)}</span>
-        ${f.fix_pr ? `<a class="fix-chip pr" href="${esc(f.fix_pr)}" target="_blank" rel="noopener" title="PR aberta pela IA"><i data-lucide="git-pull-request"></i> PR</a>`
+        ${f.fix_pr ? (f.fix_pr_state === 'merged'
+            ? `<a class="fix-chip pr" href="${esc(f.fix_pr)}" target="_blank" rel="noopener" title="PR da IA mesclada"><i data-lucide="git-merge"></i> PR mesclada</a>`
+            : f.fix_pr_state === 'closed'
+            ? `<a class="fix-chip closed" href="${esc(f.fix_pr)}" target="_blank" rel="noopener" title="PR da IA fechada sem mesclar"><i data-lucide="x-circle"></i> PR fechada</a>`
+            : `<a class="fix-chip" href="${esc(f.fix_pr)}" target="_blank" rel="noopener" title="PR aberta pela IA — aguardando aprovação"><i data-lucide="git-pull-request"></i> PR aberta</a>`)
           : f.fix_branch ? `<span class="fix-chip" title="Branch de correção pronta: ${esc(f.fix_branch)}"><i data-lucide="git-branch"></i> branch pronta</span>` : ''}
       </td>
       <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span>${breach ? `<i data-lucide="alarm-clock" style="width:12px;height:12px;color:var(--crit);vertical-align:-2px;margin-left:5px" title="SLA estourado — aberto há ${ageDays(f)} dias"></i>` : ''}</td>
@@ -3094,7 +3099,7 @@ function toggleFindDetail(gi, btn) {
     </div>
     <div class="fd-section full">
       <div class="fd-label">✨ AI Engine</div>
-      ${f.fix_pr ? `<div class="fd-text fix-state ok">Correção da IA já tem PR: <a class="fd-ref" href="${esc(f.fix_pr)}" target="_blank" rel="noopener">${esc(f.fix_pr)} ↗</a></div>`
+      ${f.fix_pr ? `<div class="fd-text fix-state ${f.fix_pr_state === 'closed' ? '' : 'ok'}">${f.fix_pr_state === 'merged' ? 'Correção da IA <strong>mesclada</strong>' : f.fix_pr_state === 'closed' ? 'PR da IA <strong>fechada sem mesclar</strong> — o finding segue aberto' : 'Correção da IA aguardando aprovação na PR'}: <a class="fd-ref" href="${esc(f.fix_pr)}" target="_blank" rel="noopener">${esc(f.fix_pr)} ↗</a></div>`
         : f.fix_branch ? `<div class="fd-text fix-state">
             <span>Branch pronta pelo piloto automático: <code>${esc(f.fix_branch)}</code>${f.fix_at ? ` <span style="color:var(--muted)">· ${esc(f.fix_at.slice(0,16).replace('T',' '))}</span>` : ''}</span>
             <button class="detail-btn" onclick="openFixPr(${gi}, this)" data-min-role="analyst" style="border-color:rgba(34,212,114,.4);color:var(--ok)"><i data-lucide="git-pull-request"></i> Abrir PR</button>
@@ -3206,7 +3211,9 @@ let _fixes = [];
 const FIX_TYPES = {
   scan:                  {icon: 'check-circle',     cls: 'ok',     label: 'Corrigido no scan'},
   ai_branch:             {icon: 'git-branch',       cls: 'accent', label: 'Branch da IA pronta'},
-  ai_pr:                 {icon: 'git-pull-request', cls: 'ok',     label: 'PR da IA aberta'},
+  ai_pr:                 {icon: 'git-pull-request', cls: 'accent', label: 'PR da IA aberta'},
+  ai_pr_merged:          {icon: 'git-merge',        cls: 'ok',     label: 'PR da IA mesclada'},
+  ai_pr_closed:          {icon: 'x-circle',         cls: 'muted',  label: 'PR da IA fechada sem mesclar'},
   triage_fixed:          {icon: 'user-check',       cls: 'ok',     label: 'Marcado como corrigido'},
   triage_false_positive: {icon: 'user-x',           cls: 'muted',  label: 'Não explorável'},
   triage_accepted:       {icon: 'shield-check',     cls: 'muted',  label: 'Risco aceito'},
@@ -3424,7 +3431,7 @@ async function mergeAiPr(repo, number, btn) {
   if (!ok) return;
   btn.disabled = true; btnLabel(btn, 'loader-circle', 'Mesclando…');
   const d = await api(`/api/ai/prs/${encodeURIComponent(repo)}/${number}/merge`, {method: 'POST'});
-  if (!d) { btn.disabled = false; btnLabel(btn, 'git-merge', 'Mesclar'); return; }
+  if (!d) { btn.disabled = false; btnLabel(btn, 'git-merge', 'Mesclar'); loadPrs(true); return; }   // 409 = estado mudou no GitHub → recarrega a fila
   uiToast(`PR #${number} mesclada em ${repo}`, 'ok');
   loadPrs(true);
 }
@@ -3450,7 +3457,7 @@ async function closeAiPr(repo, number, btn) {
   if (!ok) return;
   btn.disabled = true;
   const d = await api(`/api/ai/prs/${encodeURIComponent(repo)}/${number}/close`, {method: 'POST'});
-  if (!d) { btn.disabled = false; return; }
+  if (!d) { btn.disabled = false; loadPrs(true); return; }
   uiToast(`PR #${number} fechada`, 'ok');
   loadPrs(true);
 }
