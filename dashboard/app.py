@@ -1887,9 +1887,11 @@ def _save_fix_state(repo: str, fid: str, **cols) -> None:
     cols = {k: v for k, v in cols.items() if k in allowed and v is not None}
     if not cols:
         return
-    sets = ", ".join(f"{k}=?" for k in cols)
+    sets = ", ".join(col + "=:" + col for col in cols)
+    sql = "UPDATE findings SET " + sets + " WHERE repo=:repo AND fid=:fid"
+    params = {**cols, "repo": repo, "fid": fid}
     with db() as conn:
-        conn.execute(f"UPDATE findings SET {sets} WHERE repo=? AND fid=?", (*cols.values(), repo, fid))
+        conn.execute(sql, params)
 
 
 def _open_fix_pr(r: AIFixRequest, branch: str, summary: str, gh_token: str) -> str:
