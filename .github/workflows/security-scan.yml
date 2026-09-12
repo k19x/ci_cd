@@ -238,30 +238,39 @@ jobs:
         continue-on-error: true
         env:
           SECPIPE_TOKEN: ${{ secrets.SECPIPE_TOKEN }}
+          SECPIPE_DASHBOARD_URL: ${{ vars.SECPIPE_DASHBOARD_URL }}
+          GH_REPO: ${{ github.repository }}
+          GH_BRANCH: ${{ github.ref_name }}
+          GH_SHA: ${{ github.sha }}
         run: |
           python scripts/upload.py findings.json \
-            --url "${{ vars.SECPIPE_DASHBOARD_URL }}" \
-            --repo "${{ github.repository }}" \
-            --branch "${{ github.ref_name }}" \
-            --commit "${{ github.sha }}" \
+            --url "$SECPIPE_DASHBOARD_URL" \
+            --repo "$GH_REPO" \
+            --branch "$GH_BRANCH" \
+            --commit "$GH_SHA" \
             --token "$SECPIPE_TOKEN"
       - name: Aplicar gate
         id: gate
         continue-on-error: true
+        env:
+          FAIL_ON: ${{ inputs.fail_on || 'critical' }}
         run: |
           set -o pipefail
           python scripts/gate.py findings.json --policy policy/policy.yml \
-            --fail-on "${{ inputs.fail_on || 'critical' }}" | tee gate-output.txt
+            --fail-on "$FAIL_ON" | tee gate-output.txt
       - name: PR decoration
         if: always() && github.event_name == 'pull_request'
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
         run: |
           python scripts/pr_comment.py findings.json \
-            --repo "${{ github.repository }}" \
-            --pr "${{ github.event.pull_request.number }}" \
-            --gate "${{ steps.gate.outcome }}" \
+            --repo "$GH_REPO" \
+            --pr "$PR_NUMBER" \
+            --gate "$GATE_OUTCOME" \
             --gate-log gate-output.txt
       - uses: actions/upload-artifact@v4
         if: always()
