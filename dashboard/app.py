@@ -101,8 +101,8 @@ def _set_repo_variable(repo: str, name: str, value: str, headers: dict) -> bool:
 
 def _auto_register_tunnel():
     """Background: lê a URL do quick tunnel e atualiza SECPIPE_DASHBOARD_URL
-    no repo central E em todos os repos cadastrados (o `vars.` do workflow
-    reutilizável é resolvido no contexto do repo CALLER, não do ci_cd)."""
+    no repo central E em todos os repos cadastrados. Roda em loop permanente,
+    re-propagando a cada 5 min ou quando o URL mudar (túnel reiniciado)."""
     gh_token = os.environ.get("GITHUB_TOKEN", "")
     gh_repo  = os.environ.get("SECPIPE_GITHUB_REPO", "k19x/ci_cd")
     if not gh_token:
@@ -113,12 +113,16 @@ def _auto_register_tunnel():
         "Content-Type": "application/json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    for _ in range(24):  # retry for up to 2 minutes
+    last_url = ""
+    while True:
         time.sleep(5)
         try:
             with urllib.request.urlopen("http://cloudflared:20241/quicktunnel", timeout=3) as r:
-                url = _json.loads(r.read()).get("url", "")
-            if not url:
+                data = _json.loads(r.read())
+                hostname = data.get("hostname") or data.get("url", "")
+                url = f"https://{hostname}" if hostname and not hostname.startswith("http") else hostname
+            if not url or url == last_url:
+                time.sleep(295)  # check every 5 min when URL is stable
                 continue
             targets = {gh_repo}
             try:
@@ -131,9 +135,9 @@ def _auto_register_tunnel():
             for repo in sorted(targets):
                 if "/" in repo and _set_repo_variable(repo, "SECPIPE_DASHBOARD_URL", url, headers):
                     ok += 1
+            last_url = url
             print(f"[secpipe] SECPIPE_DASHBOARD_URL → {url} ({ok}/{len(targets)} repos atualizados)",
                   flush=True)
-            return
         except Exception:
             pass
 

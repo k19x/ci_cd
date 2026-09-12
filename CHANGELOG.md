@@ -3,6 +3,21 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.14] - 2026-09-12 21:00
+
+### Fixed
+- **`_auto_register_tunnel` não propagava URL após reinício do cloudflared**: A função só rodava uma vez na inicialização do dashboard. Se o cloudflared reiniciasse depois, o URL do Quick Tunnel mudava mas os repos do GitHub ficavam com o URL antigo — scans passavam a enviar resultados para um endpoint morto. Corrigido em duas frentes:
+  1. **Bug de chave**: `/quicktunnel` retorna `{"hostname":"..."}` mas o código procurava `"url"` — sempre vazio. Corrigido para ler `hostname` e prefixar `https://` se necessário.
+  2. **Loop permanente**: função convertida em loop infinito que verifica o URL a cada 5 min (ou imediatamente ao detectar mudança) em vez de retornar após o primeiro sucesso.
+- **Criação de API key de ingest e propagação do `SECPIPE_TOKEN`**: `SECPIPE_TOKEN` estava vazio no container; criada API key com escopo `ingest` e propagada como secret `SECPIPE_TOKEN` para todos os 44 repos cadastrados via `gh secret set`.
+- **`SECPIPE_DASHBOARD_URL` desatualizado em todos os repos**: propagação manual da URL correta do tunnel e do novo token para todos os repos via GitHub API.
+
+### Execução
+- 2026-09-12 21:00 — Rebuild + restart: `[secpipe] SECPIPE_DASHBOARD_URL → https://briefs-photographic-buttons-sql.trycloudflare.com (45/45 repos atualizados)` ✓
+- Criada API key `github-ingest` (escopo `ingest`) via `POST /api/keys`
+- Secret `SECPIPE_TOKEN` + variável `SECPIPE_DASHBOARD_URL` atualizados em 44 repos via `gh` CLI ✓
+- Scan disparado em `k19x/mdm` para validar pipeline de ingest
+
 ## [0.15.13] - 2026-09-12 20:30
 
 ### Added
