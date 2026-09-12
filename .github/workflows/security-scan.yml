@@ -37,11 +37,14 @@ jobs:
           fetch-depth: 0
       - name: Rodar Semgrep
         # Em PR: diff-aware — reporta apenas findings NOVOS vs a branch base (mais rápido, menos ruído)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           git config --global --add safe.directory "$PWD" || true
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ]; then
             semgrep scan --config auto --sarif --output semgrep.sarif \
-              --baseline-commit "${{ github.event.pull_request.base.sha }}" || \
+              --baseline-commit "$BASE_SHA" || \
             semgrep scan --config auto --sarif --output semgrep.sarif || true
           else
             semgrep scan --config auto --sarif --output semgrep.sarif || true
@@ -119,9 +122,11 @@ jobs:
         with:
           repository: k19x/ci_cd
       - name: ZAP baseline scan
+        env:
+          DAST_URL: ${{ inputs.dast_url }}
         run: |
           docker run --rm -v "$PWD:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t "${{ inputs.dast_url }}" -J zap.json -I || true
+            zap-baseline.py -t "$DAST_URL" -J zap.json -I || true
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -238,30 +243,39 @@ jobs:
         continue-on-error: true
         env:
           SECPIPE_TOKEN: ${{ secrets.SECPIPE_TOKEN }}
+          DASHBOARD_URL: ${{ vars.SECPIPE_DASHBOARD_URL }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
         run: |
           python scripts/upload.py findings.json \
-            --url "${{ vars.SECPIPE_DASHBOARD_URL }}" \
-            --repo "${{ github.repository }}" \
-            --branch "${{ github.ref_name }}" \
-            --commit "${{ github.sha }}" \
+            --url "$DASHBOARD_URL" \
+            --repo "$REPO" \
+            --branch "$BRANCH" \
+            --commit "$COMMIT" \
             --token "$SECPIPE_TOKEN"
       - name: Aplicar gate
         id: gate
         continue-on-error: true
+        env:
+          FAIL_ON: ${{ inputs.fail_on || 'critical' }}
         run: |
           set -o pipefail
           python scripts/gate.py findings.json --policy policy/policy.yml \
-            --fail-on "${{ inputs.fail_on || 'critical' }}" | tee gate-output.txt
+            --fail-on "$FAIL_ON" | tee gate-output.txt
       - name: PR decoration
         if: always() && github.event_name == 'pull_request'
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
         run: |
           python scripts/pr_comment.py findings.json \
-            --repo "${{ github.repository }}" \
-            --pr "${{ github.event.pull_request.number }}" \
-            --gate "${{ steps.gate.outcome }}" \
+            --repo "$REPO" \
+            --pr "$PR_NUMBER" \
+            --gate "$GATE_OUTCOME" \
             --gate-log gate-output.txt
       - uses: actions/upload-artifact@v4
         if: always()
