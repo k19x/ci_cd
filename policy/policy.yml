@@ -19,3 +19,19 @@ allowlist:
   - "yaml.github-actions.security.secrets-inherit.secrets-inherit"
   # arquivos de workflow do caller não são código da aplicação
   - ".github/workflows/security.yml"
+
+  # ── Handbooks de pentest ──────────────────────────────────────────────────────
+  # Os arquivos em handbooks/ são documentação técnica de segurança ofensiva com
+  # exemplos de código, hashes, tokens e payloads propositalmente inseguros.
+  # Não representam código em execução — são referências para analistas.
+  - "handbooks/**"
+
+  # ── Dockerfile: container de pentest roda como root por design ────────────────
+  # A imagem instala e executa nmap, nuclei, sqlmap, naabu e outras ferramentas
+  # que requerem raw sockets e capacidades de rede (CAP_NET_RAW, CAP_NET_ADMIN).
+  # Trocar para USER não-root quebraria essas ferramentas sem passar --cap-add,
+  # o que exigiria privileged mode — equivalente em risco. Risco aceito e
+  # documentado: a imagem é usada apenas em ambientes de pentest controlados,
+  # nunca exposta publicamente como serviço.
+  - "dockerfile.security.missing-user.missing-user"
+  - "DS002"
