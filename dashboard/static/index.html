@@ -1,6 +1,6 @@
 <title>SecPipe</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@700;800&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <!-- Lucide 1.42.0 servido localmente: a URL do unpkg (0.263.1) nunca existiu e o app rodava sem ícones -->
@@ -94,46 +94,49 @@
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --void: #f0f5fa;
+    --s0:   #f6f8fa;
     --s1:   #ffffff;
     --s2:   #f8fafc;
     --s3:   #f1f5f9;
     --bd:   rgba(0,0,0,.07);
-    --bd2:  rgba(0,149,204,.3);
-    --accent:      #0095cc;
-    --accent-dim:  rgba(0,149,204,.1);
-    --accent-glow: rgba(0,149,204,.15);
-    --accent-dark: #006fa3;
+    --bd2:  rgba(29,111,168,.3);
+    --accent:      #1d6fa8;
+    --accent-dim:  rgba(29,111,168,.1);
+    --accent-glow: rgba(29,111,168,.2);
+    --accent-dark: #155a8c;
     --t0: #0f172a;
     --t1: #475569;
-    --t2: #94a3b8;
-    --crit-bg: rgba(255,51,85,.07);
-    --high-bg: rgba(255,119,51,.07);
-    --med-bg:  rgba(240,185,11,.07);
-    --low-bg:  rgba(59,130,246,.07);
-    --ok-bg:   rgba(34,197,94,.07);
+    --t2: #8d99aa;
+    /* severity calibrada para fundo claro — contraste WCAG AA */
+    --crit: #c0392b; --crit-bg: rgba(192,57,43,.08);
+    --high: #a16207; --high-bg: rgba(161,98,7,.08);
+    --med:  #854d0e; --med-bg:  rgba(133,77,14,.07);
+    --low:  #1e5fa8; --low-bg:  rgba(30,95,168,.07);
+    --ok:   #166534; --ok-bg:   rgba(22,101,52,.07);
     --shadow: 0 2px 8px rgba(0,0,0,.07);
     --shadow-md: 0 8px 24px rgba(0,0,0,.10);
   }
 }
 :root[data-theme="light"] {
   --void: #f0f5fa;
+  --s0:   #f6f8fa;
   --s1:   #ffffff;
   --s2:   #f8fafc;
   --s3:   #f1f5f9;
   --bd:   rgba(0,0,0,.07);
-  --bd2:  rgba(0,149,204,.3);
-  --accent:      #0095cc;
-  --accent-dim:  rgba(0,149,204,.1);
-  --accent-glow: rgba(0,149,204,.15);
-  --accent-dark: #006fa3;
+  --bd2:  rgba(29,111,168,.3);
+  --accent:      #1d6fa8;
+  --accent-dim:  rgba(29,111,168,.1);
+  --accent-glow: rgba(29,111,168,.2);
+  --accent-dark: #155a8c;
   --t0: #0f172a;
   --t1: #475569;
-  --t2: #94a3b8;
-  --crit-bg: rgba(255,51,85,.07);
-  --high-bg: rgba(255,119,51,.07);
-  --med-bg:  rgba(240,185,11,.07);
-  --low-bg:  rgba(59,130,246,.07);
-  --ok-bg:   rgba(34,197,94,.07);
+  --t2: #8d99aa;
+  --crit: #c0392b; --crit-bg: rgba(192,57,43,.08);
+  --high: #a16207; --high-bg: rgba(161,98,7,.08);
+  --med:  #854d0e; --med-bg:  rgba(133,77,14,.07);
+  --low:  #1e5fa8; --low-bg:  rgba(30,95,168,.07);
+  --ok:   #166534; --ok-bg:   rgba(22,101,52,.07);
   --shadow: 0 2px 8px rgba(0,0,0,.07);
   --shadow-md: 0 8px 24px rgba(0,0,0,.10);
 }
@@ -157,7 +160,7 @@
 *::-webkit-scrollbar-thumb:hover { background: var(--sb-thumb-hover); }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
   font-size: 14px; line-height: 1.5;
   background: var(--bg); color: var(--text);
   display: flex; height: 100vh; overflow: hidden;
@@ -237,9 +240,9 @@ body::after {
 
 .nav-section { padding: 14px 10px 4px; }
 .nav-label {
-  display: block; font-size: 9px; font-weight: 700;
-  color: #2c435e;
-  text-transform: uppercase; letter-spacing: .14em;
+  display: block; font-size: 9.5px; font-weight: 700;
+  color: #4a5a6e;
+  text-transform: uppercase; letter-spacing: .12em;
   padding: 0 10px 8px;
 }
 .nav-item {
@@ -255,18 +258,18 @@ body::after {
 }
 .nav-item:hover { background: rgba(0,200,255,.06); color: #b8d4ec; }
 .nav-item.active {
-  background: linear-gradient(90deg, rgba(0,200,255,.14) 0%, rgba(0,200,255,.04) 100%);
-  border-color: rgba(0,200,255,.22);
-  color: #dff4ff;
+  background: rgba(0,184,255,.08);
+  border-color: transparent;
+  color: var(--accent);
   font-weight: 600;
-  box-shadow: 0 0 16px rgba(0,200,255,.08);
 }
-/* glowing dot marker on active item */
-.nav-item.active::after {
-  content: ''; position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-  width: 5px; height: 5px; border-radius: 50%;
-  background: var(--accent); box-shadow: 0 0 8px var(--accent);
+/* left border line on active item */
+.nav-item.active::before {
+  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 2px; height: 14px; border-radius: 0 2px 2px 0;
+  background: var(--accent);
 }
+.nav-item.active::after { display: none; }
 .nav-item svg, .nav-item i[data-lucide] { width: 16px; height: 16px; flex-shrink: 0; opacity: .6; transition: opacity .15s; }
 .nav-item:hover svg, .nav-item:hover i[data-lucide] { opacity: .9; }
 .nav-item.active svg, .nav-item.active i[data-lucide] { opacity: 1; color: var(--accent); }
@@ -324,13 +327,34 @@ body::after {
   background: transparent; border: none;
   margin-bottom: 20px;
 }
+/* KPI group containers */
+.stat-group {
+  display: flex; gap: 8px; flex: 1;
+  background: rgba(0,0,0,.18);
+  border: 1px solid var(--bd);
+  border-radius: 12px; padding: 8px 10px 6px;
+  position: relative;
+}
+.stat-group-label {
+  position: absolute; top: -7px; left: 12px;
+  font-size: 9px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--t2);
+  background: var(--void); padding: 0 5px;
+  line-height: 1;
+}
+:root[data-theme="light"] .stat-group { background: rgba(0,0,0,.03); }
+:root[data-theme="light"] .stat-group-label { background: var(--void); }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .stat-group { background: rgba(0,0,0,.03); }
+  :root:not([data-theme="dark"]) .stat-group-label { background: var(--void); }
+}
 .stat-cell {
   flex: 1;
-  background: rgba(8,21,42,.65);
+  background: rgba(8,21,42,.55);
   border: 1px solid var(--bd);
-  border-radius: 11px;
-  padding: 18px 16px 15px;
-  display: flex; flex-direction: column; gap: 6px;
+  border-radius: 9px;
+  padding: 14px 12px 11px;
+  display: flex; flex-direction: column; gap: 5px;
   cursor: pointer;
   transition: border-color .2s, box-shadow .2s, background .15s, transform .15s;
   position: relative; overflow: hidden;
@@ -425,7 +449,7 @@ th.sortable.sorted { color: var(--accent); }
 th.sortable .arr { font-size: 8px; }
 tbody tr { border-bottom: 1px solid var(--bd); transition: background .1s; }
 tbody tr:last-child { border-bottom: 0; }
-tbody tr:hover { background: rgba(0,184,255,.04); }
+tbody tr:hover { background: rgba(255,255,255,.045); }
 td { padding: 10px 14px; vertical-align: middle; color: var(--t1); }
 td.primary { color: var(--t0); font-weight: 500; }
 .mono { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--t2); }
@@ -435,21 +459,21 @@ td.primary { color: var(--t0); font-weight: 500; }
 /* ── Severity badges ── */
 .sev {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 2px 8px; border-radius: 4px;
+  padding: 2px 9px 2px 7px; border-radius: 20px;
   font-size: 10.5px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .05em;
-  white-space: nowrap;
+  text-transform: uppercase; letter-spacing: .04em;
+  white-space: nowrap; border: 1px solid;
 }
-.sev::before { content: ''; width: 5px; height: 5px; border-radius: 50%; }
-.sev.critical { background: var(--crit-bg); color: var(--crit); border: 1px solid rgba(255,51,85,.2); }
+.sev::before { content: ''; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.sev.critical { background: var(--crit-bg); color: var(--crit); border-color: rgba(255,51,85,.25); }
 .sev.critical::before { background: var(--crit); box-shadow: 0 0 5px var(--crit); }
-.sev.high     { background: var(--high-bg); color: var(--high); }
+.sev.high     { background: var(--high-bg); color: var(--high); border-color: rgba(255,119,51,.2); }
 .sev.high::before { background: var(--high); }
-.sev.medium   { background: var(--med-bg);  color: var(--med); }
+.sev.medium   { background: var(--med-bg);  color: var(--med);  border-color: rgba(240,185,11,.18); }
 .sev.medium::before { background: var(--med); }
-.sev.low      { background: var(--low-bg);  color: var(--low); }
+.sev.low      { background: var(--low-bg);  color: var(--low);  border-color: rgba(59,130,246,.2); }
 .sev.low::before { background: var(--low); }
-.sev.info     { background: var(--info-bg); color: var(--info); }
+.sev.info     { background: var(--info-bg); color: var(--info); border-color: rgba(90,106,130,.18); }
 .sev.info::before { background: var(--info); }
 
 /* ── Status badges ── */
@@ -527,7 +551,8 @@ select.triage {
   border-radius: var(--radius); padding: 5px 12px; font-size: 12px;
   cursor: pointer; transition: all .15s;
 }
-.btn-ghost:hover { color: var(--crit); border-color: var(--crit); background: rgba(255,51,85,.07); }
+.btn-ghost:hover { color: var(--t0); border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.05); }
+.btn-ghost.danger:hover { color: var(--crit); border-color: var(--crit); background: rgba(255,51,85,.07); }
 .form-msg { font-size: 12px; }
 .form-msg.ok  { color: var(--ok); }
 .form-msg.err { color: var(--crit); }
@@ -987,7 +1012,7 @@ tr.sla-row td:first-child { background: rgba(255,51,85,.04); }
 }
 
 /* ── Larger stat numbers ── */
-.stat-val { font-size: 42px; }
+.stat-val { font-size: 36px; }
 
 /* ── Card header — subtle gradient ── */
 .card-head {
@@ -1011,7 +1036,7 @@ td { padding: 11px 16px; }
 
 /* ── Nav section spacing ── */
 .nav-section + .nav-section { padding-top: 6px; border-top: 1px solid rgba(0,180,255,.07); margin-top: 4px; }
-.nav-label { color: rgba(0,180,255,.4); font-size: 9.5px; }
+.nav-label { color: #4a5a6e; font-size: 9.5px; }
 
 /* ── More visible empty states ── */
 .empty-state { padding: 60px 24px; }
@@ -1394,14 +1419,22 @@ td { padding: 11px 16px; }
     <!-- ═══ DASHBOARD ═══ -->
     <div id="tab-dashboard" class="tab-pane active">
       <div class="stat-strip" id="statStrip">
-        <div class="stat-cell total" title="Ver todos os findings abertos (inclui severidade info)" onclick="goToFindings('','open')"><div class="stat-val" id="s-total">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="package-open"></i></span>Total abertos<span class="stat-note" id="s-info-note" hidden></span></div></div>
-        <div class="stat-cell crit"  title="Filtrar por Critical" onclick="goToFindings('critical','open')"><div class="stat-val" id="s-critical">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="shield-alert"></i></span>Critical</div></div>
-        <div class="stat-cell high"  title="Filtrar por High" onclick="goToFindings('high','open')"><div class="stat-val" id="s-high">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="triangle-alert"></i></span>High</div></div>
-        <div class="stat-cell med"   title="Filtrar por Medium" onclick="goToFindings('medium','open')"><div class="stat-val" id="s-medium">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="circle-alert"></i></span>Medium</div></div>
-        <div class="stat-cell low"   title="Filtrar por Low" onclick="goToFindings('low','open')"><div class="stat-val" id="s-low">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="info"></i></span>Low</div></div>
-        <div class="stat-cell fixed" title="Ver findings corrigidos" onclick="goToFindings('','fixed')"><div class="stat-val" id="s-fixed">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="check-circle"></i></span>Corrigidos</div></div>
-        <div class="stat-cell crit" title="Findings abertos além do prazo de SLA" onclick="if($('fSlaOnly'))$('fSlaOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-sla">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="clock-alert"></i></span>SLA estourado</div></div>
-        <div class="stat-cell fixready" title="Correções da IA com branch pronta aguardando abertura de PR" onclick="if($('fFixOnly'))$('fFixOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-fixready">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="git-pull-request"></i></span>Aguardando PR</div></div>
+        <!-- grupo: achados abertos por severidade -->
+        <div class="stat-group" style="flex:5">
+          <span class="stat-group-label">Abertos</span>
+          <div class="stat-cell total" title="Ver todos os findings abertos (inclui severidade info)" onclick="goToFindings('','open')"><div class="stat-val" id="s-total">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="package-open"></i></span>Total<span class="stat-note" id="s-info-note" hidden></span></div></div>
+          <div class="stat-cell crit"  title="Filtrar por Critical" onclick="goToFindings('critical','open')"><div class="stat-val" id="s-critical">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="shield-alert"></i></span>Critical</div></div>
+          <div class="stat-cell high"  title="Filtrar por High" onclick="goToFindings('high','open')"><div class="stat-val" id="s-high">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="triangle-alert"></i></span>High</div></div>
+          <div class="stat-cell med"   title="Filtrar por Medium" onclick="goToFindings('medium','open')"><div class="stat-val" id="s-medium">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="circle-alert"></i></span>Medium</div></div>
+          <div class="stat-cell low"   title="Filtrar por Low" onclick="goToFindings('low','open')"><div class="stat-val" id="s-low">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="info"></i></span>Low</div></div>
+        </div>
+        <!-- grupo: status de correção -->
+        <div class="stat-group" style="flex:3">
+          <span class="stat-group-label">Status</span>
+          <div class="stat-cell fixed" title="Ver findings corrigidos" onclick="goToFindings('','fixed')"><div class="stat-val" id="s-fixed">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="check-circle"></i></span>Corrigidos</div></div>
+          <div class="stat-cell crit" title="Findings abertos além do prazo de SLA" onclick="if($('fSlaOnly'))$('fSlaOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-sla">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="clock-alert"></i></span>SLA</div></div>
+          <div class="stat-cell fixready" title="Correções da IA com branch pronta aguardando abertura de PR" onclick="if($('fFixOnly'))$('fFixOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-fixready">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="git-pull-request"></i></span>Aguard. PR</div></div>
+        </div>
       </div>
 
       <!-- customize bar -->
@@ -1889,7 +1922,7 @@ td { padding: 11px 16px; }
             <button class="btn-primary" id="totp2faEnableBtn" onclick="startTOTPSetup()" style="display:none">Ativar 2FA</button>
             <div id="totp2faDisableForm" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
               <input type="password" id="totp2faDisablePwd" placeholder="Senha atual para desativar" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--bg);color:var(--text)">
-              <button class="btn-ghost" onclick="disableTOTP()" style="color:var(--crit)">Desativar 2FA</button>
+              <button class="btn-ghost danger" onclick="disableTOTP()">Desativar 2FA</button>
               <span class="form-msg" id="totp2faDisableMsg"></span>
             </div>
           </div>

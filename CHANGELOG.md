@@ -3,6 +3,23 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.12] - 2026-09-12 20:00
+
+### Changed
+- **Tipografia**: migração de `Inter` para `DM Sans` (Google Fonts) como face UI principal — melhor legibilidade em tamanhos pequenos, escala tipográfica mais definida
+- **Hover de botões**: `.btn-ghost:hover` deixou de ir para vermelho em botões não-destrutivos; hover neutro (`rgba(255,255,255,.05)`) como padrão global; novo modificador `.btn-ghost.danger` para ações irreversíveis (fechar PR, revogar chave, desativar 2FA)
+- **Severity chips**: `border-radius: 4px` → `20px` (pill); todas as severidades agora têm borda sutil (critical/high/medium/low/info) — distinção por forma além de cor, melhora acessibilidade para daltonismo
+- **Sidebar labels**: `#2c435e` → `#4a5a6e` nas labels de seção ("ANALYSIS", "MANAGEMENT") — eram praticamente invisíveis no tema dark
+- **Sidebar active state**: substituído gradiente+dot direito por linha vertical de 2px na borda esquerda (padrão GitHub/Linear/Vercel) — indica claramente a página ativa
+- **KPIs agrupados**: 8 cards soltos reorganizados em 2 grupos visuais com container e label flutuante: "Abertos" (Total + Critical + High + Medium + Low) e "Status" (Corrigidos + SLA + Aguard. PR) — hierarquia de leitura total→detalhe→saúde
+- **Table row hover**: `rgba(0,184,255,.04)` → `rgba(255,255,255,.045)` — hover de linha ~11× mais visível, rastreamento horizontal em tabelas densas
+- **Light theme calibrado**: `--accent` dark→`#1d6fa8` (contraste 4.9:1 vs branco, WCAG AA); severity colors recalibradas para fundo claro (vermelho, laranja, amarelo, azul escuros); tokens `--s0` adicionado ao light theme
+
+### Execução
+- Rebuild `docker compose up -d --build` — healthy · imagem reconstruída com novos assets CSS
+- Verificação visual: Dashboard, Findings, Scans conferidos no Chrome — chips pill ✓, linha active ✓, grupos KPI ✓, labels sidebar ✓, font DM Sans ✓
+- Sem regressões visuais detectadas
+
 ## [0.15.11] - 2026-09-07 20:57
 
 ### Fixed
