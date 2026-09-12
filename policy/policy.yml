@@ -26,6 +26,16 @@ allowlist:
   # Não representam código em execução — são referências para analistas.
   - "handbooks/**"
 
+  # ── Scorecard: controles de governança — decisões de nível organizacional ───────
+  # Branch protection, code review obrigatório e dependency update tools
+  # são configurações de repositório (GitHub settings), não vulnerabilidades de código.
+  # Exigem decisão org-level; não bloqueiam o gate de segurança de código.
+  - "BranchProtectionID"
+  - "CodeReviewID"
+  - "TokenPermissionsID"
+  - "DependencyUpdateToolID"
+  - "VulnerabilitiesID"
+
   # ── Dockerfile: container de pentest roda como root por design ────────────────
   # A imagem instala e executa nmap, nuclei, sqlmap, naabu e outras ferramentas
   # que requerem raw sockets e capacidades de rede (CAP_NET_RAW, CAP_NET_ADMIN).

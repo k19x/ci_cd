@@ -1686,23 +1686,26 @@ def notify_test(user=Depends(require_role("admin"))):
     _send_notifications("secpipe/teste", [_F()])
     return {"ok": True, "detail": "Teste enviado aos canais configurados (verifique lá)"}
 _ai_jobs:  dict = {}   # job_id -> {status: running|done|error, result?, error?, ts}
+# Pool global: max 8 jobs de IA simultâneos — evita estourar pids_limit com muitos dispatches
+_ai_executor = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="ai-job")
 
 
 def _start_ai_job(fn, arg) -> dict:
-    """Executa fn(arg) em background — evita o timeout (~100s) do tunnel Cloudflare."""
+    """Executa fn(arg) em background via pool — evita o timeout (~100s) do tunnel Cloudflare."""
     cutoff = time.time() - 3600
     for k in [k for k, v in _ai_jobs.items() if v.get("ts", 0) < cutoff]:
         _ai_jobs.pop(k, None)
     job_id = secrets.token_hex(8)
-    _ai_jobs[job_id] = {"status": "running", "ts": time.time()}
+    _ai_jobs[job_id] = {"status": "queued", "ts": time.time()}
     def run():
+        _ai_jobs[job_id]["status"] = "running"
         try:
             _ai_jobs[job_id] = {"status": "done", "result": fn(arg), "ts": time.time()}
         except HTTPException as e:
             _ai_jobs[job_id] = {"status": "error", "error": str(e.detail), "ts": time.time()}
         except Exception as e:
             _ai_jobs[job_id] = {"status": "error", "error": str(e)[:300], "ts": time.time()}
-    threading.Thread(target=run, daemon=True).start()
+    _ai_executor.submit(run)
     return {"job": job_id}
 
 

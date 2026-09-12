@@ -29,7 +29,7 @@ services:
     mem_limit: 768m          # Claude Code CLI (Node) precisa de folga
     mem_reservation: 128m
     cpus: 1.0
-    pids_limit: 200
+    pids_limit: 512
 
     # nenhuma porta exposta ao host — acesso apenas via cloudflared
     healthcheck:
