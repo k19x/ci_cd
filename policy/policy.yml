@@ -34,4 +34,4 @@ allowlist:
   # documentado: a imagem é usada apenas em ambientes de pentest controlados,
   # nunca exposta publicamente como serviço.
   - "dockerfile.security.missing-user.missing-user"
-  - "DS002"
+  - "DS-0002"
