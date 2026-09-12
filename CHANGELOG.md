@@ -3,6 +3,15 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.13] - 2026-09-12 20:30
+
+### Added
+- **Botão "Corrigir com IA" por finding** (Findings → aba Findings): cada finding sem correção exibe um botão roxo `✨ Corrigir com IA` inline na coluna de vulnerabilidade. Um clique dispara `POST /api/ai/autofix` com todos os campos do finding (repo, fid, rule, severity, file, line, message, tool). Feedback visual: spinner durante o dispatch → "Em andamento…" desabilitado ao confirmar. Se a PR já foi fechada sem merge, exibe `↻ Refazer com IA` em vez do botão padrão. Botão não aparece quando: PR aberta, PR mesclada, branch pronta aguardando PR, ou finding triado como Fixed/Not Exploitable/Risk Accepted (role mínimo: analyst)
+
+### Execução
+- Rebuild `docker compose up -d --build` — healthy
+- Verificação visual: botão roxo visível em todos os findings sem correção; findings com `PR mesclada` não exibem botão ✓; clique dispara toast `IA iniciou correção — PR será aberta em instantes`
+
 ## [0.15.12] - 2026-09-12 20:00
 
 ### Changed
