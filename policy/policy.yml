@@ -35,6 +35,10 @@ allowlist:
   - "TokenPermissionsID"
   - "DependencyUpdateToolID"
   - "VulnerabilitiesID"
+  # MaintainedID: score 0 por repositório criado há menos de 90 dias — controle
+  # puramente temporal, não endereçável por mudança de código. Será resolvido
+  # automaticamente com o passar do tempo e atividade contínua no repositório.
+  - "MaintainedID"
 
   # ── Dockerfile: container de pentest roda como root por design ────────────────
   # A imagem instala e executa nmap, nuclei, sqlmap, naabu e outras ferramentas
