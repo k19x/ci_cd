@@ -5272,8 +5272,29 @@ const _cyStyle = [
 async function loadGraph() {
   if (!$('tab-graph').classList.contains('active')) return;
 
-  const repoFilter = $('graphRepoFilter') ? $('graphRepoFilter').value : '';
+  const repoSel = $('graphRepoFilter');
+  const repoFilter = repoSel ? repoSel.value : '';
   const onlyAttack = $('graphOnlyAttack') ? $('graphOnlyAttack').checked : false;
+  const isFirstLoad = repoSel && repoSel.options.length <= 1;
+
+  // On first open: get repo list, auto-select top repo, then reload
+  if (isFirstLoad && !repoFilter) {
+    const cyEl = $('cy');
+    cyEl.innerHTML = `<div class="graph-spinner"><i data-lucide="loader-2"></i><span>Carregando grafo…</span></div>`;
+    if (typeof lucide !== 'undefined') lucide.createIcons({ el: cyEl });
+    const listData = await api('/api/graph?severity=high,critical&limit=5&max_repos=20');
+    if (!listData) return;
+    const repoNodes = (listData.nodes || []).filter(n => n.type === 'repo');
+    repoNodes.sort((a, b) => ((b.data.open_critical||0)*2 + (b.data.open_high||0)) - ((a.data.open_critical||0)*2 + (a.data.open_high||0)));
+    repoNodes.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.data.full_name; opt.textContent = r.label;
+      repoSel.appendChild(opt);
+    });
+    if (repoNodes.length > 0) { repoSel.value = repoNodes[0].data.full_name; }
+    loadGraph();
+    return;
+  }
 
   const cyEl = $('cy');
   cyEl.innerHTML = `<div class="graph-spinner"><i data-lucide="loader-2"></i><span>Carregando grafo…</span></div>`;
@@ -5326,16 +5347,16 @@ async function loadGraph() {
     if (typeof lucide !== 'undefined') lucide.createIcons({ el: banner });
   }
 
-  // Populate repo filter dropdown (once)
-  const repoSel = $('graphRepoFilter');
-  if (repoSel && repoSel.options.length <= 1) {
-    const repos = [...new Set((data.nodes || []).filter(n => n.type === 'repo').map(n => n.data.full_name))].sort();
-    repos.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r; opt.textContent = r.split('/').pop();
-      repoSel.appendChild(opt);
+  // Add any new repos found in data to dropdown (if not already there)
+  if (repoSel) {
+    const existing = new Set([...repoSel.options].map(o => o.value));
+    (data.nodes || []).filter(n => n.type === 'repo').forEach(n => {
+      if (!existing.has(n.data.full_name)) {
+        const opt = document.createElement('option');
+        opt.value = n.data.full_name; opt.textContent = n.label;
+        repoSel.appendChild(opt);
+      }
     });
-    if (repoFilter) repoSel.value = repoFilter;
   }
 
   let nodes = data.nodes || [];
@@ -5379,32 +5400,49 @@ async function loadGraph() {
 
   if (_cy) { try { _cy.destroy(); } catch(e) {} _cy = null; }
 
-  // Test if cose-bilkent is registered (auto-registers on load)
-  let hasBilkent = false;
-  try {
-    const _t = document.createElement('div');
-    _t.style.cssText = 'width:1px;height:1px;position:fixed;top:-10px';
-    document.body.appendChild(_t);
-    cytoscape({ container: _t, elements: [], layout: { name: 'cose-bilkent' } });
-    document.body.removeChild(_t);
-    hasBilkent = true;
-  } catch(e) { /* not available */ }
+  const repoCount = nodes.filter(n => n.type === 'repo').length;
 
-  const layoutConfig = hasBilkent
-    ? { name: 'cose-bilkent', quality: 'proof', animate: true, animationDuration: 800,
-        nodeDimensionsIncludeLabels: true, idealEdgeLength: 180, nodeRepulsion: 8000,
-        edgeElasticity: 0.45, gravity: 0.35, numIter: 2500,
-        fit: true, padding: 48, randomize: true, tile: true,
-        tilingPaddingVertical: 20, tilingPaddingHorizontal: 20 }
-    : { name: 'cose', idealEdgeLength: 120, nodeOverlap: 60, nodeRepulsion: n => 500000,
-        gravity: 0.1, numIter: 2000, fit: true, padding: 40, animate: true };
+  // Single repo: clean star (cose with high repulsion); multi repo: concentric rings by severity
+  let layoutConfig;
+  if (repoCount <= 1) {
+    layoutConfig = {
+      name: 'cose',
+      idealEdgeLength: 140, nodeRepulsion: () => 900000,
+      nodeOverlap: 20, gravity: 0.1,
+      numIter: 1500, fit: true, padding: 60, animate: true,
+      animationDuration: 500
+    };
+  } else {
+    layoutConfig = {
+      name: 'concentric',
+      concentric: n => {
+        const t = n.data('type');
+        const sev = n.data('severity');
+        if (t === 'repo') return 12;
+        if (t === 'cve') return 8;
+        if (t === 'finding' && sev === 'critical') return 6;
+        if (t === 'secret') return 5;
+        return 3;
+      },
+      levelWidth: () => 2,
+      minNodeSpacing: 22,
+      spacingFactor: 1.8,
+      startAngle: (3 / 2) * Math.PI,
+      sweep: Math.PI * 2,
+      clockwise: true,
+      padding: 48,
+      fit: true,
+      animate: true,
+      animationDuration: 600
+    };
+  }
 
   _cy = cytoscape({
     container: cyEl,
     elements,
     style: _cyStyle,
     layout: layoutConfig,
-    minZoom: 0.1,
+    minZoom: 0.08,
     maxZoom: 4,
     wheelSensitivity: 0.3
   });
