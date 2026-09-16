@@ -3,6 +3,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@700;800&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
 <!-- Lucide 1.42.0 servido localmente: a URL do unpkg (0.263.1) nunca existiu e o app rodava sem ícones -->
 <script src="/static/vendor/lucide.min.js"></script>
 
@@ -1223,6 +1224,51 @@ td { padding: 11px 16px; }
 .nav-badge.muted { background:var(--s3); color:var(--text2); }
 .nav-badge[hidden] { display:none; }
 
+/* ── Security Graph ── */
+#cy {
+  width: 100%; height: 600px;
+  background: var(--s1);
+  border: 1px solid var(--bd);
+  border-radius: var(--radius);
+  position: relative;
+}
+.graph-controls {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.graph-detail {
+  min-width: 220px; max-width: 280px;
+  background: var(--s2); border: 1px solid var(--bd);
+  border-radius: var(--radius); padding: 14px;
+  font-size: 12px;
+}
+.graph-detail-title { font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--accent); }
+.graph-detail-row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+.graph-detail-row .lbl { color: var(--muted); }
+.graph-detail-row .val { font-weight: 600; color: var(--text); word-break: break-all; text-align: right; }
+.graph-wrap { display: flex; gap: 12px; align-items: flex-start; }
+.graph-wrap #cy { flex: 1; }
+.graph-detail[hidden] { display: none; }
+.graph-attack-banner {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(239,68,68,.10); border: 1px solid rgba(239,68,68,.3);
+  border-radius: var(--radius); padding: 10px 14px;
+  margin-bottom: 12px; font-size: 13px; color: var(--crit); font-weight: 600;
+}
+.graph-attack-banner i[data-lucide] { width: 16px; height: 16px; flex-shrink: 0; }
+.graph-attack-banner[hidden] { display: none; }
+.graph-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 600px; gap: 12px; color: var(--muted);
+}
+.graph-empty i[data-lucide] { width: 40px; height: 40px; opacity: .4; }
+.graph-spinner {
+  display: flex; align-items: center; justify-content: center;
+  height: 600px; gap: 10px; color: var(--muted);
+}
+.graph-spinner i[data-lucide] { width: 24px; height: 24px; animation: spin .9s linear infinite; }
+@keyframes graph-spin { to { transform: rotate(360deg); } }
+
 /* ── Stat "Aguardando PR" ── */
 .stat-cell.fixready .stat-val { color: var(--accent); }
 .stat-note { color: var(--muted); font-weight: 500; text-transform: none; letter-spacing: 0; }
@@ -1309,6 +1355,11 @@ td { padding: 11px 16px; }
       <a class="nav-item" onclick="showTab('vulns',this)">
         <i data-lucide="history"></i>
         Histórico
+      </a>
+      <a class="nav-item" onclick="showTab('graph',this)">
+        <i data-lucide="git-branch-plus"></i>
+        Security Graph
+        <span id="navGraphBadge" class="nav-badge" hidden title="Attack paths detectados"></span>
       </a>
     </div>
     <div class="nav-section">
@@ -1446,6 +1497,11 @@ td { padding: 11px 16px; }
           <div class="stat-cell crit" title="Findings abertos além do prazo de SLA" onclick="if($('fSlaOnly'))$('fSlaOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-sla">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="clock-alert"></i></span>SLA</div></div>
           <div class="stat-cell fixready" title="Correções da IA com branch pronta aguardando abertura de PR" onclick="if($('fFixOnly'))$('fFixOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-fixready">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="git-pull-request"></i></span>Aguard. PR</div></div>
           <div class="stat-cell" id="s-toprisk-cell" title="Maior risk_score entre os findings abertos (severidade × criticidade × EPSS)"><div class="stat-val" id="s-toprisk">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="flame"></i></span>Top Risk</div></div>
+        </div>
+        <!-- grupo: grafo de ataque -->
+        <div class="stat-group" style="flex:1">
+          <span class="stat-group-label">Grafo</span>
+          <div class="stat-cell" id="s-attack-paths-cell" title="Attack paths no Security Graph" onclick="showTab('graph',document.querySelector('.nav-item[onclick*=graph]'))"><div class="stat-val" id="s-attack-paths">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="git-branch-plus"></i></span>Attack Paths</div></div>
         </div>
       </div>
 
@@ -2293,6 +2349,35 @@ td { padding: 11px 16px; }
       </div>
     </div>
 
+    <!-- ═══ SECURITY GRAPH ═══ -->
+    <div id="tab-graph" class="tab-pane">
+      <div id="graphAttackBanner" class="graph-attack-banner" hidden>
+        <i data-lucide="alert-triangle"></i>
+        <span id="graphAttackText"></span>
+        <button class="btn-ghost" style="margin-left:auto;font-size:12px" onclick="graphShowOnlyAttackPaths()">Ver attack paths</button>
+      </div>
+      <div class="graph-controls">
+        <select id="graphRepoFilter" style="font-size:12px;padding:5px 8px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s3);color:var(--text);cursor:pointer" onchange="loadGraph()">
+          <option value="">Todos os repos</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer">
+          <input type="checkbox" id="graphOnlyAttack" onchange="loadGraph()"> Só attack paths
+        </label>
+        <button class="refresh-btn" onclick="loadGraph()" title="Atualizar grafo"><i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Refresh</button>
+        <span id="graphNodeCount" style="font-size:11px;color:var(--muted);margin-left:auto"></span>
+      </div>
+      <div class="graph-wrap">
+        <div id="cy"></div>
+        <div id="graphDetail" class="graph-detail" hidden>
+          <div class="graph-detail-title" id="gdTitle"></div>
+          <div id="gdBody"></div>
+          <div style="margin-top:10px">
+            <button class="btn-ghost" id="gdFindingsBtn" style="font-size:11px" hidden onclick="_graphNavFindings()"><i data-lucide="bug" style="width:12px;height:12px"></i> Ver findings</button>
+          </div>
+        </div>
+      </div>
+    </div><!-- /tab-graph -->
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -2473,7 +2558,7 @@ function showTab(tab, el) {
   $(`tab-${tab}`).classList.add('active');
   if (el) el.classList.add('active');
   currentTab = tab;
-  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Findings', prs:'Pull Requests', vulns:'Histórico de scans', repos:'Projects', settings:'Settings', audit:'Audit Log'};
+  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Findings', prs:'Pull Requests', vulns:'Histórico de scans', repos:'Projects', settings:'Settings', audit:'Audit Log', graph:'Security Graph'};
   $('topbarTitle').textContent = titles[tab] || tab;
   clearInterval(jobTimer);
   clearInterval(dashTimer);
@@ -2489,6 +2574,7 @@ function showTab(tab, el) {
   if (tab === 'repos')    loadRepos();
   if (tab === 'settings') loadSettings();
   if (tab === 'audit')    loadAudit();
+  if (tab === 'graph')    loadGraph();
 }
 
 /* ── Helpers de tempo (drawer de jobs de IA) ── */
@@ -2642,6 +2728,7 @@ async function loadDashboard() {
   _setNavBadge('navFindingsBadge', Object.values(data.open_by_severity || {}).reduce((a, b) => a + b, 0));
   loadPrsBadge();   // /api/ai/prs tem cache de 60 s no backend
   if (!_runs.length) loadJobs();   // popula o badge de Scans já no primeiro carregamento
+  _loadAttackPathsKpi();
   _slaCfg = data.sla || _slaCfg;
   _riskMap = Object.fromEntries((data.risk_scores || []).map(r => [r.repo, r.score]));
 
@@ -4979,6 +5066,275 @@ function initDashDnD() {
     _dashLayout.order = [...wrap.querySelectorAll('[data-card]')].map(el => el.dataset.card);
     saveDashLayout();
   });
+}
+
+/* ── Security Graph ── */
+let _attackPathsLoaded = false;
+async function _loadAttackPathsKpi() {
+  if (_attackPathsLoaded) return;
+  const data = await api('/api/graph?severity=high,critical&limit=150');
+  if (!data) return;
+  _attackPathsLoaded = true;
+  const cnt = (data.attack_paths || []).length;
+  const apEl = $('s-attack-paths');
+  if (apEl) apEl.textContent = cnt;
+  const cell = $('s-attack-paths-cell');
+  if (cell) {
+    const valEl = cell.querySelector('.stat-val');
+    if (valEl) valEl.style.color = cnt > 0 ? 'var(--crit)' : 'var(--ok)';
+  }
+  const badge = $('navGraphBadge');
+  if (badge) { badge.textContent = cnt; badge.hidden = cnt === 0; }
+}
+
+let _cy = null;
+let _graphData = null;
+let _graphRepoSelected = null;
+
+const _cyStyle = [
+  { selector: 'node[type="repo"]', style: {
+    'background-color': '#3B82F6', 'label': 'data(label)',
+    'color': '#fff', 'text-valign': 'bottom', 'font-size': '11px',
+    'width': 40, 'height': 40, 'shape': 'round-rectangle',
+    'text-outline-color': '#1e3a5f', 'text-outline-width': 1
+  }},
+  { selector: 'node[type="finding"]', style: {
+    'background-color': '#F59E0B', 'label': 'data(label)',
+    'color': '#1f2937', 'text-valign': 'bottom', 'font-size': '9px',
+    'width': 20, 'height': 20, 'shape': 'ellipse'
+  }},
+  { selector: 'node[type="cve"]', style: {
+    'background-color': '#EF4444', 'label': 'data(label)',
+    'color': '#fff', 'text-valign': 'bottom', 'font-size': '9px',
+    'width': 28, 'height': 28, 'shape': 'diamond',
+    'text-outline-color': '#7f1d1d', 'text-outline-width': 1
+  }},
+  { selector: 'node[type="secret"]', style: {
+    'background-color': '#8B5CF6', 'label': 'data(label)',
+    'color': '#fff', 'text-valign': 'bottom', 'font-size': '9px',
+    'width': 24, 'height': 24, 'shape': 'star'
+  }},
+  { selector: 'edge', style: {
+    'line-color': '#94A3B8', 'target-arrow-color': '#94A3B8',
+    'target-arrow-shape': 'triangle', 'curve-style': 'bezier',
+    'width': 1, 'opacity': 0.6
+  }},
+  { selector: 'edge[type="attack_path"]', style: {
+    'line-color': '#EF4444', 'target-arrow-color': '#EF4444',
+    'width': 2.5, 'line-style': 'dashed', 'opacity': 0.9
+  }},
+  { selector: '.highlighted', style: {
+    'border-width': 3, 'border-color': '#F59E0B'
+  }},
+  { selector: '.dimmed', style: { 'opacity': 0.15 }}
+];
+
+async function loadGraph() {
+  if (!$('tab-graph').classList.contains('active')) return;
+
+  const repoFilter = $('graphRepoFilter') ? $('graphRepoFilter').value : '';
+  const onlyAttack = $('graphOnlyAttack') ? $('graphOnlyAttack').checked : false;
+
+  const cyEl = $('cy');
+  cyEl.innerHTML = `<div class="graph-spinner"><i data-lucide="loader-2"></i><span>Carregando grafo…</span></div>`;
+  if (typeof lucide !== 'undefined') lucide.createIcons({ el: cyEl });
+  $('graphDetail').hidden = true;
+
+  let url = '/api/graph?severity=high,critical&limit=150';
+  if (repoFilter) url += `&repo=${encodeURIComponent(repoFilter)}`;
+  const data = await api(url);
+  if (!data) return;
+  _graphData = data;
+
+  const attackCount = (data.attack_paths || []).length;
+
+  // Update Attack Paths KPI on dashboard
+  const apEl = $('s-attack-paths');
+  if (apEl) {
+    apEl.textContent = attackCount;
+    const cell = $('s-attack-paths-cell');
+    if (cell) {
+      cell.style.cursor = 'pointer';
+      if (attackCount > 0) {
+        cell.querySelector('.stat-val').style.color = 'var(--crit)';
+      } else {
+        cell.querySelector('.stat-val').style.color = 'var(--ok)';
+      }
+    }
+  }
+
+  // Nav badge
+  const badge = $('navGraphBadge');
+  if (badge) {
+    if (attackCount > 0) {
+      badge.textContent = attackCount;
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
+  }
+
+  // Attack paths banner
+  const banner = $('graphAttackBanner');
+  if (banner) {
+    if (attackCount > 0) {
+      $('graphAttackText').textContent = `${attackCount} attack path${attackCount > 1 ? 's' : ''} detectado${attackCount > 1 ? 's' : ''}`;
+      banner.hidden = false;
+    } else {
+      banner.hidden = true;
+    }
+    if (typeof lucide !== 'undefined') lucide.createIcons({ el: banner });
+  }
+
+  // Populate repo filter dropdown (once)
+  const repoSel = $('graphRepoFilter');
+  if (repoSel && repoSel.options.length <= 1) {
+    const repos = [...new Set((data.nodes || []).filter(n => n.type === 'repo').map(n => n.data.full_name))].sort();
+    repos.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r; opt.textContent = r.split('/').pop();
+      repoSel.appendChild(opt);
+    });
+    if (repoFilter) repoSel.value = repoFilter;
+  }
+
+  let nodes = data.nodes || [];
+  let edges = data.edges || [];
+
+  if (onlyAttack && attackCount > 0) {
+    const pathNodeIds = new Set(data.attack_paths.flatMap(p => p.nodes));
+    nodes = nodes.filter(n => pathNodeIds.has(n.id));
+    const nodeIds = new Set(nodes.map(n => n.id));
+    edges = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
+  }
+
+  if (nodes.length === 0) {
+    cyEl.innerHTML = `<div class="graph-empty"><i data-lucide="shield-check"></i><span>Nenhum finding de alta severidade detectado</span></div>`;
+    if (typeof lucide !== 'undefined') lucide.createIcons({ el: cyEl });
+    $('graphNodeCount').textContent = '';
+    return;
+  }
+
+  cyEl.innerHTML = '';
+
+  const elements = [
+    ...nodes.map(n => ({ data: { id: n.id, label: n.label, type: n.type, nodeData: n.data } })),
+    ...edges.map(e => ({ data: { source: e.source, target: e.target, type: e.type } }))
+  ];
+
+  // Add attack path edges
+  (data.attack_paths || []).forEach(path => {
+    for (let i = 0; i < path.nodes.length - 1; i++) {
+      const src = path.nodes[i], tgt = path.nodes[i + 1];
+      if (nodes.find(n => n.id === src) && nodes.find(n => n.id === tgt)) {
+        elements.push({ data: { source: src, target: tgt, type: 'attack_path', pathId: path.id } });
+      }
+    }
+  });
+
+  if (_cy) { try { _cy.destroy(); } catch(e) {} _cy = null; }
+
+  _cy = cytoscape({
+    container: cyEl,
+    elements,
+    style: _cyStyle,
+    layout: { name: 'cose', idealEdgeLength: 80, nodeOverlap: 20, refresh: 20, fit: true, padding: 30, animate: true }
+  });
+
+  $('graphNodeCount').textContent = `${nodes.length} nós · ${edges.length} arestas`;
+
+  _cy.on('tap', 'node', function(evt) {
+    const node = evt.target;
+    _cy.elements().removeClass('highlighted dimmed');
+    _cy.elements().addClass('dimmed');
+    node.addClass('highlighted');
+    node.neighborhood().addClass('highlighted');
+    node.neighborhood().removeClass('dimmed');
+    node.removeClass('dimmed');
+    _graphShowDetail(node.data('type'), node.data('label'), node.data('nodeData'));
+  });
+
+  _cy.on('tap', function(evt) {
+    if (evt.target === _cy) {
+      _cy.elements().removeClass('highlighted dimmed');
+      $('graphDetail').hidden = true;
+    }
+  });
+
+  _cy.on('mouseover', 'edge[type="attack_path"]', function(evt) {
+    const pathId = evt.target.data('pathId');
+    if (!pathId) return;
+    const path = (data.attack_paths || []).find(p => p.id === pathId);
+    if (!path) return;
+    _cy.elements().addClass('dimmed');
+    const pathSet = new Set(path.nodes);
+    _cy.nodes().filter(n => pathSet.has(n.id())).removeClass('dimmed').addClass('highlighted');
+    _cy.edges('[type="attack_path"]').filter(e => e.data('pathId') === pathId).removeClass('dimmed');
+  });
+
+  _cy.on('mouseout', 'edge[type="attack_path"]', function() {
+    _cy.elements().removeClass('highlighted dimmed');
+  });
+}
+
+function _graphShowDetail(type, label, data) {
+  const detail = $('graphDetail');
+  const title = $('gdTitle');
+  const body = $('gdBody');
+  const btn = $('gdFindingsBtn');
+
+  const typeLabel = { repo: 'Repositório', finding: 'Finding', cve: 'CVE', secret: 'Secret' }[type] || type;
+  title.textContent = `${typeLabel}: ${label}`;
+
+  const row = (lbl, val) => `<div class="graph-detail-row"><span class="lbl">${esc(lbl)}</span><span class="val">${esc(String(val ?? '—'))}</span></div>`;
+  let html = '';
+  if (type === 'repo') {
+    html += row('Projeto', data.full_name);
+    html += row('High', data.open_high);
+    html += row('Critical', data.open_critical);
+    btn.hidden = false;
+    btn._repoName = data.full_name;
+  } else if (type === 'finding') {
+    html += row('Severidade', data.severity);
+    html += row('Regra', data.rule);
+    html += row('Arquivo', data.file || '—');
+    if (data.line) html += row('Linha', data.line);
+    if (data.message) html += `<div style="margin-top:6px;font-size:11px;color:var(--muted);word-break:break-word">${esc(data.message)}</div>`;
+    btn.hidden = false;
+    btn._repoName = data.repo;
+  } else if (type === 'cve') {
+    html += row('CVE', label);
+    html += row('Severidade', data.severity);
+    btn.hidden = true;
+  } else if (type === 'secret') {
+    html += row('Regra', data.rule);
+    html += row('Severidade', data.severity);
+    html += row('Repositório', data.repo);
+    btn.hidden = false;
+    btn._repoName = data.repo;
+  }
+
+  body.innerHTML = html;
+  detail.hidden = false;
+  if (typeof lucide !== 'undefined') lucide.createIcons({ el: detail });
+}
+
+function _graphNavFindings() {
+  const btn = $('gdFindingsBtn');
+  const repo = btn._repoName;
+  if (repo) {
+    const navEl = document.querySelector('.nav-item[onclick*="findings"]');
+    showTab('findings', navEl);
+    const repoSel = $('fRepo');
+    if (repoSel) { repoSel.value = repo; }
+    if (typeof renderFindPage === 'function') { _findPage = 0; renderFindPage(); }
+  }
+}
+
+function graphShowOnlyAttackPaths() {
+  const cb = $('graphOnlyAttack');
+  if (cb) cb.checked = true;
+  loadGraph();
 }
 
 /* ── Boot ── */
