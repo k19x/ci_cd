@@ -1,0 +1,117 @@
+# Mapeamento de regras de segurança para controles de compliance
+# Estrutura: rule_pattern → lista de controles
+
+frameworks:
+  CIS_Controls_v8:
+    name: "CIS Controls v8"
+    controls:
+      "4.1":
+        name: "Establish and Maintain a Secure Configuration Process"
+        rules:
+          - "dockerfile.security.*"
+          - "DS-*"
+      "6.2":
+        name: "Establish an Access Control List"
+        rules:
+          - "*.hardcoded*"
+          - "generic.secrets.*"
+      "7.5":
+        name: "Perform Automated Vulnerability Scans"
+        rules:
+          - "CVE-*"
+          - "GHSA-*"
+      "14.1":
+        name: "Establish and Maintain a Data Recovery Process"
+        rules:
+          - "*.sql-injection*"
+          - "*.sqlalchemy*"
+      "16.1":
+        name: "Establish and Maintain an Inventory of Authentication Systems"
+        rules:
+          - "*.jwt*"
+          - "*.auth*"
+          - "*.password*"
+
+  SOC2_CC:
+    name: "SOC2 Trust Services Criteria"
+    controls:
+      "CC6.1":
+        name: "Logical and Physical Access Controls"
+        rules:
+          - "generic.secrets.*"
+          - "*.hardcoded*"
+          - "*.jwt*"
+      "CC6.6":
+        name: "Protection Against Threats Outside System Boundaries"
+        rules:
+          - "CVE-*"
+          - "GHSA-*"
+      "CC7.1":
+        name: "Detection of Vulnerabilities"
+        rules:
+          - "python.lang.security.*"
+          - "javascript.lang.security.*"
+      "CC8.1":
+        name: "Change Management"
+        rules:
+          - "yaml.github-actions.*"
+          - "BranchProtectionID"
+          - "CodeReviewID"
+
+  NIST_CSF:
+    name: "NIST Cybersecurity Framework 2.0"
+    controls:
+      "ID.RA-1":
+        name: "Asset vulnerabilities are identified and documented"
+        rules:
+          - "CVE-*"
+          - "GHSA-*"
+          - "BinaryArtifactsID"
+      "PR.AC-1":
+        name: "Identities and credentials are issued and managed"
+        rules:
+          - "generic.secrets.*"
+          - "*.hardcoded*"
+      "PR.DS-1":
+        name: "Data-at-rest is protected"
+        rules:
+          - "*.sql-injection*"
+          - "*.sqlalchemy*"
+      "PR.IP-1":
+        name: "A baseline configuration is established"
+        rules:
+          - "dockerfile.security.*"
+          - "DS-*"
+      "DE.CM-8":
+        name: "Vulnerability scans are performed"
+        rules:
+          - "python.lang.security.*"
+          - "javascript.lang.security.*"
+          - "*.subprocess*"
+
+  PCI_DSS_v4:
+    name: "PCI DSS v4.0"
+    controls:
+      "6.2":
+        name: "Bespoke and custom software are developed securely"
+        rules:
+          - "python.lang.security.*"
+          - "javascript.lang.security.*"
+          - "*.injection*"
+          - "*.subprocess*"
+      "6.3":
+        name: "Security vulnerabilities are identified and addressed"
+        rules:
+          - "CVE-*"
+          - "GHSA-*"
+      "8.2":
+        name: "User identification and authentication are managed"
+        rules:
+          - "generic.secrets.*"
+          - "*.hardcoded*"
+          - "*.jwt*"
+      "12.3":
+        name: "Hardware and software technologies are reviewed"
+        rules:
+          - "DS-*"
+          - "dockerfile.security.*"

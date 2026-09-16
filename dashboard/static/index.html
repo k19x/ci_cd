@@ -1315,6 +1315,30 @@ td { padding: 11px 16px; }
 }
 .ui-toast.err { border-color: var(--crit); }
 .ui-toast.ok  { border-color: var(--ok); }
+
+/* ── Compliance ── */
+.compliance-fw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; padding: 4px 0; }
+.compliance-fw-card { background: var(--s1); border: 1px solid var(--bd); border-radius: 10px; padding: 18px 20px; cursor: pointer; transition: border-color .15s, background .15s; }
+.compliance-fw-card:hover { border-color: var(--accent-dim); background: rgba(0,184,255,.04); }
+.compliance-fw-card.active { border-color: var(--accent); background: rgba(0,184,255,.06); }
+.compliance-fw-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.compliance-fw-name { font-weight: 600; font-size: 13px; color: var(--text); flex: 1; padding-right: 8px; }
+.compliance-fw-pct { font-size: 22px; font-weight: 700; font-family: 'Space Grotesk', sans-serif; flex-shrink: 0; }
+.compliance-progress-bar { height: 6px; background: var(--bd); border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
+.compliance-progress-fill { height: 100%; border-radius: 3px; transition: width .4s ease; }
+.compliance-fw-stats { display: flex; gap: 12px; font-size: 11px; align-items: center; flex-wrap: wrap; }
+.compliance-fw-stats span { display: flex; align-items: center; gap: 4px; }
+.compliance-ctrl-list { margin-top: 16px; }
+.compliance-ctrl-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--bd); }
+.compliance-ctrl-item:last-child { border-bottom: none; }
+.compliance-ctrl-badge { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.compliance-ctrl-badge.passing { background: rgba(34,197,94,.12); color: var(--ok); }
+.compliance-ctrl-badge.failing { background: rgba(239,68,68,.12); color: var(--crit); }
+.compliance-ctrl-info { flex: 1; min-width: 0; }
+.compliance-ctrl-name { font-size: 12px; font-weight: 500; color: var(--text); }
+.compliance-ctrl-id { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.compliance-ctrl-findings { margin-top: 6px; }
+.compliance-finding-item { font-size: 11px; color: var(--muted); padding: 5px 8px; background: var(--s2); border-radius: 4px; margin-top: 4px; display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
 </style>
 
 <div class="sidebar">
@@ -1360,6 +1384,10 @@ td { padding: 11px 16px; }
         <i data-lucide="git-branch-plus"></i>
         Security Graph
         <span id="navGraphBadge" class="nav-badge" hidden title="Attack paths detectados"></span>
+      </a>
+      <a class="nav-item" onclick="showTab('compliance',this)">
+        <i data-lucide="shield-check"></i>
+        Compliance
       </a>
     </div>
     <div class="nav-section">
@@ -1502,6 +1530,10 @@ td { padding: 11px 16px; }
         <div class="stat-group" style="flex:1">
           <span class="stat-group-label">Grafo</span>
           <div class="stat-cell" id="s-attack-paths-cell" title="Attack paths no Security Graph" onclick="showTab('graph',document.querySelector('.nav-item[onclick*=graph]'))"><div class="stat-val" id="s-attack-paths">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="git-branch-plus"></i></span>Attack Paths</div></div>
+        </div>
+        <div class="stat-group" style="flex:2">
+          <span class="stat-group-label">Compliance</span>
+          <div class="stat-cell" id="s-compliance-cell" title="Frameworks com cobertura ≥ 80%" onclick="showTab('compliance',document.querySelector('.nav-item[onclick*=compliance]'))"><div class="stat-val" id="s-compliance">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="shield-check"></i></span>Frameworks</div></div>
         </div>
       </div>
 
@@ -2378,6 +2410,20 @@ td { padding: 11px 16px; }
       </div>
     </div><!-- /tab-graph -->
 
+    <!-- ═══ COMPLIANCE ═══ -->
+    <div id="tab-compliance" class="tab-pane">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><i data-lucide="shield-check"></i> Compliance Frameworks</div>
+          <div class="card-sub" id="complianceSub">Carregando...</div>
+        </div>
+        <div id="complianceGrid" style="padding:0 0 8px">
+          <div style="color:var(--muted);padding:24px">Carregando...</div>
+        </div>
+        <div id="complianceDetail"></div>
+      </div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -2558,7 +2604,7 @@ function showTab(tab, el) {
   $(`tab-${tab}`).classList.add('active');
   if (el) el.classList.add('active');
   currentTab = tab;
-  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Findings', prs:'Pull Requests', vulns:'Histórico de scans', repos:'Projects', settings:'Settings', audit:'Audit Log', graph:'Security Graph'};
+  const titles = {dashboard:'Dashboard', jobs:'Scans', findings:'Findings', prs:'Pull Requests', vulns:'Histórico de scans', repos:'Projects', settings:'Settings', audit:'Audit Log', graph:'Security Graph', compliance:'Compliance'};
   $('topbarTitle').textContent = titles[tab] || tab;
   clearInterval(jobTimer);
   clearInterval(dashTimer);
@@ -2567,14 +2613,15 @@ function showTab(tab, el) {
     loadDashboard();
     dashTimer = setInterval(() => { loadDashboard(); updateDashAge(); }, 30000);
   }
-  if (tab === 'jobs')     { loadJobs(); jobTimer = setInterval(loadJobs, 15000); }
-  if (tab === 'findings') loadFindings();
-  if (tab === 'prs')      loadPrs();
-  if (tab === 'vulns')    loadVulns();
-  if (tab === 'repos')    loadRepos();
-  if (tab === 'settings') loadSettings();
-  if (tab === 'audit')    loadAudit();
-  if (tab === 'graph')    loadGraph();
+  if (tab === 'jobs')       { loadJobs(); jobTimer = setInterval(loadJobs, 15000); }
+  if (tab === 'findings')   loadFindings();
+  if (tab === 'prs')        loadPrs();
+  if (tab === 'vulns')      loadVulns();
+  if (tab === 'repos')      loadRepos();
+  if (tab === 'settings')   loadSettings();
+  if (tab === 'audit')      loadAudit();
+  if (tab === 'graph')      loadGraph();
+  if (tab === 'compliance') loadCompliance();
 }
 
 /* ── Helpers de tempo (drawer de jobs de IA) ── */
@@ -2730,6 +2777,7 @@ async function loadDashboard() {
   if (!_runs.length) loadJobs();   // popula o badge de Scans já no primeiro carregamento
   _loadAttackPathsKpi();
   _slaCfg = data.sla || _slaCfg;
+  loadComplianceKpi();
   _riskMap = Object.fromEntries((data.risk_scores || []).map(r => [r.repo, r.score]));
 
   // populate repo selects
@@ -5335,6 +5383,150 @@ function graphShowOnlyAttackPaths() {
   const cb = $('graphOnlyAttack');
   if (cb) cb.checked = true;
   loadGraph();
+}
+
+/* ── Compliance ── */
+let _complianceData = null;
+let _complianceActiveId = null;
+let _complianceActiveFindingsCtrl = null;
+
+async function loadComplianceKpi() {
+  try {
+    const data = await api('/api/compliance');
+    if (!data) return;
+    if (!_complianceData) _complianceData = data;
+    _renderComplianceKpi(data);
+  } catch(e) {}
+}
+
+function _renderComplianceKpi(data) {
+  const fws = (data || _complianceData)?.frameworks || [];
+  const passing = fws.filter(f => f.coverage_pct >= 80).length;
+  const total = fws.length;
+  const el = $('s-compliance');
+  if (!el) return;
+  el.textContent = total ? `${passing}/${total}` : '—';
+  const cell = $('s-compliance-cell');
+  if (!cell) return;
+  cell.className = 'stat-cell' + (!total ? '' : passing === total ? ' fixed' : passing > 0 ? '' : ' crit');
+}
+
+async function loadCompliance() {
+  const grid = $('complianceGrid');
+  const sub  = $('complianceSub');
+  const det  = $('complianceDetail');
+  if (sub)  sub.textContent = 'Carregando...';
+  if (grid) grid.innerHTML  = '<div style="color:var(--muted);padding:24px">Carregando...</div>';
+  if (det)  { det.innerHTML = ''; }
+  _complianceActiveId = null;
+  _complianceActiveFindingsCtrl = null;
+  const data = await api('/api/compliance');
+  if (!data) {
+    if (sub)  sub.textContent = 'Erro ao carregar';
+    if (grid) grid.innerHTML  = '<div style="color:var(--crit);padding:24px">Erro ao carregar frameworks.</div>';
+    return;
+  }
+  _complianceData = data;
+  _renderComplianceKpi(data);
+  _renderComplianceFrameworks();
+}
+
+function _renderComplianceFrameworks() {
+  const fws  = _complianceData?.frameworks || [];
+  const sub  = $('complianceSub');
+  const grid = $('complianceGrid');
+  if (!fws.length) {
+    if (sub)  sub.textContent = 'Nenhum framework configurado';
+    if (grid) grid.innerHTML  = '<div style="color:var(--muted);padding:24px">Arquivo policy/compliance_frameworks.yml não encontrado ou vazio.</div>';
+    return;
+  }
+  const passing = fws.filter(f => f.coverage_pct >= 80).length;
+  if (sub) sub.textContent = `${passing}/${fws.length} frameworks com cobertura ≥ 80%`;
+  const cards = fws.map(fw => {
+    const color = fw.coverage_pct >= 80 ? 'var(--ok)' : fw.coverage_pct >= 50 ? 'var(--orange)' : 'var(--crit)';
+    const isActive = _complianceActiveId === fw.id;
+    return `<div class="compliance-fw-card${isActive ? ' active' : ''}" onclick="toggleComplianceDetail(${jsq(fw.id)})">
+  <div class="compliance-fw-header">
+    <div class="compliance-fw-name">${esc(fw.name)}</div>
+    <div class="compliance-fw-pct" style="color:${color}">${fw.coverage_pct}%</div>
+  </div>
+  <div class="compliance-progress-bar"><div class="compliance-progress-fill" style="width:${fw.coverage_pct}%;background:${color}"></div></div>
+  <div class="compliance-fw-stats">
+    <span style="color:var(--ok)"><i data-lucide="check-circle" style="width:12px;height:12px"></i> ${fw.controls_passing} passing</span>
+    <span style="color:var(--crit)"><i data-lucide="x-circle" style="width:12px;height:12px"></i> ${fw.controls_failing} failing</span>
+    <span style="color:var(--muted)">${fw.controls_total} controles</span>
+  </div>
+</div>`;
+  }).join('');
+  if (grid) grid.innerHTML = `<div class="compliance-fw-grid">${cards}</div>`;
+  lucide.createIcons();
+  if (_complianceActiveId) _renderComplianceControls(_complianceActiveId);
+}
+
+function toggleComplianceDetail(fwId) {
+  if (_complianceActiveId === fwId) {
+    _complianceActiveId = null;
+    _complianceActiveFindingsCtrl = null;
+    const det = $('complianceDetail');
+    if (det) det.innerHTML = '';
+    _renderComplianceFrameworks();
+    return;
+  }
+  _complianceActiveId = fwId;
+  _complianceActiveFindingsCtrl = null;
+  _renderComplianceFrameworks();
+}
+
+function _renderComplianceControls(fwId) {
+  const fw  = (_complianceData?.frameworks || []).find(f => f.id === fwId);
+  const det = $('complianceDetail');
+  if (!fw || !det) return;
+  const ctrlRows = (fw.controls || []).map(ctrl => {
+    const isFailing  = ctrl.status === 'failing';
+    const badgeCls   = isFailing ? 'failing' : 'passing';
+    const badgeLabel = isFailing ? `${ctrl.open_findings} finding${ctrl.open_findings !== 1 ? 's' : ''}` : 'Passing';
+    const isExpanded = _complianceActiveFindingsCtrl === ctrl.id;
+    const safeKey    = fwId.replace(/[^a-z0-9]/gi,'-') + '-' + ctrl.id.replace(/[^a-z0-9]/gi,'-');
+    return `<div class="compliance-ctrl-item">
+  <span class="compliance-ctrl-badge ${badgeCls}">
+    <i data-lucide="${isFailing ? 'x-circle' : 'check-circle'}" style="width:11px;height:11px"></i>
+    ${esc(badgeLabel)}
+  </span>
+  <div class="compliance-ctrl-info">
+    <div class="compliance-ctrl-id">${esc(ctrl.id)}</div>
+    <div class="compliance-ctrl-name">${esc(ctrl.name)}</div>
+    ${isFailing ? `<button class="btn-ghost" style="margin-top:6px;font-size:11px" onclick="toggleComplianceFindings(${jsq(fwId)},${jsq(ctrl.id)})"><i data-lucide="${isExpanded ? 'chevron-up' : 'chevron-down'}" style="width:12px;height:12px"></i> ${isExpanded ? 'Ocultar findings' : 'Ver findings'}</button>` : ''}
+    <div id="crf-${safeKey}" style="display:${isExpanded ? 'block' : 'none'}" class="compliance-ctrl-findings"></div>
+  </div>
+</div>`;
+  }).join('');
+  det.innerHTML = `<div class="compliance-ctrl-list" style="margin-top:20px;border-top:1px solid var(--bd);padding-top:16px">
+  <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em">${esc(fw.name)} — Controles</div>
+  ${ctrlRows}
+</div>`;
+  lucide.createIcons();
+  if (_complianceActiveFindingsCtrl) _loadCtrlFindings(fwId, _complianceActiveFindingsCtrl);
+}
+
+function toggleComplianceFindings(fwId, ctrlId) {
+  _complianceActiveFindingsCtrl = (_complianceActiveFindingsCtrl === ctrlId) ? null : ctrlId;
+  _renderComplianceControls(fwId);
+}
+
+async function _loadCtrlFindings(fwId, ctrlId) {
+  const safeKey = fwId.replace(/[^a-z0-9]/gi,'-') + '-' + ctrlId.replace(/[^a-z0-9]/gi,'-');
+  const el = $(`crf-${safeKey}`);
+  if (!el) return;
+  el.innerHTML = '<span style="color:var(--muted);font-size:11px">Carregando...</span>';
+  const data = await api(`/api/compliance/findings?framework=${encodeURIComponent(fwId)}&control=${encodeURIComponent(ctrlId)}`);
+  if (!data) { el.innerHTML = '<span style="color:var(--crit);font-size:11px">Erro ao carregar.</span>'; return; }
+  const findings = data.findings || [];
+  if (!findings.length) { el.innerHTML = '<span style="color:var(--muted);font-size:11px">Nenhum finding associado.</span>'; return; }
+  const sevMap = {critical:'c', high:'h', medium:'m', low:'l'};
+  el.innerHTML = findings.map(f => {
+    const sc = sevMap[f.severity] || 'l';
+    return `<div class="compliance-finding-item"><span class="chip ${sc}">${esc(f.severity)}</span><span style="flex:1;min-width:0"><b>${esc(f.repo)}</b> · ${esc(f.rule || '')} · ${esc(f.file || '')}${f.line ? ':'+f.line : ''}</span></div>`;
+  }).join('');
 }
 
 /* ── Boot ── */
