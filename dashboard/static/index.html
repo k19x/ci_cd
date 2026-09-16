@@ -4,6 +4,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>
 <!-- Lucide 1.42.0 servido localmente: a URL do unpkg (0.263.1) nunca existiu e o app rodava sem ícones -->
 <script src="/static/vendor/lucide.min.js"></script>
 
@@ -1226,7 +1227,7 @@ td { padding: 11px 16px; }
 
 /* ── Security Graph ── */
 #cy {
-  width: 100%; height: 600px;
+  width: 100%; height: 680px;
   background: var(--s1);
   border: 1px solid var(--bd);
   border-radius: var(--radius);
@@ -1246,9 +1247,23 @@ td { padding: 11px 16px; }
 .graph-detail-row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
 .graph-detail-row .lbl { color: var(--muted); }
 .graph-detail-row .val { font-weight: 600; color: var(--text); word-break: break-all; text-align: right; }
-.graph-wrap { display: flex; gap: 12px; align-items: flex-start; }
-.graph-wrap #cy { flex: 1; }
+.graph-wrap { display: flex; gap: 12px; align-items: flex-start; position: relative; }
+.graph-wrap #cy { flex: 1; border-radius: var(--radius); overflow: hidden; }
 .graph-detail[hidden] { display: none; }
+.graph-legend {
+  position: absolute; bottom: 14px; left: 14px;
+  background: var(--s2); border: 1px solid var(--bd);
+  border-radius: var(--radius); padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 11px; color: var(--text); z-index: 10;
+  pointer-events: none;
+}
+.gl-item { display: flex; align-items: center; gap: 7px; }
+.gl-dot { width: 12px; height: 12px; flex-shrink: 0; display: inline-block; }
+.gl-sep { border-top: 1px solid var(--bd); margin: 2px 0; height: 0; padding: 0; }
+.gl-line { display: inline-block; width: 22px; height: 2px; flex-shrink: 0; border-radius: 2px; }
+.gl-line.attack { background: #F43F5E; }
+.gl-line.normal { background: #475569; opacity: 0.7; }
 .graph-attack-banner {
   display: flex; align-items: center; gap: 10px;
   background: rgba(239,68,68,.10); border: 1px solid rgba(239,68,68,.3);
@@ -2400,6 +2415,16 @@ td { padding: 11px 16px; }
       </div>
       <div class="graph-wrap">
         <div id="cy"></div>
+        <div class="graph-legend">
+          <div class="gl-item"><span class="gl-dot" style="background:#2563EB;border-radius:4px;width:18px;height:10px"></span>Repositório</div>
+          <div class="gl-item"><span class="gl-dot" style="background:#DC2626;border-radius:50%"></span>Critical</div>
+          <div class="gl-item"><span class="gl-dot" style="background:#EA580C;border-radius:50%"></span>High</div>
+          <div class="gl-item"><span class="gl-dot" style="background:#7C3AED;transform:rotate(45deg)"></span>CVE</div>
+          <div class="gl-item"><span class="gl-dot" style="background:#0891B2;clip-path:polygon(50% 0%,100% 38%,82% 100%,18% 100%,0% 38%)"></span>Secret</div>
+          <div class="gl-item gl-sep"></div>
+          <div class="gl-item"><span class="gl-line attack"></span>Attack path</div>
+          <div class="gl-item"><span class="gl-line normal"></span>Conexão</div>
+        </div>
         <div id="graphDetail" class="graph-detail" hidden>
           <div class="graph-detail-title" id="gdTitle"></div>
           <div id="gdBody"></div>
@@ -5140,41 +5165,106 @@ let _graphData = null;
 let _graphRepoSelected = null;
 
 const _cyStyle = [
+  { selector: 'node', style: {
+    'font-family': 'Inter, system-ui, sans-serif',
+    'text-wrap': 'ellipsis', 'text-max-width': '120px',
+    'text-overflow-wrap': 'anywhere'
+  }},
   { selector: 'node[type="repo"]', style: {
-    'background-color': '#3B82F6', 'label': 'data(label)',
-    'color': '#fff', 'text-valign': 'bottom', 'font-size': '11px',
-    'width': 40, 'height': 40, 'shape': 'round-rectangle',
-    'text-outline-color': '#1e3a5f', 'text-outline-width': 1
+    'background-color': '#2563EB',
+    'label': 'data(label)',
+    'color': '#fff',
+    'text-valign': 'center',
+    'text-halign': 'center',
+    'font-size': '12px',
+    'font-weight': '600',
+    'width': 'mapData(size, 1, 40, 72, 130)',
+    'height': 36,
+    'shape': 'round-rectangle',
+    'padding': '6px',
+    'border-width': 0,
+    'text-outline-width': 0,
+    'min-zoomed-font-size': 8
+  }},
+  { selector: 'node[type="finding"][severity="critical"]', style: {
+    'background-color': '#DC2626',
+    'label': 'data(label)',
+    'color': '#fff',
+    'text-valign': 'center', 'text-halign': 'center',
+    'font-size': '9px', 'font-weight': '500',
+    'width': 32, 'height': 32,
+    'shape': 'ellipse',
+    'border-width': 2, 'border-color': '#991B1B',
+    'min-zoomed-font-size': 7
+  }},
+  { selector: 'node[type="finding"][severity="high"]', style: {
+    'background-color': '#EA580C',
+    'label': 'data(label)',
+    'color': '#fff',
+    'text-valign': 'center', 'text-halign': 'center',
+    'font-size': '9px', 'font-weight': '500',
+    'width': 26, 'height': 26,
+    'shape': 'ellipse',
+    'border-width': 0,
+    'min-zoomed-font-size': 7
   }},
   { selector: 'node[type="finding"]', style: {
-    'background-color': '#F59E0B', 'label': 'data(label)',
-    'color': '#1f2937', 'text-valign': 'bottom', 'font-size': '9px',
-    'width': 20, 'height': 20, 'shape': 'ellipse'
+    'background-color': '#D97706',
+    'label': 'data(label)',
+    'color': '#fff',
+    'text-valign': 'center', 'text-halign': 'center',
+    'font-size': '9px',
+    'width': 22, 'height': 22,
+    'shape': 'ellipse',
+    'min-zoomed-font-size': 7
   }},
   { selector: 'node[type="cve"]', style: {
-    'background-color': '#EF4444', 'label': 'data(label)',
-    'color': '#fff', 'text-valign': 'bottom', 'font-size': '9px',
-    'width': 28, 'height': 28, 'shape': 'diamond',
-    'text-outline-color': '#7f1d1d', 'text-outline-width': 1
+    'background-color': '#7C3AED',
+    'label': 'data(label)',
+    'color': '#fff',
+    'text-valign': 'center', 'text-halign': 'center',
+    'font-size': '9px', 'font-weight': '600',
+    'width': 38, 'height': 38,
+    'shape': 'diamond',
+    'border-width': 2, 'border-color': '#5B21B6',
+    'min-zoomed-font-size': 7
   }},
   { selector: 'node[type="secret"]', style: {
-    'background-color': '#8B5CF6', 'label': 'data(label)',
-    'color': '#fff', 'text-valign': 'bottom', 'font-size': '9px',
-    'width': 24, 'height': 24, 'shape': 'star'
+    'background-color': '#0891B2',
+    'label': 'data(label)',
+    'color': '#fff',
+    'text-valign': 'center', 'text-halign': 'center',
+    'font-size': '9px',
+    'width': 28, 'height': 28,
+    'shape': 'round-pentagon',
+    'border-width': 2, 'border-color': '#0E7490',
+    'min-zoomed-font-size': 7
   }},
   { selector: 'edge', style: {
-    'line-color': '#94A3B8', 'target-arrow-color': '#94A3B8',
-    'target-arrow-shape': 'triangle', 'curve-style': 'bezier',
-    'width': 1, 'opacity': 0.6
+    'line-color': '#475569',
+    'target-arrow-color': '#475569',
+    'target-arrow-shape': 'triangle',
+    'curve-style': 'bezier',
+    'width': 1.2,
+    'opacity': 0.55,
+    'arrow-scale': 0.8
   }},
   { selector: 'edge[type="attack_path"]', style: {
-    'line-color': '#EF4444', 'target-arrow-color': '#EF4444',
-    'width': 2.5, 'line-style': 'dashed', 'opacity': 0.9
+    'line-color': '#F43F5E',
+    'target-arrow-color': '#F43F5E',
+    'width': 3,
+    'line-style': 'dashed',
+    'line-dash-pattern': [6, 3],
+    'opacity': 1,
+    'z-index': 10
   }},
   { selector: '.highlighted', style: {
-    'border-width': 3, 'border-color': '#F59E0B'
+    'border-width': 4,
+    'border-color': '#FBBF24',
+    'border-opacity': 1,
+    'z-index': 20
   }},
-  { selector: '.dimmed', style: { 'opacity': 0.15 }}
+  { selector: '.dimmed', style: { 'opacity': 0.12 }}
 ];
 
 async function loadGraph() {
@@ -5188,7 +5278,7 @@ async function loadGraph() {
   if (typeof lucide !== 'undefined') lucide.createIcons({ el: cyEl });
   $('graphDetail').hidden = true;
 
-  let url = '/api/graph?severity=high,critical&limit=150';
+  let url = '/api/graph?severity=high,critical&limit=80&max_repos=12';
   if (repoFilter) url += `&repo=${encodeURIComponent(repoFilter)}`;
   const data = await api(url);
   if (!data) return;
@@ -5266,7 +5356,12 @@ async function loadGraph() {
   cyEl.innerHTML = '';
 
   const elements = [
-    ...nodes.map(n => ({ data: { id: n.id, label: n.label, type: n.type, nodeData: n.data } })),
+    ...nodes.map(n => ({ data: {
+      id: n.id, label: n.label, type: n.type,
+      severity: n.data?.severity || '',
+      size: n.data?.open_high != null ? Math.min(n.data.open_high + (n.data.open_critical || 0), 40) : 1,
+      nodeData: n.data
+    }})),
     ...edges.map(e => ({ data: { source: e.source, target: e.target, type: e.type } }))
   ];
 
@@ -5282,11 +5377,27 @@ async function loadGraph() {
 
   if (_cy) { try { _cy.destroy(); } catch(e) {} _cy = null; }
 
+  // Register fcose if available and not already registered
+  if (typeof cytoscapeFcose !== 'undefined') {
+    try { cytoscape.use(cytoscapeFcose); } catch(e) {}
+  }
+
+  const layoutName = (typeof cytoscapeFcose !== 'undefined') ? 'fcose' : 'cose';
+  const layoutConfig = layoutName === 'fcose'
+    ? { name: 'fcose', quality: 'proof', randomize: true, animate: true, animationDuration: 700,
+        nodeSeparation: 160, idealEdgeLength: 200, edgeElasticity: () => 0.45,
+        nodeRepulsion: () => 6500, gravity: 0.35, numIter: 2500,
+        fit: true, padding: 48, tile: true, tilingPaddingVertical: 20, tilingPaddingHorizontal: 20 }
+    : { name: 'cose', idealEdgeLength: 100, nodeOverlap: 20, refresh: 20, fit: true, padding: 40, animate: true };
+
   _cy = cytoscape({
     container: cyEl,
     elements,
     style: _cyStyle,
-    layout: { name: 'cose', idealEdgeLength: 80, nodeOverlap: 20, refresh: 20, fit: true, padding: 30, animate: true }
+    layout: layoutConfig,
+    minZoom: 0.1,
+    maxZoom: 4,
+    wheelSensitivity: 0.3
   });
 
   $('graphNodeCount').textContent = `${nodes.length} nós · ${edges.length} arestas`;

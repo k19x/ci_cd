@@ -2705,21 +2705,38 @@ def security_graph(
     repo: str | None = None,
     severity: str | None = None,
     limit: int = 150,
+    max_repos: int = 12,
     user=Depends(require_role("viewer")),
 ):
     limit = min(max(limit, 1), 300)
+    max_repos = min(max(max_repos, 1), 50)
     sevs = [s.strip() for s in (severity or "high,critical").split(",") if s.strip()]
     sev_placeholders = ",".join("?" * len(sevs))
 
     with db() as conn:
+        # When no repo filter, limit to top repos by finding count to keep graph readable
+        allowed_repos: list[str] | None = None
+        if not repo:
+            top = conn.execute(
+                f"SELECT repo, COUNT(*) AS cnt FROM findings"
+                f" WHERE status='open' AND severity IN ({sev_placeholders})"
+                f" GROUP BY repo ORDER BY cnt DESC LIMIT ?",
+                list(sevs) + [max_repos],
+            ).fetchall()
+            allowed_repos = [r["repo"] for r in top]
+
         base_query = (
-            f"SELECT repo, fid, tool, rule, severity, file, line, message, status"
+            f"SELECT repo, fid, tool, rule, severity, file, line, message, status, risk_score"
             f" FROM findings WHERE status='open' AND severity IN ({sev_placeholders})"
         )
         params: list = list(sevs)
         if repo:
             base_query += " AND repo=?"
             params.append(repo)
+        elif allowed_repos:
+            rp = ",".join("?" * len(allowed_repos))
+            base_query += f" AND repo IN ({rp})"
+            params.extend(allowed_repos)
         base_query += (
             " ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 ELSE 2 END"
             ", last_seen DESC LIMIT ?"

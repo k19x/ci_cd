@@ -3,6 +3,23 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.19] - 2026-09-16 02:30
+
+### Changed
+- **Security Graph — redesign visual completo**:
+  - Layout substituído de `cose` para `fcose` (cytoscape-fcose@2.2.0 de jsdelivr) — `quality: proof`, `nodeSeparation: 160`, `idealEdgeLength: 200`; elimina o blob denso de nós.
+  - Nós repositório: pill horizontal 72–130 × 36 px (largura proporcional ao nº de findings), texto **dentro** (`text-valign: center`), azul `#2563EB`.
+  - Nós finding critical: vermelho `#DC2626`, 32 px, borda 2 px; finding high: laranja `#EA580C`, 26 px — distinguidos por seletor de severidade.
+  - Nós CVE: roxo `#7C3AED`, 38 px diamante com borda; nós Secret: ciano `#0891B2`, 28 px pentagon.
+  - Attack-path edges: rosa `#F43F5E`, largura 3, linha tracejada `[6,3]`, `z-index: 10`.
+  - Limite padrão reduzido de 150 → 80 nós; `max_repos=12` para não sobrecarregar visão "todos".
+  - **Backend** `/api/graph`: novo parâmetro `max_repos` (1–50, default 12) — limita a visão "todos os repos" aos N repos com mais findings; sem `repo` filter, consulta top repos primeiro.
+  - **Legenda visual** sobreposição bottom-left no canvas com cor, forma e tipo de cada nó + linha de attack path vs. conexão normal.
+  - Altura do canvas: 600 → 680 px; `wheelSensitivity: 0.3` para scroll mais suave.
+
+### Execução
+- 2026-09-16 02:30 — Sem rebuild necessário; apenas `index.html` e `app.py` alterados. Recarregar página.
+
 ## [0.15.18] - 2026-09-16 00:00
 
 ### Added
