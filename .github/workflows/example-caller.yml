@@ -20,6 +20,8 @@
 name: example-caller (desativado)
 on:
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   noop:
     runs-on: ubuntu-latest
