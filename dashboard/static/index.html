@@ -1445,6 +1445,7 @@ td { padding: 11px 16px; }
           <div class="stat-cell fixed" title="Ver findings corrigidos" onclick="goToFindings('','fixed')"><div class="stat-val" id="s-fixed">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="check-circle"></i></span>Corrigidos</div></div>
           <div class="stat-cell crit" title="Findings abertos além do prazo de SLA" onclick="if($('fSlaOnly'))$('fSlaOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-sla">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="clock-alert"></i></span>SLA</div></div>
           <div class="stat-cell fixready" title="Correções da IA com branch pronta aguardando abertura de PR" onclick="if($('fFixOnly'))$('fFixOnly').checked=true;goToFindings('','open')"><div class="stat-val" id="s-fixready">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="git-pull-request"></i></span>Aguard. PR</div></div>
+          <div class="stat-cell" id="s-toprisk-cell" title="Maior risk_score entre os findings abertos (severidade × criticidade × EPSS)"><div class="stat-val" id="s-toprisk">—</div><div class="stat-label"><span class="stat-icon"><i data-lucide="flame"></i></span>Top Risk</div></div>
         </div>
       </div>
 
@@ -1620,6 +1621,7 @@ td { padding: 11px 16px; }
             <input type="checkbox" id="fFixOnly" class="selbox" onchange="_findPage=0;renderFindPage()"> Correção pronta
           </label>
           <button class="btn-ghost" onclick="exportFindingsCSV()" title="Exportar CSV"><i data-lucide="download"></i> CSV</button>
+          <button class="btn-ghost" id="refreshRiskBtn" data-min-role="analyst" onclick="refreshRiskScores(this)" title="Busca EPSS para CVEs e recalcula risk_score de todos os findings abertos"><i data-lucide="refresh-cw"></i> Atualizar Risk Scores</button>
           <span id="bulkBar" hidden>
             <select id="bulkStatus">
               <option value="false_positive">Not Exploitable</option>
@@ -1638,6 +1640,7 @@ td { padding: 11px 16px; }
               <th class="sortable" data-k="res" data-c="0" onclick="sortBy('res',0,renderFindPage)">Project<span class="arr"></span></th>
               <th class="sortable" data-k="res" data-c="1" onclick="sortBy('res',1,renderFindPage)">Vulnerability<span class="arr"></span></th>
               <th class="sortable" data-k="res" data-c="2" onclick="sortBy('res',2,renderFindPage)">Severity<span class="arr"></span></th>
+              <th class="sortable" data-k="res" data-c="6" onclick="sortBy('res',6,renderFindPage)">Risk<span class="arr"></span></th>
               <th class="sortable" data-k="res" data-c="3" onclick="sortBy('res',3,renderFindPage)">Engine<span class="arr"></span></th>
               <th class="sortable" data-k="res" data-c="4" onclick="sortBy('res',4,renderFindPage)">Location<span class="arr"></span></th>
               <th class="sortable" data-k="res" data-c="5" onclick="sortBy('res',5,renderFindPage)">State<span class="arr"></span></th>
@@ -1769,6 +1772,7 @@ td { padding: 11px 16px; }
               <th class="sortable" data-k="rep" data-c="5" onclick="sortBy('rep',5,renderRepos)">Crit / High<span class="arr"></span></th>
               <th class="sortable" data-k="rep" data-c="6" onclick="sortBy('rep',6,renderRepos)">Risk<span class="arr"></span></th>
               <th title="Piloto automático: seguir o global, ligar ou desligar só neste projeto">Piloto</th>
+              <th title="Nível de criticidade do projeto — multiplica o risk_score dos seus findings">Criticality</th>
               <th>Integration</th><th></th>
             </tr></thead>
             <tbody id="repoRows"></tbody>
@@ -2626,6 +2630,11 @@ async function loadDashboard() {
   $('s-fixed').textContent   = data.by_status.fixed || 0;
   $('s-sla').textContent     = data.sla_breached ?? '—';
   $('s-fixready').textContent = data.fix_ready ?? '—';
+  const _topRisk = (data.top_risk || [])[0];
+  const _trScore = _topRisk?.risk_score;
+  const _trCell  = $('s-toprisk-cell');
+  if (_trCell) _trCell.className = 'stat-cell ' + (_trScore > 50 ? 'crit' : _trScore > 20 ? 'high' : 'fixed');
+  $('s-toprisk').textContent = _trScore != null ? (+_trScore).toFixed(1) : '—';
   // o total inclui 'info', que não tem card próprio — sem esta nota os 4 cards visíveis não fecham a soma
   const nInfo = (data.open_by_severity || {}).info || 0;
   const note = $('s-info-note');
@@ -2974,6 +2983,7 @@ function renderFindPage() {
   _findingsView = applySort('res', base, {
     0: f => f.repo || '', 1: f => f.rule || '', 2: f => SEV_ORD[f.severity] ?? 9, 3: f => f.tool || '',
     4: f => (f.file || '') + ':' + (f.line || 0), 5: f => f.status || '',
+    6: f => f.risk_score ?? -1,
   });
   const total = _findingsView.length;
   const pages = Math.max(1, Math.ceil(total / _findPageSize));
@@ -2985,7 +2995,7 @@ function renderFindPage() {
 
   const tbody = $('findRows');
   if (!total) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i data-lucide="circle-check-big"></i><p>No results for the selected filters</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i data-lucide="circle-check-big"></i><p>No results for the selected filters</p></div></td></tr>`;
     $('findPager').hidden = true;
     return;
   }
@@ -3014,6 +3024,7 @@ function renderFindPage() {
               : ''}
       </td>
       <td><span class="sev ${sevClass(f.severity)}">${f.severity}</span>${breach ? `<i data-lucide="alarm-clock" style="width:12px;height:12px;color:var(--crit);vertical-align:-2px;margin-left:5px" title="SLA estourado — aberto há ${ageDays(f)} dias"></i>` : ''}</td>
+      <td>${findRiskBadge(f)}</td>
       <td style="color:var(--muted);font-size:12px">${esc(f.tool)}</td>
       <td class="mono file-cell" title="${esc(f.file)}"><a class="fd-file-link" href="${esc(fileLink(f))}" target="_blank" rel="noopener">${esc(f.file)}${f.line?':'+f.line:''}</a></td>
       <td>
@@ -3063,6 +3074,28 @@ async function dispatchAutofix(repo, fid, rule, severity, file, line, message, t
     btn.classList.remove('loading');
     btnLabel(btn, 'sparkles', 'Corrigir com IA');
     if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [btn] });
+  }
+}
+
+function findRiskBadge(f) {
+  if (f.risk_score == null) return '<span style="color:var(--muted)">—</span>';
+  const v = f.risk_score;
+  const color = v > 50 ? 'var(--crit)' : v > 20 ? 'var(--high)' : 'var(--ok)';
+  const epssTitle = (f.epss_score != null && f.epss_score > 0.1)
+    ? ` title="EPSS: ${(f.epss_score * 100).toFixed(1)}% probabilidade de exploit em 30 dias"`
+    : '';
+  return `<span style="font-weight:600;color:${color}"${epssTitle}>${v.toFixed(1)}</span>`;
+}
+
+async function refreshRiskScores(btn) {
+  btnLabel(btn, 'loader-circle', 'Calculando...');
+  btn.disabled = true;
+  const d = await api('/api/findings/refresh-risk', {method:'POST'});
+  btnLabel(btn, 'refresh-cw', 'Atualizar Risk Scores');
+  btn.disabled = false;
+  if (d) {
+    uiToast(`${d.updated} findings atualizados com risk_score`, 'ok');
+    await loadFindings();
   }
 }
 
@@ -3611,6 +3644,15 @@ async function setRepoAutopilot(name, mode, sel) {
   if (!d) { loadRepos(); return; }
   sel.className = 'ap-sel ' + (mode || 'global');
   uiToast(`${name}: piloto ${mode === 'on' ? 'ligado' : mode === 'off' ? 'desligado' : 'seguindo o global'}`, 'ok');
+}
+
+async function setRepoCriticality(name, criticality, sel) {
+  const d = await api(`/api/repos/${encodeURIComponent(name)}/criticality`,
+    {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({criticality})});
+  if (!d) { loadRepos(); return; }
+  const repo = _allRepos.find(r => r.name === name);
+  if (repo) repo.criticality = criticality;
+  uiToast(`${name}: criticidade definida como ${criticality}`, 'ok');
 }
 
 /* ── SLA ── */
@@ -4218,7 +4260,7 @@ function renderRepos() {
   $('repoCount').textContent = `${list.length} project${list.length!==1?'s':''}`;
   if (!list.length) {
     const msg = _visFilter !== 'all' ? `No ${_visFilter} projects.` : 'No projects yet. Add one above.';
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><p>${msg}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><p>${msg}</p></div></td></tr>`;
     return;
   }
   list = applySort('rep', list, {
@@ -4262,6 +4304,15 @@ function renderRepos() {
           <option value=""    ${!r.autopilot ? 'selected' : ''}>global</option>
           <option value="on"  ${r.autopilot === 'on' ? 'selected' : ''}>ligado</option>
           <option value="off" ${r.autopilot === 'off' ? 'selected' : ''}>desligado</option>
+        </select>
+      </td>
+      <td>
+        <select class="ap-sel" data-min-role="analyst" title="Criticidade do projeto — afeta o risk_score dos findings"
+                onchange="setRepoCriticality(${jsq(r.name)}, this.value, this)">
+          <option value="low"      ${(r.criticality||'medium')==='low'      ? 'selected' : ''}>low</option>
+          <option value="medium"   ${(r.criticality||'medium')==='medium'   ? 'selected' : ''}>medium</option>
+          <option value="high"     ${(r.criticality||'medium')==='high'     ? 'selected' : ''}>high</option>
+          <option value="critical" ${(r.criticality||'medium')==='critical' ? 'selected' : ''}>critical</option>
         </select>
       </td>
       <td>

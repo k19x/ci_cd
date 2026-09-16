@@ -232,6 +232,10 @@ _migrations = [
     "ALTER TABLE repos ADD COLUMN autopilot TEXT DEFAULT ''",
     "ALTER TABLE findings ADD COLUMN fix_pr_state TEXT DEFAULT ''",
     "ALTER TABLE findings ADD COLUMN fix_pr_merged_at TEXT DEFAULT ''",
+    "ALTER TABLE findings ADD COLUMN epss_score REAL DEFAULT NULL",
+    "ALTER TABLE findings ADD COLUMN epss_percentile REAL DEFAULT NULL",
+    "ALTER TABLE findings ADD COLUMN risk_score REAL DEFAULT NULL",
+    "ALTER TABLE repos ADD COLUMN criticality TEXT DEFAULT 'medium'",
 ]
 for _mig in _migrations:
     try:
@@ -628,6 +632,11 @@ def overview(user=Depends(require_role("viewer"))):
         fix_ready = conn.execute(
             "SELECT COUNT(*) FROM findings WHERE status='open' AND fix_branch!='' AND fix_pr=''"
         ).fetchone()[0]
+        top_risk = [dict(r) for r in conn.execute(
+            "SELECT fid, repo, rule, risk_score, severity FROM findings "
+            "WHERE status='open' AND risk_score IS NOT NULL "
+            "ORDER BY risk_score DESC LIMIT 10"
+        ).fetchall()]
 
     return {
         "repos": repos,
@@ -641,6 +650,7 @@ def overview(user=Depends(require_role("viewer"))):
         "sla": sla,
         "sla_breached": sla_breached,
         "risk_scores": risk_scores,
+        "top_risk": top_risk,
     }
 
 
@@ -655,7 +665,7 @@ def list_repos(user=Depends(require_role("viewer"))):
         rows = conn.execute(
             """
             SELECT r.name, r.url, r.created_at,
-                   r.visibility, r.languages, r.autopilot,
+                   r.visibility, r.languages, r.autopilot, r.criticality,
                    (SELECT MAX(created_at) FROM scans s WHERE s.repo = r.name) AS last_scan,
                    (SELECT COUNT(*) FROM scans s WHERE s.repo = r.name) AS scan_count,
                    (SELECT COUNT(*) FROM findings f
@@ -666,10 +676,11 @@ def list_repos(user=Depends(require_role("viewer"))):
             FROM (SELECT name, url, created_at,
                          COALESCE(visibility,'') AS visibility,
                          COALESCE(languages,'') AS languages,
-                         COALESCE(autopilot,'') AS autopilot
+                         COALESCE(autopilot,'') AS autopilot,
+                         COALESCE(criticality,'medium') AS criticality
                   FROM repos
                   UNION
-                  SELECT DISTINCT repo, '', '', '', '', '' FROM scans
+                  SELECT DISTINCT repo, '', '', '', '', '', 'medium' FROM scans
                    WHERE repo NOT IN (SELECT name FROM repos)) r
             ORDER BY r.name
             """
@@ -691,6 +702,22 @@ def set_repo_autopilot(name: str, body: RepoAutopilot, user=Depends(require_role
         conn.execute("UPDATE repos SET autopilot=? WHERE name=?", (body.mode, name))
     _audit(user["username"], "repo_autopilot", name, detail=body.mode or "global")
     return {"ok": True, "mode": body.mode}
+
+
+class RepoCriticality(BaseModel):
+    criticality: str  # low / medium / high / critical
+
+
+@app.patch("/api/repos/{repo:path}/criticality")
+def set_repo_criticality(repo: str, body: RepoCriticality, user=Depends(require_role("analyst"))):
+    if body.criticality not in ("low", "medium", "high", "critical"):
+        raise HTTPException(400, "criticality deve ser low, medium, high ou critical")
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with db() as conn:
+        conn.execute("INSERT OR IGNORE INTO repos(name, created_at) VALUES (?,?)", (repo, now))
+        conn.execute("UPDATE repos SET criticality=? WHERE name=?", (body.criticality, repo))
+    _audit(user["username"], "repo_criticality", repo, detail=body.criticality)
+    return {"ok": True, "criticality": body.criticality}
 
 
 @app.post("/api/repos", status_code=201)
@@ -810,6 +837,47 @@ def list_findings(
     with db() as conn:
         rows = [dict(r) for r in conn.execute(query, params)]
     return {"count": len(rows), "findings": rows}
+
+
+@app.post("/api/findings/refresh-risk")
+def refresh_risk(user=Depends(require_role("analyst"))):
+    """Computes risk_score for every open finding:
+    severity_weight × criticality_mult × (1 + epss × 10).
+    CVE rules get real EPSS data; non-CVEs use 0.1 as fallback."""
+    _SEV_W  = {"critical": 10, "high": 7, "medium": 4, "low": 1}
+    _CRIT_M = {"critical": 2.0, "high": 1.5, "medium": 1.0, "low": 0.5}
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT f.repo, f.fid, f.rule, f.severity, "
+            "COALESCE(r.criticality, 'medium') AS criticality "
+            "FROM findings f LEFT JOIN repos r ON f.repo = r.name "
+            "WHERE f.status = 'open'"
+        ).fetchall()
+    cve_ids = list({
+        re.match(r"(CVE-\d{4}-\d+)", row["rule"] or "", re.I).group(1).upper()
+        for row in rows
+        if re.match(r"CVE-\d{4}-\d+", row["rule"] or "", re.I)
+    })
+    epss_map = _fetch_epss(cve_ids) if cve_ids else {}
+    updated = 0
+    with db() as conn:
+        for row in rows:
+            cve_m = re.match(r"(CVE-\d{4}-\d+)", row["rule"] or "", re.I)
+            epss_data  = epss_map.get(cve_m.group(1).upper()) if cve_m else None
+            epss_score = epss_data[0] if epss_data else None
+            epss_pct   = epss_data[1] if epss_data else None
+            epss       = epss_score if epss_score is not None else 0.1
+            sw         = _SEV_W.get(row["severity"], 1)
+            cm         = _CRIT_M.get(row["criticality"], 1.0)
+            risk_score = round(sw * cm * (1 + epss * 10), 2)
+            conn.execute(
+                "UPDATE findings SET epss_score=?, epss_percentile=?, risk_score=? "
+                "WHERE repo=? AND fid=?",
+                (epss_score, epss_pct, risk_score, row["repo"], row["fid"]),
+            )
+            updated += 1
+    _audit(user["username"], "refresh_risk", detail=f"{updated} findings atualizados")
+    return {"updated": updated, "ok": True}
 
 
 class TriageUpdate(BaseModel):
@@ -1547,6 +1615,39 @@ def rerun_scan(repo: str, run_id: int, user=Depends(require_role("analyst"))):
 AI_MODELS = ["claude-sonnet-4-6", "claude-sonnet-5", "claude-opus-5",
              "claude-fable-5", "claude-haiku-4-5-20251001"]
 _ai_cache: dict = {}   # (kind, repo, key) -> analysis text
+_epss_cache: dict = {}  # cve_id (upper) -> (score, percentile, expires_ts)
+
+
+def _fetch_epss(cves: list[str]) -> dict[str, tuple[float, float]]:
+    """Returns {cve_id: (score, percentile)} via FIRST EPSS API — batched, 24 h in-memory cache.
+    Never raises; returns {} on network or parse failure."""
+    now = time.time()
+    result: dict[str, tuple[float, float]] = {}
+    to_fetch: list[str] = []
+    for cve in cves:
+        c = cve.upper()
+        entry = _epss_cache.get(c)
+        if entry and entry[2] > now:
+            result[c] = (entry[0], entry[1])
+        else:
+            to_fetch.append(c)
+    _BATCH = 100
+    for i in range(0, len(to_fetch), _BATCH):
+        batch = to_fetch[i : i + _BATCH]
+        try:
+            url = "https://api.first.org/data/v1/epss?cve=" + ",".join(batch)
+            req = urllib.request.Request(url, headers={"Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = _json.loads(resp.read())
+            for item in data.get("data", []):
+                cid = (item.get("cve") or "").upper()
+                score = float(item.get("epss") or 0)
+                pct   = float(item.get("percentile") or 0)
+                result[cid] = (score, pct)
+                _epss_cache[cid] = (score, pct, now + 86400)
+        except Exception:
+            pass
+    return result
 
 
 def _get_setting(key: str, default: str = "") -> str:

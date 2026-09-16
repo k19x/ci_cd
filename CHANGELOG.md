@@ -3,6 +3,22 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.16] - 2026-09-16 00:00
+
+### Added
+- **Risk Score**: integração com EPSS (FIRST.org) para CVEs + criticidade por repo + `risk_score` composto por finding
+  - Novas colunas: `findings.epss_score`, `findings.epss_percentile`, `findings.risk_score`, `repos.criticality`
+  - `POST /api/findings/refresh-risk`: calcula `risk_score = severity_weight × criticality_mult × (1 + epss × 10)` para todos os findings abertos; busca EPSS em lotes de 100, cache 24 h
+  - `PATCH /api/repos/{repo}/criticality`: define criticidade do projeto (low/medium/high/critical)
+  - `GET /api/overview` inclui `top_risk` (top 10 por risk_score)
+  - KPI "Top Risk Score" no dashboard (flame, cor dinâmica: vermelho >50, laranja >20, verde ≤20)
+  - Coluna "Risk" na tabela de Findings com badge colorido e tooltip EPSS quando score > 10 %
+  - Dropdown de criticidade por repo na aba Repos
+  - Botão "Atualizar Risk Scores" na aba Findings
+
+### Execução
+- 2026-09-16 00:00 — Rebuild necessário (novo schema: 4 colunas adicionadas via migration idempotente)
+
 ## [0.15.15] - 2026-09-12 22:00
 
 ### Fixed
