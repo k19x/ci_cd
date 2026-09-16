@@ -2575,6 +2575,147 @@ def executive_report(user=Depends(require_role("viewer"))):
     return HTMLResponse(html)
 
 
+@app.get("/api/graph")
+def security_graph(
+    repo: str | None = None,
+    severity: str | None = None,
+    limit: int = 150,
+    user=Depends(require_role("viewer")),
+):
+    limit = min(max(limit, 1), 300)
+    sevs = [s.strip() for s in (severity or "high,critical").split(",") if s.strip()]
+    sev_placeholders = ",".join("?" * len(sevs))
+
+    with db() as conn:
+        base_query = (
+            f"SELECT repo, fid, tool, rule, severity, file, line, message, status"
+            f" FROM findings WHERE status='open' AND severity IN ({sev_placeholders})"
+        )
+        params: list = list(sevs)
+        if repo:
+            base_query += " AND repo=?"
+            params.append(repo)
+        base_query += (
+            " ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 ELSE 2 END"
+            ", last_seen DESC LIMIT ?"
+        )
+        params.append(limit)
+        rows = [dict(r) for r in conn.execute(base_query, params)]
+
+    _SECRET_PATS = re.compile(r"secret|jwt|password|token|key|credential|api.key", re.I)
+    _CVE_PAT = re.compile(r"^CVE-", re.I)
+
+    nodes: dict[str, dict] = {}
+    edges: list[dict] = []
+
+    for f in rows:
+        r_id = f"repo:{f['repo']}"
+        short_repo = f["repo"].split("/")[-1] if "/" in f["repo"] else f["repo"]
+
+        if r_id not in nodes:
+            nodes[r_id] = {
+                "id": r_id, "type": "repo", "label": short_repo,
+                "data": {"full_name": f["repo"], "open_high": 0, "open_critical": 0}
+            }
+        if f["severity"] == "critical":
+            nodes[r_id]["data"]["open_critical"] += 1
+        elif f["severity"] == "high":
+            nodes[r_id]["data"]["open_high"] += 1
+
+        rule = f.get("rule") or ""
+        label = rule[:30] if rule else f.get("fid", "")[:12]
+
+        is_secret = bool(_SECRET_PATS.search(rule)) or bool(_SECRET_PATS.search(f.get("message") or ""))
+        is_cve = bool(_CVE_PAT.match(rule))
+
+        if is_secret:
+            n_id = f"secret:{f['repo']}:{f['fid']}"
+            if n_id not in nodes:
+                nodes[n_id] = {
+                    "id": n_id, "type": "secret", "label": label[:24],
+                    "data": {"repo": f["repo"], "rule": rule, "severity": f["severity"]}
+                }
+            edges.append({"source": r_id, "target": n_id, "type": "exposes_secret"})
+        else:
+            f_id = f"finding:{f['fid']}"
+            if f_id not in nodes:
+                nodes[f_id] = {
+                    "id": f_id, "type": "finding", "label": label,
+                    "data": {
+                        "severity": f["severity"], "rule": rule,
+                        "file": f.get("file") or "", "line": f.get("line") or 0,
+                        "message": (f.get("message") or "")[:120],
+                        "repo": f["repo"]
+                    }
+                }
+            edges.append({"source": r_id, "target": f_id, "type": "has_finding"})
+
+            if is_cve:
+                cve_id = f"cve:{rule}"
+                if cve_id not in nodes:
+                    nodes[cve_id] = {
+                        "id": cve_id, "type": "cve", "label": rule[:32],
+                        "data": {"severity": f["severity"]}
+                    }
+                edges.append({"source": f_id, "target": cve_id, "type": "references_cve"})
+
+    finding_to_cve: dict[str, str] = {}
+    for e in edges:
+        if e["type"] == "references_cve":
+            finding_to_cve[e["source"]] = e["target"]
+
+    repos_with_cve: dict[str, str] = {}
+    repos_with_secret: dict[str, str] = {}
+    for e in edges:
+        src = e["source"]
+        if not src.startswith("repo:"):
+            continue
+        tgt = e["target"]
+        if tgt.startswith("finding:") and tgt in finding_to_cve:
+            repos_with_cve[src] = finding_to_cve[tgt]
+        if tgt.startswith("secret:"):
+            repos_with_secret[src] = tgt
+
+    attack_paths: list[dict] = []
+    path_num = 0
+    for r_id in sorted(set(repos_with_cve) & set(repos_with_secret)):
+        cve_node = repos_with_cve[r_id]
+        secret_node = repos_with_secret[r_id]
+        repo_label = nodes[r_id]["data"]["full_name"]
+        cve_label = nodes[cve_node]["label"] if cve_node in nodes else cve_node.split(":")[-1]
+        secret_label = nodes[secret_node]["label"] if secret_node in nodes else "secret"
+        path_sev = "critical" if (
+            nodes[r_id]["data"].get("open_critical", 0) > 0 or
+            nodes.get(cve_node, {}).get("data", {}).get("severity") == "critical"
+        ) else "high"
+
+        finding_node = next(
+            (src for src, tgt in finding_to_cve.items() if tgt == cve_node), None
+        )
+        path_nodes = [cve_node]
+        if finding_node:
+            path_nodes.append(finding_node)
+        path_nodes += [r_id, secret_node]
+
+        path_num += 1
+        attack_paths.append({
+            "id": f"path-{path_num}",
+            "severity": path_sev,
+            "label": "CVE exploitable → secret exposed",
+            "nodes": path_nodes,
+            "description": (
+                f"{cve_label} em {repo_label} pode ser explorado "
+                f"para acessar {secret_label} exposto no mesmo repositório"
+            )
+        })
+
+    return {
+        "nodes": list(nodes.values()),
+        "edges": edges,
+        "attack_paths": attack_paths,
+    }
+
+
 @app.get("/health")
 def health():
     return {"ok": True}

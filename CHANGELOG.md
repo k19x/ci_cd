@@ -3,6 +3,21 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 0.15.17 — 2026-09-16 00:00
+
+### Added
+- **Security Graph**: grafo interativo Cytoscape.js com nós repo/finding/CVE/secret e arestas de risco
+- **Nova aba Security Graph** no dashboard com controles de filtro (repo, attack paths only, refresh)
+- **Painel lateral de detalhe** ao clicar em nó: tipo, label, dados do nó e botão "Ver findings"
+- **Attack path detection**: repo com CVE de alta severidade + secret exposto gera um attack path
+- **KPI "Attack Paths"** no grupo Grafo da stat strip do dashboard (vermelho se > 0, verde se 0)
+- **Banner de alerta** na aba Security Graph quando attack paths detectados
+- **Badge na sidebar** para Security Graph quando há attack paths
+- **Endpoint `GET /api/graph`**: constrói grafo em memória a partir do SQLite — nós repo/finding/CVE/secret, arestas has_finding/references_cve/exposes_secret, attack paths computados
+
+### Execução
+- Sem rebuild necessário (sem schema novo — tudo computado em memória)
+
 ## [0.15.16] - 2026-09-16 00:00
 
 ### Added
