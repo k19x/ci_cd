@@ -4,7 +4,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>
+<script src="/static/vendor/layout-base.js"></script>
+<script src="/static/vendor/cose-base.js"></script>
+<script src="/static/vendor/cytoscape-cose-bilkent.js"></script>
 <!-- Lucide 1.42.0 servido localmente: a URL do unpkg (0.263.1) nunca existiu e o app rodava sem ícones -->
 <script src="/static/vendor/lucide.min.js"></script>
 
@@ -5377,18 +5379,25 @@ async function loadGraph() {
 
   if (_cy) { try { _cy.destroy(); } catch(e) {} _cy = null; }
 
-  // Register fcose if available and not already registered
-  if (typeof cytoscapeFcose !== 'undefined') {
-    try { cytoscape.use(cytoscapeFcose); } catch(e) {}
-  }
+  // Test if cose-bilkent is registered (auto-registers on load)
+  let hasBilkent = false;
+  try {
+    const _t = document.createElement('div');
+    _t.style.cssText = 'width:1px;height:1px;position:fixed;top:-10px';
+    document.body.appendChild(_t);
+    cytoscape({ container: _t, elements: [], layout: { name: 'cose-bilkent' } });
+    document.body.removeChild(_t);
+    hasBilkent = true;
+  } catch(e) { /* not available */ }
 
-  const layoutName = (typeof cytoscapeFcose !== 'undefined') ? 'fcose' : 'cose';
-  const layoutConfig = layoutName === 'fcose'
-    ? { name: 'fcose', quality: 'proof', randomize: true, animate: true, animationDuration: 700,
-        nodeSeparation: 160, idealEdgeLength: 200, edgeElasticity: () => 0.45,
-        nodeRepulsion: () => 6500, gravity: 0.35, numIter: 2500,
-        fit: true, padding: 48, tile: true, tilingPaddingVertical: 20, tilingPaddingHorizontal: 20 }
-    : { name: 'cose', idealEdgeLength: 100, nodeOverlap: 20, refresh: 20, fit: true, padding: 40, animate: true };
+  const layoutConfig = hasBilkent
+    ? { name: 'cose-bilkent', quality: 'proof', animate: true, animationDuration: 800,
+        nodeDimensionsIncludeLabels: true, idealEdgeLength: 180, nodeRepulsion: 8000,
+        edgeElasticity: 0.45, gravity: 0.35, numIter: 2500,
+        fit: true, padding: 48, randomize: true, tile: true,
+        tilingPaddingVertical: 20, tilingPaddingHorizontal: 20 }
+    : { name: 'cose', idealEdgeLength: 120, nodeOverlap: 60, nodeRepulsion: n => 500000,
+        gravity: 0.1, numIter: 2000, fit: true, padding: 40, animate: true };
 
   _cy = cytoscape({
     container: cyEl,
