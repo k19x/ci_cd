@@ -3,6 +3,18 @@
 All notable changes to SecPipe are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.18] - 2026-09-16 00:00
+
+### Added
+- **Compliance Frameworks**: arquivo `policy/compliance_frameworks.yml` com mapeamento de rule patterns para controles de CIS Controls v8, SOC2 Trust Services Criteria, NIST CSF 2.0 e PCI DSS v4.0.
+- **`GET /api/compliance`**: endpoint que calcula cobertura por framework (passing/failing/%) baseado em findings abertos, com wildcard matching via `fnmatch`.
+- **`GET /api/compliance/findings`**: endpoint que retorna findings abertos associados a um controle específico de um framework.
+- **Aba Compliance** no dashboard: grid de cards por framework com barra de progresso, contagem de controles passing/failing e cor semântica (verde ≥ 80%, amarelo ≥ 50%, vermelho < 50%). Clique no card expande lista de controles; clique em controle failing carrega findings associados inline.
+- **KPI Compliance** no stat-strip do dashboard: célula "Frameworks" mostrando X/4 com cor verde se todos ≥ 80%, vermelho caso contrário.
+
+### Execução
+- 2026-09-16 00:00 — Rebuild necessário: `pyyaml>=6.0` adicionado ao `requirements.txt`; novo arquivo `policy/compliance_frameworks.yml` montado via volume.
+
 ## 0.15.17 — 2026-09-16 00:00
 
 ### Added

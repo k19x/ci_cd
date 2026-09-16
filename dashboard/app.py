@@ -11,6 +11,7 @@ Auth:   se a env SECPIPE_TOKEN estiver definida, o /api/ingest exige o
 
 import base64
 import concurrent.futures
+import fnmatch
 import shutil
 import subprocess
 import tempfile
@@ -31,18 +32,30 @@ from pathlib import Path
 
 import hashlib
 import pyotp
+try:
+    import yaml as _yaml
+    _YAML_AVAILABLE = True
+except ImportError:
+    _YAML_AVAILABLE = False
 
 from fastapi import FastAPI, Header, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-DB_PATH     = Path(os.environ.get("SECPIPE_DB",     Path(__file__).parent / "secpipe.db"))
-POLICY_PATH = Path(os.environ.get("SECPIPE_POLICY", Path(__file__).parent.parent / "policy" / "policy.yml"))
-STATIC      = Path(__file__).parent / "static"
-SEVERITIES      = ["critical", "high", "medium", "low", "info"]
-TRIAGE_STATUSES = {"open", "fixed", "false_positive", "accepted"}
-ROLES           = ["viewer", "analyst", "admin"]
+DB_PATH          = Path(os.environ.get("SECPIPE_DB",     Path(__file__).parent / "secpipe.db"))
+POLICY_PATH      = Path(os.environ.get("SECPIPE_POLICY", Path(__file__).parent.parent / "policy" / "policy.yml"))
+STATIC           = Path(__file__).parent / "static"
+SEVERITIES       = ["critical", "high", "medium", "low", "info"]
+TRIAGE_STATUSES  = {"open", "fixed", "false_positive", "accepted"}
+ROLES            = ["viewer", "analyst", "admin"]
+
+
+def _compliance_path() -> Path:
+    env = os.environ.get("SECPIPE_COMPLIANCE")
+    if env:
+        return Path(env)
+    return POLICY_PATH.parent / "compliance_frameworks.yml"
 
 # Auth config
 SESSION_COOKIE = "secpipe_session"
@@ -1051,6 +1064,118 @@ def _write_policy(policy: dict) -> None:
     for entry in policy.get("allowlist", []):
         lines.append(f'  - "{entry}"\n')
     POLICY_PATH.write_text("".join(lines), encoding="utf-8")
+
+
+def _load_compliance_frameworks() -> dict:
+    """Carrega policy/compliance_frameworks.yml, retorna {} se não existir."""
+    if not _YAML_AVAILABLE:
+        return {}
+    p = _compliance_path()
+    if not p.exists():
+        return {}
+    try:
+        return _yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+
+
+def _match_rule_to_controls(rule: str, frameworks: dict) -> list[dict]:
+    """Retorna lista de {framework, control_id, control_name} que fazem match com a rule.
+    Suporta wildcards com fnmatch."""
+    results = []
+    for fw_id, fw_data in frameworks.get("frameworks", {}).items():
+        for ctrl_id, ctrl_data in fw_data.get("controls", {}).items():
+            for pattern in ctrl_data.get("rules", []):
+                if fnmatch.fnmatch(rule, pattern):
+                    results.append({
+                        "framework": fw_id,
+                        "control_id": ctrl_id,
+                        "control_name": ctrl_data.get("name", ""),
+                    })
+                    break
+    return results
+
+
+@app.get("/api/compliance")
+def get_compliance(user=Depends(require_role("viewer"))):
+    frameworks = _load_compliance_frameworks()
+    if not frameworks.get("frameworks"):
+        return {"frameworks": []}
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT repo, fid, rule, severity, file, line, message, tool "
+            "FROM findings WHERE status='open'"
+        ).fetchall()
+    open_findings = [dict(r) for r in rows]
+    result = []
+    for fw_id, fw_data in frameworks["frameworks"].items():
+        controls = fw_data.get("controls", {})
+        controls_result = []
+        for ctrl_id, ctrl_data in controls.items():
+            patterns = ctrl_data.get("rules", [])
+            matched_findings: list[dict] = []
+            matched_rules: set[str] = set()
+            for f in open_findings:
+                rule = f.get("rule") or ""
+                for pattern in patterns:
+                    if fnmatch.fnmatch(rule, pattern):
+                        matched_findings.append(f)
+                        matched_rules.add(rule)
+                        break
+            controls_result.append({
+                "id": ctrl_id,
+                "name": ctrl_data.get("name", ""),
+                "status": "failing" if matched_findings else "passing",
+                "open_findings": len(matched_findings),
+                "rules_matched": list(matched_rules),
+            })
+        total = len(controls_result)
+        passing = sum(1 for c in controls_result if c["status"] == "passing")
+        failing = total - passing
+        coverage = round(passing / total * 100) if total else 0
+        result.append({
+            "id": fw_id,
+            "name": fw_data.get("name", fw_id),
+            "controls_total": total,
+            "controls_passing": passing,
+            "controls_failing": failing,
+            "coverage_pct": coverage,
+            "controls": controls_result,
+        })
+    return {"frameworks": result}
+
+
+@app.get("/api/compliance/findings")
+def get_compliance_findings(
+    framework: str = "",
+    control: str = "",
+    user=Depends(require_role("viewer")),
+):
+    frameworks = _load_compliance_frameworks()
+    fw = frameworks.get("frameworks", {}).get(framework)
+    if not fw:
+        raise HTTPException(404, "Framework não encontrado")
+    ctrl = fw.get("controls", {}).get(control)
+    if not ctrl:
+        raise HTTPException(404, "Controle não encontrado")
+    patterns = ctrl.get("rules", [])
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT repo, fid, rule, severity, file, line, message, tool "
+            "FROM findings WHERE status='open'"
+        ).fetchall()
+    matched = []
+    for f in rows:
+        rule = f["rule"] or ""
+        for pattern in patterns:
+            if fnmatch.fnmatch(rule, pattern):
+                matched.append(dict(f))
+                break
+    return {
+        "findings": matched,
+        "control": ctrl.get("name", ""),
+        "framework": fw.get("name", framework),
+    }
 
 
 class PolicyMax(BaseModel):
